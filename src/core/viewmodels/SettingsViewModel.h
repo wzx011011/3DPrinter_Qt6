@@ -55,6 +55,13 @@ class SettingsViewModel : public QObject
   Q_PROPERTY(bool hintsEnabled READ hintsEnabled WRITE setHintsEnabled NOTIFY settingsChanged)
   Q_PROPERTY(int autoDismissSec READ autoDismissSec WRITE setAutoDismissSec NOTIFY settingsChanged)
   Q_PROPERTY(bool showProgressNotifications READ showProgressNotifications WRITE setShowProgressNotifications NOTIFY settingsChanged)
+  /// STEP import (upstream Preferences import_export items, Preferences.cpp
+  /// enable_step_mesh_setting / linear_deflection / angle_deflection /
+  /// is_split_compound). Same QSettings keys StepMeshPrompt reads.
+  Q_PROPERTY(bool stepMeshDialogEnabled READ stepMeshDialogEnabled WRITE setStepMeshDialogEnabled NOTIFY settingsChanged)
+  Q_PROPERTY(double stepLinearDeflection READ stepLinearDeflection WRITE setStepLinearDeflection NOTIFY settingsChanged)
+  Q_PROPERTY(double stepAngleDeflection READ stepAngleDeflection WRITE setStepAngleDeflection NOTIFY settingsChanged)
+  Q_PROPERTY(bool stepSplitCompound READ stepSplitCompound WRITE setStepSplitCompound NOTIFY settingsChanged)
   /// 开发者模式（对齐上游 PreferencesDialog::create_debug_page）。Gates the
   /// Preferences Developer category visibility (Phase 241 PAGE-04 consumer).
   Q_PROPERTY(bool developerMode READ developerMode WRITE setDeveloperMode NOTIFY settingsChanged)
@@ -125,6 +132,10 @@ public:
   bool hintsEnabled() const { return m_hintsEnabled; }
   int autoDismissSec() const { return m_autoDismissSec; }
   bool showProgressNotifications() const { return m_showProgressNotifications; }
+  bool stepMeshDialogEnabled() const { return m_stepMeshDialogEnabled; }
+  double stepLinearDeflection() const { return m_stepLinearDeflection; }
+  double stepAngleDeflection() const { return m_stepAngleDeflection; }
+  bool stepSplitCompound() const { return m_stepSplitCompound; }
   bool developerMode() const { return m_developerMode; }
   bool showDebugOverlay() const { return m_showDebugOverlay; }
   int logLevel() const { return m_logLevel; }
@@ -184,6 +195,13 @@ public slots:
   void setHintsEnabled(bool v);
   void setAutoDismissSec(int sec);
   void setShowProgressNotifications(bool v);
+  void setStepMeshDialogEnabled(bool v);
+  /// Out-of-range values are ignored (upstream decimal input range).
+  void setStepLinearDeflection(double v);
+  void setStepAngleDeflection(double v);
+  void setStepSplitCompound(bool v);
+  /// Re-read the STEP keys after StepMeshDialog stored new defaults.
+  void reloadStepImportDefaults();
   void setDeveloperMode(bool v);
   void setShowDebugOverlay(bool v);
   void setLogLevel(int v);
@@ -243,6 +261,10 @@ private:
   bool m_hintsEnabled = true;
   int m_autoDismissSec = 5;
   bool m_showProgressNotifications = true;
+  bool m_stepMeshDialogEnabled = true;
+  double m_stepLinearDeflection = 0.003;
+  double m_stepAngleDeflection = 0.5;
+  bool m_stepSplitCompound = false;
   bool m_developerMode = false;
   bool m_showDebugOverlay = false;
   int m_logLevel = 2;            // Info

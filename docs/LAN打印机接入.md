@@ -1,8 +1,8 @@
 # OWzx 局域网打印机接入
 
-> 状态：一期完成（L0–L4 代码 + L5 部分），分支 `feature/lan-printers`
-> 协议参考：`CP/creality-ref/调研报告-LAN协议.md`（CrealityPrint 官方开源实现，AGPL-3.0）
-> 审计记录：[依赖与协议边界审计.md](依赖与协议边界审计.md) — "设备基础发现与局域网连接"行（2026-10-23 部分解除）
+> 状态（2026-11-03 核对）：一期代码已合入 `main`，**未经真机验收**；`Device/Backend` 默认仍是 `mock`。
+> 协议参考：Creality Print 官方开源实现（AGPL-3.0，`CrealityOfficial/CrealityPrint` 的 `print_manage/Device/*`、`RemotePrinterManager.*`、`utils/cxmdns.*`）。原调研笔记 `CP/creality-ref/调研报告-LAN协议.md` 不在本仓库。
+> 审计记录：[依赖与协议边界审计.md](依赖与协议边界审计.md) §3.2（2026-10-23 局域网部分解除）
 
 ## 1. 范围
 
@@ -57,9 +57,8 @@ Device/Backend 装配开关（QSettings，默认 mock）
    /24 端口扫描确认，2026-10-23）——真打印机上电后，运行
    `LanDiscoveryTests::realLanDiscoverySmoke` 即可完成发现/探测真机验证；
    发送/监控 E2E 待真机人工验收
-2. ~~上传取消为 no-op~~ → 已实现（收尾#3）
-3. 老机型 FTP / WebRTC 视频 / CFS 向导 / 对象排除 / 设备分组 / 文件管理——二期
-4. 测试二进制的 OpenSSL 符号冲突（paho-mqtt 静态 vs 系统 libcrypto）：
+2. 老机型 FTP / WebRTC 视频 / CFS 向导 / 对象排除 / 设备分组——二期
+3. 测试二进制的 OpenSSL 符号冲突（paho-mqtt 静态 vs 系统 libcrypto）：
    TLS 相关测试钩子（httpsDisabled）规避，生产路径不受影响
 
 ## 5. 测试

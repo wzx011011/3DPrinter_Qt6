@@ -35,7 +35,20 @@ file(MAKE_DIRECTORY "${LIBSLIC3R_GEN_DIR}")
 file(MAKE_DIRECTORY "${LIBSLIC3R_RELATIVE_GEN_DIR}")
 
 # ─── Timestamp for build info ────────────────────────────────────────────────
-string(TIMESTAMP COMPILE_TIME "%y-%m-%d %H:%M")
+# Deterministic: the commit date of the pinned upstream checkout, not the
+# configure time. SLIC3R_BUILD_ID lands in libslic3r_version.h / buildinfo.h,
+# which most of libslic3r includes; a wall-clock value rewrote them on every
+# CMake re-run and (once ninja tracked header deps) recompiled all of
+# libslic3r each time.
+execute_process(
+    COMMAND git -C "${UPSTREAM_ROOT}" log -1 --format=%cd "--date=format:%y-%m-%d %H:%M"
+    OUTPUT_VARIABLE COMPILE_TIME
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+    RESULT_VARIABLE _owzx_pin_date_result)
+if(NOT _owzx_pin_date_result EQUAL 0 OR COMPILE_TIME STREQUAL "")
+    set(COMPILE_TIME "unknown")
+endif()
 set(SLIC3R_BUILD_TIME ${COMPILE_TIME})
 
 # ─── 1. Generate libslic3r_version.h ─────────────────────────────────────────
@@ -1026,3 +1039,15 @@ endif()
 message(STATUS "=== libslic3r: Compiled from source ===")
 message(STATUS "    Source dir: ${LIBSLIC3R_SRC_DIR}")
 message(STATUS "    Generated headers: ${LIBSLIC3R_GEN_DIR}")
+
+# ─── Compile concurrency cap for the engine ──────────────────────────────────
+# libslic3r translation units (Eigen / CGAL / Boost heavy, PCH) take 2-3 GB of
+# commit each. With the build at -j10 they exhausted system commit memory
+# (cl C1060/C1076, Windows Resource-Exhaustion event 2004, and a GPU driver
+# timeout on the same machine). Ninja job pool: at most OWZX_ENGINE_COMPILE_JOBS
+# engine compiles at once; every other target keeps the full -j.
+set(OWZX_ENGINE_COMPILE_JOBS 4 CACHE STRING "Max parallel libslic3r compiles (ninja job pool)")
+set_property(GLOBAL APPEND PROPERTY JOB_POOLS owzx_engine_compile=${OWZX_ENGINE_COMPILE_JOBS})
+set_target_properties(libslic3r_from_source libslic3r_cgal_from_source
+    PROPERTIES JOB_POOL_COMPILE owzx_engine_compile)
+

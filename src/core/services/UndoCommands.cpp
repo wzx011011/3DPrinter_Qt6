@@ -1232,6 +1232,31 @@ InstanceCountCommand::InstanceCountCommand(int objectIndex, int oldCount, int ne
   Q_UNUSED(parent)
 }
 
+InstanceLayoutCommand::InstanceLayoutCommand(const QString &text, int objectIndex,
+                                             const QVariantList &before,
+                                             ProjectService *service, QUndoCommand *parent)
+    : QUndoCommand(text, parent), m_objectIndex(objectIndex), m_before(before),
+      m_service(service)
+{
+}
+
+void InstanceLayoutCommand::undo()
+{
+  if (m_service && !m_before.isEmpty())
+    m_service->setObjectInstanceTransforms(m_objectIndex, m_before);
+}
+
+void InstanceLayoutCommand::redo()
+{
+  if (!m_firstRedoDone)
+  {
+    m_firstRedoDone = true;  // push(): the fill result is already applied
+    return;
+  }
+  if (m_service && !m_after.isEmpty())
+    m_service->setObjectInstanceTransforms(m_objectIndex, m_after);
+}
+
 void InstanceCountCommand::undo()
 {
   if (m_service && m_objectIndex >= 0 && m_oldCount >= 1)

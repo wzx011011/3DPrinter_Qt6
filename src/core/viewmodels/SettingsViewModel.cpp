@@ -1,6 +1,8 @@
 #include "SettingsViewModel.h"
 #include <QCoreApplication>
 #include <QSettings>
+
+#include "core/services/StepMeshPrompt.h"
 #include <QUuid>
 
 // Preference setters update the live draft. Persistence is intentionally
@@ -78,6 +80,13 @@ void SettingsViewModel::loadFromSettings()
   m_hintsEnabled     = s.value("hintsEnabled", true).toBool();
   m_autoDismissSec   = s.value("autoDismissSec", 5).toInt();
   m_showProgressNotifications = s.value("showProgressNotifications", true).toBool();
+  {
+    const StepMeshPrompt::Params step = StepMeshPrompt::storedDefaults();
+    m_stepMeshDialogEnabled = StepMeshPrompt::promptEnabled();
+    m_stepLinearDeflection = step.linear;
+    m_stepAngleDeflection = step.angle;
+    m_stepSplitCompound = step.splitCompound;
+  }
   m_developerMode    = s.value("developerMode", false).toBool();
   m_showDebugOverlay = s.value("showDebugOverlay", false).toBool();
   m_logLevel         = s.value("logLevel", 2).toInt();
@@ -226,6 +235,10 @@ void SettingsViewModel::resetPreferences()
   setHintsEnabled(true);
   setAutoDismissSec(5);
   setShowProgressNotifications(true);
+  setStepMeshDialogEnabled(true);
+  setStepLinearDeflection(0.003);
+  setStepAngleDeflection(0.5);
+  setStepSplitCompound(false);
   setDeveloperMode(false);
   setShowDebugOverlay(false);
   setLogLevel(2);
@@ -279,6 +292,10 @@ void SettingsViewModel::saveToSettings() const
   s.setValue(QStringLiteral("hintsEnabled"), m_hintsEnabled);
   s.setValue(QStringLiteral("autoDismissSec"), m_autoDismissSec);
   s.setValue(QStringLiteral("showProgressNotifications"), m_showProgressNotifications);
+  s.setValue(QStringLiteral("enableStepMeshSetting"), m_stepMeshDialogEnabled);
+  s.setValue(QStringLiteral("stepLinearDeflection"), m_stepLinearDeflection);
+  s.setValue(QStringLiteral("stepAngleDeflection"), m_stepAngleDeflection);
+  s.setValue(QStringLiteral("stepSplitCompound"), m_stepSplitCompound);
   s.setValue(QStringLiteral("developerMode"), m_developerMode);
   s.setValue(QStringLiteral("showDebugOverlay"), m_showDebugOverlay);
   s.setValue(QStringLiteral("logLevel"), m_logLevel);
@@ -410,6 +427,42 @@ void SettingsViewModel::setAutoDismissSec(int sec)
 void SettingsViewModel::setShowProgressNotifications(bool v)
 {
   if (m_showProgressNotifications != v) { m_showProgressNotifications = v; SAVE_SETTING("showProgressNotifications", v); emit settingsChanged(); }
+}
+
+void SettingsViewModel::setStepMeshDialogEnabled(bool v)
+{
+  if (m_stepMeshDialogEnabled != v) { m_stepMeshDialogEnabled = v; emit settingsChanged(); }
+}
+
+void SettingsViewModel::setStepLinearDeflection(double v)
+{
+  if (!StepMeshPrompt::linearInRange(v) || qFuzzyCompare(m_stepLinearDeflection, v))
+    return;
+  m_stepLinearDeflection = v;
+  emit settingsChanged();
+}
+
+void SettingsViewModel::setStepAngleDeflection(double v)
+{
+  if (!StepMeshPrompt::angleInRange(v) || qFuzzyCompare(m_stepAngleDeflection, v))
+    return;
+  m_stepAngleDeflection = v;
+  emit settingsChanged();
+}
+
+void SettingsViewModel::setStepSplitCompound(bool v)
+{
+  if (m_stepSplitCompound != v) { m_stepSplitCompound = v; emit settingsChanged(); }
+}
+
+void SettingsViewModel::reloadStepImportDefaults()
+{
+  const StepMeshPrompt::Params step = StepMeshPrompt::storedDefaults();
+  m_stepMeshDialogEnabled = StepMeshPrompt::promptEnabled();
+  m_stepLinearDeflection = step.linear;
+  m_stepAngleDeflection = step.angle;
+  m_stepSplitCompound = step.splitCompound;
+  emit settingsChanged();
 }
 
 void SettingsViewModel::setDeveloperMode(bool v)

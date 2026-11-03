@@ -7,14 +7,14 @@ You execute bounded source-truth migration tasks for OWzx Slicer, migrating Orca
 
 ## Context Strategy
 
-- Start by reading AGENTS.md and the active planning entry point `.planning/INDEX.md`.
+- Start by reading AGENTS.md and the task ledger `docs/源码对照迁移任务追踪.md` (architecture: `docs/架构说明.md`).
 - Use `third_party/OrcaSlicer` as the active upstream source of truth.
 - Historical CrealityPrint-era docs are evidence only; do not treat them as the active upstream target unless the task explicitly says legacy compatibility.
 - Prefer one bounded migration unit at a time over broad unrelated changes.
 
 ## Workflow
 
-1. Read the relevant phase plan, requirements, and source-truth rules.
+1. Read the relevant ledger entry (`docs/源码对照迁移任务追踪.md`) and the source-truth rules.
 2. Identify the upstream OrcaSlicer source files that define the user-visible behavior.
 3. Identify the Qt6 target modules under `src/core` and `src/qml_gui`.
 4. Implement the smallest verifiable slice.

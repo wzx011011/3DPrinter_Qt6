@@ -153,7 +153,7 @@ struct SequentialPrintClearance {
 };
 Q_DECLARE_METATYPE(SequentialPrintClearance)
 
-/// P4 (step profile, docs/开发计划_2026-10-10.md §6d): one entry of the
+/// P4 (step profile, 2026-10-10 dev plan §6d; doc in git history): one entry of the
 /// per-step slice wall-clock timeline captured BY VALUE inside the
 /// SliceService worker. Mirrors the FilamentMapResult capture pattern (Frozen
 /// Decision 1): a plain value type with no Slic3r reference crosses the
@@ -217,8 +217,8 @@ struct SliceOutcome
 /// 2840). The slot is keyed by the plate's stable printIndex.
 ///
 /// OWNERSHIP / THREAD MODEL (design-eliminates the two P0s from the
-/// 2026-09-04 review of the perf/waves persistent WIP, docs/
-/// 代码评审报告_2026-09-04.md section 4 P0-1/P0-2):
+/// 2026-09-04 review of the perf/waves persistent WIP, section 4
+/// P0-1/P0-2; doc in git history):
 ///  - Exactly ONE thread owns a slot at any instant, so no lock exists and no
 ///    lock-free handshake is needed. The GUI thread owns idle slots through
 ///    SliceService::persistentSlices_. startSlice() takes the slot OUT of the
@@ -416,6 +416,14 @@ public:
   /// Inject merged preset config before startSlice(), aligned with upstream PresetBundle::full_fff_config.
   /// Values come from the current user-selected printer, filament, and print presets.
   void setMergedPresetConfig(const QHash<QString, QVariant> &config);
+  /// C6/P1: the plater's filament slots (slot 0 first). At slice time every
+  /// per-filament vector option is rebuilt from the slot presets, and
+  /// filament_colour / filament_settings_id from the slot colours / names
+  /// (upstream PresetBundle::full_fff_config). With fewer than two slots the
+  /// merged single-filament config is used unchanged.
+  void setFilamentSlots(const QStringList &presetNames,
+                        const QList<QHash<QString, QVariant>> &presetValues,
+                        const QStringList &colours);
 
   /// v2.7 P0: set bed shape in millimeters, aligned with CLI path CliRunner.cpp:397-399.
   /// Uses ConfigOptionPoints directly because bed_shape is not suitable for the generic preset path.
@@ -479,6 +487,9 @@ signals:
   /// the GUI shows it as a notification without aborting, Plater.cpp:13749).
   /// Empty messages are never emitted; errors still go through sliceFailed.
   void validateWarning(const QString &message);
+  /// Engine per-step slicing warning (empty layers, floating regions, ...);
+  /// serious = upstream SeriousWarningNotificationLevel.
+  void sliceStepWarning(const QString &message, bool serious);
   void exportStarted(const QString &stage);
   void exportFinished(const QString &filePath);
   void exportFailed(const QString &message);
@@ -555,6 +566,9 @@ private:
 
   QMap<int, PlateSliceResult> plateResults_;
   QHash<QString, QVariant> mergedPresetConfig_; ///< Merged preset values injected from ConfigViewModel.
+  QStringList filamentSlotNames_;
+  QList<QHash<QString, QVariant>> filamentSlotValues_;
+  QStringList filamentSlotColours_;
   /// Bed shape in millimeters. Empty means using full_print_config defaults.
   /// startSlice injects it via set_key_value("bed_shape", ConfigOptionPoints).
   QVector<QPointF> bedShape_;

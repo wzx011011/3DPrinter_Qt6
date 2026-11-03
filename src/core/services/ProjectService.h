@@ -13,6 +13,8 @@
 
 #include "core/model/PartPlateList.h"
 
+class StepMeshPrompt;
+
 #ifdef HAS_LIBSLIC3R
 // Phase 112 (MEASURE-01): indexed_triangle_set lives at GLOBAL scope in
 // libslic3r (forward-declared before `namespace Slic3r` at Measure.hpp:9 and
@@ -84,6 +86,9 @@ class ProjectService final : public QObject
 public:
   explicit ProjectService(QObject *parent = nullptr);
   ~ProjectService();
+
+  /// STEP import mesh-parameter prompt (upstream StepMeshDialog).
+  StepMeshPrompt *stepMeshPrompt() const { return stepMeshPrompt_.get(); }
 
   QString projectName() const;
   int modelCount() const;
@@ -278,6 +283,11 @@ public:
   /// G-13: embedded presets read from the last loaded 3MF; returns and
   /// clears. Empty when the archive carried none (or it was not a project).
   QVariantList takeProjectEmbeddedPresets();
+  /// C6: preset selection + per-slot colours read from the last loaded 3MF's
+  /// Metadata/project_settings.config (printer/print/filament_settings_id,
+  /// filament_colour, and the OWzx *_preset_id / filament_presets keys);
+  /// returns and clears. Consumed by ConfigViewModel::applyProjectConfig.
+  QVariantMap takeProjectPresetSelection();
 
   /// 返回已加载的模型对象名称列表
   Q_INVOKABLE QStringList objectNames() const;
@@ -412,6 +422,12 @@ public:
   Q_INVOKABLE bool clearObjectDrainHoles(int objectIndex);
   /// 每个对象的实例数量（对齐上游 ModelObject::instances.size()）
   Q_INVOKABLE int objectInstanceCount(int index) const;
+  /// Full instance layout of an object: one 16-double row-major matrix per
+  /// instance. setObjectInstanceTransforms resizes the instance list to the
+  /// given layout and applies every matrix (undo/redo of instance-adding
+  /// operations such as fill bed, upstream "Fill bed" snapshot).
+  QVariantList objectInstanceTransforms(int objectIndex) const;
+  bool setObjectInstanceTransforms(int objectIndex, const QVariantList &transforms);
   Q_INVOKABLE QString objectVolumeName(int objectIndex, int volumeIndex) const;
   Q_INVOKABLE QString objectVolumeTypeLabel(int objectIndex, int volumeIndex) const;
   /// Get volume type as integer (0=ModelPart, 1=NegativeVolume, etc.) for the given volume
@@ -543,6 +559,15 @@ public:
   /// "Arrange objects on selected plates"): the other plates' objects are not
   /// touched, overflow goes onto NEW plates appended after the existing ones,
   /// and no empty plate is recycled. -1 (default) is the all-plates arrange.
+  /// Upstream FillBedJob (Jobs/FillBedJob.cpp): fill the free area of the
+  /// object's plate with copies of its first instance in ONE arrange run.
+  /// Other objects on the plate stay fixed; the object's existing printable
+  /// instances are re-packed together with the candidates; candidates that do
+  /// not fit on the plate are dropped. Returns the number of instances added
+  /// (0 = plate already full), or -1 on invalid input.
+  Q_INVOKABLE int fillBedWithInstances(int objectIndex, float spacing, bool allowRotation,
+                                       const QString &printableArea,
+                                       const QVariantMap &wipeTowerContext = {});
   Q_INVOKABLE bool arrangeObjects(float spacing, bool allowRotation, bool alignY,
                                     const QString &printableArea = QString(),
                                     const QVariantMap &wipeTowerContext = {},
@@ -1257,10 +1282,14 @@ private:
   /// publishes them through the load-delivery lambda; BackendContext takes
   /// and adopts them into the PresetService on loadFinished).
   QVariantList m_projectEmbeddedPresetsFromLoad;
+  QVariantMap m_projectPresetSelectionFromLoad;
   int loadProgress_ = 0;
   bool loading_ = false;
 
   std::shared_ptr<std::atomic_bool> activeCancelFlag_;
+  // Upstream StepMeshDialog bridge; shared so a worker-thread import that is
+  // waiting on it keeps it alive past service teardown.
+  std::shared_ptr<StepMeshPrompt> stepMeshPrompt_;
 
   // v3.0 Phase 18 (D-12): staging buffers for per-plate state captured during async
   // 3MF load (PlateData lives in the read lambda; m_plateList is rebuilt in a later

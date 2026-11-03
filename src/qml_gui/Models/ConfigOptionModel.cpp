@@ -502,7 +502,7 @@ static bool fuzzyMatch(const QString &pattern, const QString &text, int &outScor
       {
         int prevScore = prevRow[ti - 1].first;
         int prevPos = prevRow[ti - 1].second;
-        int bonus = 15; // sequential bonus (瀵归綈涓婃父 sequential bonus)
+        int bonus = 15; // sequential bonus (对齐上游 sequential bonus)
         if (ti > 1 && prevPos == ti - 2) bonus = 25; // consecutive chars
         int score = prevScore + bonus;
         if (score > curRow[ti].first)
@@ -529,7 +529,7 @@ static bool fuzzyMatch(const QString &pattern, const QString &text, int &outScor
   int bestScore = prevRow[n].first;
   int score = qMax(0, bestScore);
   outScore = score;
-  return score >= 60; // minimum threshold (瀵归綈涓婃父 minimum score)
+  return score >= 60; // minimum threshold (对齐上游 minimum score)
 }
 
 } // anonymous namespace

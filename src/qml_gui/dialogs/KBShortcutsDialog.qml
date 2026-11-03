@@ -27,7 +27,7 @@ import OWzx
 // PreviewPage.handlePreviewKey); the app-wide bindings are QML Shortcut{}
 // registrations in main.qml (no C++ key handler exists).
 //
-// U7 ghost-entry alignment (docs/开发计划_2026-10-10.md §6b U7) + the U2
+// U7 ghost-entry alignment (2026-10-10 dev plan §6b U7) + the U2
 // row-by-row truth pass (§6b U2 = audit M11): every row below names a
 // real binding. Deleted by U7 -- no implementation and no plan:
 // Ctrl+Shift+E "Publish 3MF" (no publish/network feature in src/, the
@@ -191,7 +191,7 @@ CxDialog {
         { key: "Ctrl+Y", desc: qsTr("Redo") }
         // U2: upstream also lists Space / mouse-click rename-in-object-list
         // (KBShortcutsDialog.cpp:294-296) -- this port has no object-list
-        // panel yet (X6, docs/开发计划_2026-10-10.md §6c), so those rows are
+        // panel yet (X6, 2026-10-10 dev plan §6c), so those rows are
         // dropped until the panel lands with the rename flow.
     ]
     // Preview: slider/playback navigation keys as implemented in

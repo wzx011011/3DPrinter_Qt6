@@ -1,8 +1,19 @@
 # 服务层 Real / Hybrid / Mock / Placeholder 状态注册表
 
-> 依据：`docs/代码债与架构审计_2026-10-10.md` ④章 S5 第 (2) 步；分类学标准 = `.codex/rules/source-truth-migration.md:51-60`（Status Terms）。
-> 建表日期：2026-10-14（S5 落地）。维护规则：每落地一个替换真实后端的工作项，更新对应行的状态与移除条件；新增服务必须带状态与移除条件入表。
-> 用途：让"mock→真"的替换路径从"考古 12.5k 行具体类"变成"看表找缝"（S5 为什么不是补丁的验收口径）。
+> 建表：2026-10-14；最近核对：2026-11-03（按 `BackendContext.cpp` 装配代码逐行核对，补入局域网设备与创想云服务）。
+> 维护规则：每落地一个替换真实后端的工作项，更新对应行的状态与移除条件；新增服务必须带状态与移除条件入表。
+> 用途：查"哪些是真的、哪些是演示数据、换成真的需要什么"。
+
+## 后端装配开关
+
+设备与云各有一个 QSettings 开关，由 `BackendContext` 在启动时读取（`BackendContext.cpp:176-227`）：
+
+| 键 | 取值 | 默认 | 实现 |
+|---|---|---|---|
+| `Device/Backend` | `mock` / `moonraker` | `mock` | `DeviceServiceMock` / `MoonrakerDeviceService` |
+| `Cloud/Backend` | `mock` / `creality` | `mock` | `CloudServiceMock` / `CrealityCloudService` |
+
+两个开关目前都**默认 Mock**；何时切换默认值见追踪文档"待决策"第 1 项。
 
 ## 状态术语（source-truth-migration.md:54-60 原文口径）
 
@@ -21,8 +32,11 @@
 | `ProjectService`（S5 正名，原 ProjectServiceMock） | **Real** | 持真 `Slic3r::Model`；导入走 `Model::read_from_file`（ProjectService.cpp:1147）、项目走 `read_from_archive`/`store_bbs_3mf`（ProjectService.cpp:11861 区段、saveProjectAs）；undo/快照/排布/布尔/切镂等全部落真模型。名字中的 Mock 已由 S5 摘除 | `m_mockVolumes` 平行镜像仍作为非 lib 构建回退与部分写入路径的第二真值（S5 第 (3) 步开始消亡：`changeVolumeType` 已改读真实 ModelVolume，11 处镜像重建块已收敛为单一函数；后续条目继续逐消费者退位） | 镜像消亡后续刀：`m_mockVolumes` 降级为可失效缓存或删除（非 lib 回退分支一并退役）；`MockVolumeEntry/MockVolumeType` 命名随退位改真名 | 不适用（Real） |
 | `PresetService`（S5 正名，原 PresetServiceMock） | **Real** | 预置枚举/比较/导入导出走上游 profile 真数据（`comparePresets`、`importBundle`；ConfigWizard 厂商/机型/材料枚举）；Q10 系列已把 extruderCount/床面等接真 preset | 插件类预置安装动作等个别入口仍为状态翻转（见 PluginService 行） | 个别入口随真实后端到位逐项转 Real；类名已正名，无整类移除条件 | 不适用（Real） |
 | `SliceService` | **Real** | `HAS_LIBSLIC3R` 下走真引擎打印管线 + `export_gcode`（含 P1 直传 `GCodeProcessorResult`）；P4 逐步骤画像门禁 | 无引擎构建（`!HAS_LIBSLIC3R`）才有 `(mock)` 切片回退路径（SliceService.cpp:1406 区段）——该分支仅为无 lib 构建存活 | 无引擎构建分支退役时 mock 路径随之删除；引擎路径无移除条件 | 不适用（Real） |
-| `DeviceServiceMock` | **Mock** | 无——设备清单/在线态/打印进度全部模拟（假设备 192.168.1.100-104，DeviceServiceMock.cpp:102-169）；发送链路的 FTP 上传 + MQTT publish 为真实协议客户端（U11：失败如实上报、真实进度） | 设备发现后的列表、连接态、任务进度、AMS 槽位为本地模拟；publish 成功后的打印进度为定时器模拟（DeviceServiceMock.cpp:27,940） | X1(a)(b)：真设备推送（MQTT 订阅遥测）落地 + 真实设备清单替换假 IP；`MqttClient`（明文 1883 改 TLS 8883）与 `FtpUploader` 两个真实协议组件届时直接被真服务复用 | MonitorPage 设备面板横幅（MonitorPage.qml:427-442，R-P1.E）；SelectMachineDialog.qml:815；MultiMachinePage.qml:76；PrintDialog.qml:884 |
-| `CloudServiceMock` | **Mock** | 无——登录/绑定/云任务全模拟 | 登录态与云任务列表为本地模拟（HomePage.qml:378 已明示"依赖 bambu_networking，外部阻塞"） | 真云 SDK（bambu_networking 或替代）落地；此前为外部阻塞项 | HomePage.qml:378、HomePage.qml:615 |
+| `MoonrakerDeviceService`（+ `MdnsDiscovery`、`LanDeviceProbe`、`LanErrorCodes`） | **Real**（未真机验收） | 局域网创想打印机：mDNS 发现、`/info` 探测、4408 ws 推送 / Moonraker 轮询、暂停/恢复/停止、multipart 上传并启动、设备文件管理（见 [LAN打印机接入.md](LAN打印机接入.md)） | 无演示设备；不支持的面（HMS、AMS、云任务）返回空值 | 真机验收通过后把 `Device/Backend` 默认值改为 `moonraker` | 不适用（无演示数据；`deviceBackendKind=moonraker` 时监控页演示横幅隐藏） |
+| `CrealityCloudService`（+ `CrealityAuthService`、`CloudHttpClient`、`OAuthCallbackServer`、`CrealityCloudConfig`） | **Hybrid** | 创想云 OAuth 登录、token 持久化、账号信息（见 [创想云模型库接入.md](创想云模型库接入.md)） | 设备、同步、云任务等面如实返回空 | 云设备通道与云打印仍属外部阻塞；OAuth 回调协议无 `state`，已缓解为单次监听（追踪文档 P8） | 云设备面为空时 UI 不显示假数据 |
+| `ModelLibraryBridge` + `ModelDownloadService` | **Real** | 模型库网页 WebChannel 桥、下载、导入 | — | 下载路径按白名单过滤并限制在下载根目录内，只接受 https | 不适用 |
+| `DeviceServiceMock` | **Mock**（当前默认） | 无——设备清单/在线态/打印进度全部模拟（假设备 192.168.1.100-104，DeviceServiceMock.cpp:102-169）；发送链路的 FTP 上传 + MQTT publish 为真实协议客户端（U11：失败如实上报、真实进度） | 设备发现后的列表、连接态、任务进度、AMS 槽位为本地模拟；publish 成功后的打印进度为定时器模拟（DeviceServiceMock.cpp:27,940） | X1(a)(b)：真设备推送（MQTT 订阅遥测）落地 + 真实设备清单替换假 IP；`MqttClient`（明文 1883 改 TLS 8883）与 `FtpUploader` 两个真实协议组件届时直接被真服务复用 | MonitorPage 设备面板横幅（MonitorPage.qml:427-442，R-P1.E）；SelectMachineDialog.qml:815；MultiMachinePage.qml:76；PrintDialog.qml:884 |
+| `CloudServiceMock` | **Mock**（当前默认） | 无——登录/绑定/云任务全模拟 | 登录态与云任务列表为本地模拟 | 已有真实替代 `CrealityCloudService`，把 `Cloud/Backend` 默认值改为 `creality` 即可退役 | HomePage.qml:378、HomePage.qml:615 |
 | `PluginService` | **Mock** | 持久化启用/安装状态（稳定 id 作键，Q10）为真实本地行为 | `installPlugin()` 是状态翻转，无真实下载源（PluginService.h:24-25,67-70） | 真实插件下载/安装通道（HTTP 源 + 依赖安装）落地 | PluginManagerDialog（S5 第 (4) 步补披露横幅） |
 | `CameraServiceMock` | **Mock**（附注：底层解码组件为真） | `CameraStream`（FFmpeg RTSP/RTMP 解码线程，CameraStream.h:1-40）在用户填入 rtsp:// URL 时真实拉流出帧（CameraServiceMock.cpp:223-260，v2.6 CAM-03） | 流状态机为 mock 时序（无条件翻 Streaming，X1(c) 待替换为真实拉流状态真相）；无 URL/无设备路径全模拟；截图无帧时回退 /tmp/ 假路径 | X1(c)：状态机改读真实拉流状态（连不上即错误态）+ 截图真实落盘；届时按 taxonomy 升 Hybrid→Real | MonitorPage 摄像头面板（S5 第 (4) 步加显式演示数据角标；面板横幅 MonitorPage.qml:436 已含"摄像头"） |
 | `MonitorViewModel`（Monitor 域） | **Hybrid** | 真实发送链路（FTP 上传进度 + MQTT publish，U11；`MqttClient`/`FtpUploader` 真协议）+ 真实网络探测（`NetworkServiceMock::probe` 真 ICMP） | 消费的设备清单/遥测/AMS 槽位来自 DeviceServiceMock 模拟数据 | 随 DeviceServiceMock→真服务切换整体转 Real | MonitorPage.qml:427-442 横幅随 Device 行维护 |

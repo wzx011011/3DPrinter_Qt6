@@ -39,6 +39,12 @@ class ConfigViewModel final : public QObject
   Q_PROPERTY(int settingsTargetVolumeIndex READ settingsTargetVolumeIndex NOTIFY stateChanged)
   Q_PROPERTY(QString activePresetTier READ activePresetTier NOTIFY stateChanged)
   Q_PROPERTY(QStringList printerPresetNames READ printerPresetNames NOTIFY stateChanged)
+  /// P4: nozzle-variant siblings of the current printer preset (upstream
+  /// Sidebar combo_nozzle_dia, Plater.cpp:2652-2690: same printer_model,
+  /// different nozzle), their diameter labels, and the nozzle-type label.
+  Q_PROPERTY(QStringList printerVariantPresets READ printerVariantPresets NOTIFY stateChanged)
+  Q_PROPERTY(QStringList printerVariantLabels READ printerVariantLabels NOTIFY stateChanged)
+  Q_PROPERTY(QString nozzleTypeLabel READ nozzleTypeLabel NOTIFY stateChanged)
   Q_PROPERTY(QStringList filamentPresetNames READ filamentPresetNames NOTIFY stateChanged)
   Q_PROPERTY(QStringList printPresetNames READ printPresetNames NOTIFY stateChanged)
   Q_PROPERTY(QStringList compatibleFilamentPresetNames READ compatibleFilamentPresetNames NOTIFY stateChanged)
@@ -240,11 +246,20 @@ public:
   Q_INVOKABLE int filamentSlotCount() const;
   Q_INVOKABLE QString filamentPresetForSlot(int slot) const;
   Q_INVOKABLE bool requestFilamentPresetForSlot(int slot, const QString &name);
-  /// F1 (R1C-10): the plater colour chip writes the slot's filament preset
-  /// colour (upstream Plater colour picker edits the preset's
-  /// filament_colour, preset goes modified). Merges into the full preset
-  /// value set — savePresetValues replaces the store entry wholesale.
+  /// C6: the plater colour chip edits the PROJECT's per-slot colour, as
+  /// upstream does (PresetComboBoxes.cpp:267-290 writes
+  /// project_config.filament_colour[idx]); presets are never touched. The
+  /// colour rides the 3MF project config and the slice config.
   Q_INVOKABLE bool setFilamentColourForSlot(int slot, const QString &colour);
+  /// Effective colour of a slot: the project colour when set, otherwise the
+  /// slot preset's default_filament_colour.
+  Q_INVOKABLE QString filamentColourForSlot(int slot) const;
+  /// Per-slot vectors for the slice config (upstream full_fff_config):
+  /// preset names, resolved preset values and effective colours, slot 0
+  /// first, all of length filamentSlotCount().
+  QStringList slotFilamentPresetNames() const;
+  QList<QHash<QString, QVariant>> slotFilamentPresetValues() const;
+  QStringList slotFilamentColours() const;
   Q_INVOKABLE bool isFilamentCompatibleForSlot(int slot) const;
   Q_INVOKABLE bool requestCurrentPrintPreset(const QString &name);
   Q_INVOKABLE bool saveCurrentPreset();
@@ -308,6 +323,9 @@ public:
   /// the preset lists. Fails when the name is empty or already taken.
   Q_INVOKABLE bool wizardCreateCustomPrinterPreset(const QString &name, const QVariantMap &values);
   Q_INVOKABLE QVariant wizardPresetValue(const QString &presetName, const QString &key) const;
+  QStringList printerVariantPresets() const;
+  QStringList printerVariantLabels() const;
+  QString nozzleTypeLabel() const;
   Q_INVOKABLE QVariantList wizardFlushMatrix() const;
   Q_INVOKABLE bool wizardSaveFlushVolumes(const QVariantList &rows);
   /// U05 (WipeTowerDialog): real filament colours for the flush-matrix
@@ -610,6 +628,9 @@ private:
   QString currentPrintPreset_;
   /// v5.16 (CIRC-04): slots 1..N; slot 0 is currentFilamentPreset_ itself.
   QStringList filamentSlotPresets_;
+  /// C6: project-level per-slot colour overrides (index = slot, slot 0 =
+  /// filament 1). Empty entry = use the slot preset's colour.
+  QStringList filamentSlotColours_;
   /// Compatibility bitmap mirror of filamentSlotPresets_ (+ slot 0), see
   /// refreshFilamentSlotCompatibility().
   QList<int> filamentSlotCompatibility_;

@@ -362,10 +362,14 @@ Item {
                 event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoSlaSupports)
             break
         case Qt.Key_V:
-            // Upstream "V": toggle printable for the selected object/part
-            // (Selection::toggle_instance_printable state lives in the VM).
-            if (!(mod & (Qt.ControlModifier | Qt.ShiftModifier | Qt.AltModifier))
+            // C13: one Key_V case (a second one further down was unreachable).
+            if (mod & Qt.ControlModifier) {
+                root.editorVm.pasteObjects()
+                event.accepted = true
+            } else if (!(mod & (Qt.ShiftModifier | Qt.AltModifier))
                     && root.editorVm && root.editorVm.selectedSourceObjectIndex >= 0) {
+                // Upstream "V": toggle printable for the selected object/part
+                // (Selection::toggle_instance_printable state lives in the VM).
                 var si = root.editorVm.selectedSourceObjectIndex
                 root.editorVm.setObjectPrintable(si, !root.editorVm.objectPrintable(si))
                 event.accepted = true
@@ -385,7 +389,6 @@ Item {
                 // it as the assembly-measure gizmo (GizmoAssemblyMeasure).
                 event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoAssemblyMeasure)
             }
-            break
             break
         case Qt.Key_Delete:
         case Qt.Key_Backspace:
@@ -419,12 +422,6 @@ Item {
             } else {
                 // Upstream "C": gizmo cut.
                 event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoCut)
-            }
-            break
-        case Qt.Key_V:
-            if (mod & Qt.ControlModifier) {
-                root.editorVm.pasteObjects()
-                event.accepted = true
             }
             break
         case Qt.Key_X:
@@ -2440,6 +2437,51 @@ Item {
                     color: Theme.tipGlassTextDim
                     font.pixelSize: Theme.fontSizeXS
                 }
+
+                // Upstream GizmoObjectManipulation reset buttons: the icon
+                // slot is always reserved and only drawn when the reset
+                // applies (reset_button(..., m_show_clear_*) renders it
+                // transparent otherwise).
+                CxIconButton {
+                    objectName: "rotateResetInitialButton"
+                    visible: viewport3d.gizmoMode === GLViewport.GizmoRotate
+                    opacity: enabled ? 1 : 0
+                    enabled: !!root.editorVm && root.editorVm.canResetRotationToInitial
+                    iconSource: "qrc:/qml/assets/icons/toolbar_reset.svg"
+                    toolTipText: qsTr("Reset current rotation to the value when open the rotation tool.")
+                    onClicked: root.editorVm.resetObjectRotation(true)
+                }
+                CxIconButton {
+                    objectName: "rotateResetZeroButton"
+                    visible: viewport3d.gizmoMode === GLViewport.GizmoRotate
+                    opacity: enabled ? 1 : 0
+                    enabled: !!root.editorVm && root.editorVm.canResetRotationToZero
+                    iconSource: "qrc:/qml/assets/icons/toolbar_reset_zero.svg"
+                    toolTipText: qsTr("Reset current rotation to real zeros.")
+                    onClicked: root.editorVm.resetObjectRotation(false)
+                }
+                CxIconButton {
+                    objectName: "scaleResetButton"
+                    visible: viewport3d.gizmoMode === GLViewport.GizmoScale
+                    opacity: enabled ? 1 : 0
+                    enabled: !!root.editorVm && root.editorVm.canResetScale
+                    iconSource: "qrc:/qml/assets/icons/toolbar_reset.svg"
+                    toolTipText: qsTr("Reset scale")
+                    onClicked: root.editorVm.resetObjectScale()
+                }
+            }
+
+            // GLGizmoRotate::set_init_rotation: record the selection's
+            // transform when the rotation tool opens or the selection changes
+            // while it is open.
+            readonly property bool rotateToolOpen: viewport3d.gizmoMode === GLViewport.GizmoRotate
+            onRotateToolOpenChanged: if (rotateToolOpen && root.editorVm) root.editorVm.captureRotateToolInitial()
+            Connections {
+                target: root.editorVm
+                function onSelectionChanged() {
+                    if (transformMiniPanel.rotateToolOpen)
+                        root.editorVm.captureRotateToolInitial()
+                }
             }
         }
 
@@ -3172,6 +3214,8 @@ Item {
                             compact: true
                             cxStyle: CxButton.Style.Segment
                             selected: root.editorVm && root.editorVm.cutKeepMode === index
+                            // Upstream GLGizmoCut.cpp:2937: keep choice is locked in parts mode.
+                            enabled: !(root.editorVm && root.editorVm.cutToParts)
                             text: modelData
                             onClicked: if (root.editorVm) root.editorVm.cutKeepMode = index
                         }
@@ -3187,6 +3231,7 @@ Item {
                     CxCheckBox {
                         text: qsTr("切割面放置到热床")
                         checked: root.editorVm && root.editorVm.cutPlaceOnCut
+                        enabled: !(root.editorVm && root.editorVm.cutToParts)
                         onToggled: if (root.editorVm) root.editorVm.cutPlaceOnCut = checked
                     }
                     CxCheckBox {

@@ -20,6 +20,7 @@
 #include "core/services/CalibrationServiceMock.h"
 #include "core/services/PresetService.h"
 #include "core/services/ProjectService.h"
+#include "core/services/StepMeshPrompt.h"
 #include "core/services/PluginService.h"
 #include "core/services/SliceService.h"
 #include "core/services/UndoRedoManager.h"
@@ -404,15 +405,28 @@ BackendContext::BackendContext(QObject *parent)
   // (a 2-filament 3MF presented one sidebar row and Change Filament
   // offered one entry). Grow-only: a multi-nozzle preset grows the slot
   // vector; nothing shrinks it but the user's delete button.
+  // P6 (review 2026-11-03): grow only when the NOZZLE COUNT changes (i.e.
+  // on a printer switch, where upstream runs
+  // update_multi_material_filament_presets) -- not on every editor state
+  // change, which re-added a slot the user had just deleted on a
+  // multi-nozzle printer (upstream allows deleting down to one filament).
   if (editorViewModel_->extruderCount() > configViewModel_->filamentSlotCount())
     configViewModel_->setExtruderCount(editorViewModel_->extruderCount());
+  m_lastNozzleCount = editorViewModel_->extruderCount();
   connect(editorViewModel_, &EditorViewModel::stateChanged, this, [this]() {
     const int nozzleCount = editorViewModel_->extruderCount();
+    if (nozzleCount == m_lastNozzleCount)
+      return;
+    m_lastNozzleCount = nozzleCount;
     if (nozzleCount > configViewModel_->filamentSlotCount())
       configViewModel_->setExtruderCount(nozzleCount);
   });
   homeViewModel_ = new HomeViewModel(cloudService_, this);
   settingsViewModel_ = new SettingsViewModel(this);
+  // StepMeshDialog "Save these settings as default" / "Don't show again"
+  // write the same keys Preferences edits; keep the Preferences copy fresh.
+  connect(projectService_->stepMeshPrompt(), &StepMeshPrompt::defaultsChanged,
+          settingsViewModel_, &SettingsViewModel::reloadStepImportDefaults);
   projectViewModel_ = new ProjectViewModel(this);
   // Phase 241 (PAGE-01/PAGE-02): Home mirrors the persisted recent list from
   // ProjectViewModel (single source of truth, upstream app_config
@@ -524,6 +538,22 @@ BackendContext::BackendContext(QObject *parent)
               }
               if (!embedded.isEmpty() && configViewModel_)
                 configViewModel_->refreshPresetLists();
+            }
+            // C6: restore the project's preset selection, filament slots and
+            // slot colours (upstream loads them from the 3MF project config).
+            // Previously written on save but never read back.
+            if (success && configViewModel_) {
+              const QVariantMap selection = projectService_->takeProjectPresetSelection();
+              if (!selection.isEmpty()) {
+                QHash<QString, QVariant> config;
+                for (auto it = selection.constBegin(); it != selection.constEnd(); ++it)
+                  config.insert(it.key(), it.value());
+                configViewModel_->applyProjectConfig(config);
+                if (editorViewModel_) {
+                  editorViewModel_->syncFilamentColours();
+                  emit editorViewModel_->paintDataChanged();  // swatches re-read
+                }
+              }
             }
           });
   // U8: the 3MF write runs on the ProjectService save worker, so the
@@ -656,6 +686,15 @@ BackendContext::BackendContext(QObject *parent)
     connect(sliceService_, &SliceService::validateWarning, this,
             [this](const QString &message)
             { postValidateWarning(message); });
+    // Per-step slicing warnings (upstream push_slicing_warning_notification).
+    connect(sliceService_, &SliceService::sliceStepWarning, this,
+            [this](const QString &message, bool serious)
+            {
+              if (serious)
+                postNotification(message, tr("切片警告"), NotiSeriousWarning);
+              else
+                postPlaterWarning(message);
+            });
 
     connect(sliceService_, &SliceService::exportStarted, this,
             [this](const QString &stage)

@@ -182,15 +182,11 @@ ApplicationWindow {
                 Backend.openExternalGcode(modelPath)
                 return
             }
-            // R1C-02: an .svg rides the SVG emboss flow (same routing as the
-            // drop handler) — import adds the volume to the selection or
-            // parks the path for the SVG gizmo panel.
+            // R1C-02 / C10: an .svg becomes an embossed part of the selection,
+            // or a new object when nothing is selected (EditorViewModel).
             if (modelPath.toLowerCase().substring(modelPath.length - 4) === ".svg") {
-                if (Backend.editorViewModel) {
-                    Backend.editorViewModel.svgFilePath = modelPath
-                    if (Backend.editorViewModel.hasSelection)
-                        Backend.editorViewModel.importSVG()
-                }
+                if (Backend.editorViewModel)
+                    Backend.editorViewModel.importSvgFile(modelPath)
                 return
             }
             Backend.topbarImportModel(modelPath)
@@ -348,6 +344,23 @@ ApplicationWindow {
         }
     }
 
+    // Upstream StepMeshDialog (Plater::load_files STEP branch): the import
+    // pauses inside StepMeshPrompt::ask until the dialog answers. The shell
+    // declares itself the presenter once loaded; without one (headless runs)
+    // the stored defaults are used, as with enable_step_mesh_setting off.
+    readonly property var stepMeshPrompt: Backend.editorViewModel ? Backend.editorViewModel.stepMeshPrompt : null
+    CxDialogHost {
+        id: stepMeshDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: StepMeshDialog { prompt: root.stepMeshPrompt }
+    }
+    Connections {
+        target: root.stepMeshPrompt
+        function onDialogRequested() { stepMeshDialog.open() }
+    }
+    onStepMeshPromptChanged: if (stepMeshPrompt) stepMeshPrompt.presenterAttached = true
+    Component.onDestruction: if (stepMeshPrompt) stepMeshPrompt.presenterAttached = false
+
     // Phase 237 (VIEW-04): unit-conversion confirm (upstream "Object too
     // small" dialog, Plater.cpp:4237-4253 — offers scaling a meters/imperial
     // authored mesh to millimeters). The conversion type maps the hint to
@@ -459,16 +472,11 @@ ApplicationWindow {
             root.requestActivate()
             if (Backend.currentPage !== Backend.tp3DEditor)
                 Backend.requestSelectTab(Backend.tp3DEditor)
-            // Single .svg: SVG emboss flow (upstream emboss_svg). OWzx's
-            // importer adds the SVG volume to the selected object; without a
-            // selection the path is parked on editorVm.svgFilePath for the
-            // SVG gizmo panel (PreparePage binds the field).
+            // Single .svg: upstream emboss_svg (Plater.cpp:7310-7321) --
+            // embossed part of the selection, or a new object (C10).
             if (paths.length === 1 && paths[0].toLowerCase().endsWith(".svg")) {
-                if (Backend.editorViewModel) {
-                    Backend.editorViewModel.svgFilePath = paths[0]
-                    if (Backend.editorViewModel.hasSelection)
-                        Backend.editorViewModel.importSVG()
-                }
+                if (Backend.editorViewModel)
+                    Backend.editorViewModel.importSvgFile(paths[0])
                 return
             }
             // Zip archives open the Phase 236 FileArchiveDialog tree instead
@@ -720,33 +728,12 @@ ApplicationWindow {
                  && !root.textEditHoldFocus
         onActivated: Backend.editorViewModel.arrangeAllObjects()
     }
-    Shortcut {
-        // Layers editing (upstream "L" variable layer height, RG-R15-01)
-        sequence: "L"
-        enabled: Backend.currentPage === Backend.tp3DEditor && !root.textEditHoldFocus
-        onActivated: {
-            const p = root.preparePage()
-            if (p) p.openLayersEditing()
-        }
-    }
-    Shortcut {
-        // G-code window (upstream "C" edit gcode, KBShortcutsDialog.cpp
-        // preview list; RG-R15-01)
-        sequence: "C"
-        enabled: Backend.currentPage === Backend.tpPreview && !root.textEditHoldFocus
-        onActivated: Backend.showEditGCodeDialog()
-    }
-    Shortcut {
-        // Export (upstream Ctrl+Shift+E export G-code, KBShortcutsDialog.cpp
-        // global list; RG-R15-01)
-        sequence: "Ctrl+Shift+E"
-        enabled: (Backend.currentPage === Backend.tp3DEditor
-                  || Backend.currentPage === Backend.tpPreview) && !root.textEditHoldFocus
-        onActivated: {
-            const p = root.preparePage()
-            if (p) p.openExportDialog()
-        }
-    }
+    // C7 (review 2026-11-03): no global L / C / Ctrl+Shift+E here. A matching
+    // Shortcut consumes the key before the page Keys handlers, which already
+    // follow upstream (KBShortcutsDialog.cpp:258/261 Prepare C = cut gizmo,
+    // L = SLA support points; :306-307 Preview L = single-layer mode, C =
+    // G-code window). Upstream Ctrl+Shift+E is "Publish 3MF" (:177), which
+    // this port does not have; sliced-file export is Ctrl+G below.
     Shortcut {
         // Deselect all (upstream WXK_ESCAPE -> deselect_all,
         // GLCanvas3D.cpp:3234; KBShortcutsDialog.cpp:245)
@@ -1595,8 +1582,9 @@ ApplicationWindow {
         defaultSuffix: "drc"
         onAccepted: {
             const vm = Backend.editorViewModel
+            // Upstream "Export all objects as one DRC" (MainFrame.cpp:2902).
             if (vm && selectedFile)
-                vm.exportSelectedObjects(selectedFile.toLocalFile(), false, true)
+                vm.exportAllObjects(selectedFile.toLocalFile(), false, true)
         }
     }
     FolderDialog {
@@ -1605,22 +1593,20 @@ ApplicationWindow {
             const vm = Backend.editorViewModel
             if (!vm || !selectedFolder)
                 return
-            vm.selectAllVisibleObjects()
-            vm.exportSelectedObjects(selectedFolder.toLocalFile(), true, true)
+            vm.exportAllObjects(selectedFolder.toLocalFile(), true, true)
         }
     }
 
-    // RG-R1-03/06: "分别导出 STL" — select every object and let
-    // exportSelectedObjects(separateFiles=true) write one STL per object
-    // into the chosen directory (upstream "Export all objects as STLs").
+    // RG-R1-03/06: "分别导出 STL" — one STL per model object on every plate
+    // (upstream "Export all objects as STLs", MainFrame.cpp:2898). C9: the
+    // VM iterates the model; the user's selection is left untouched.
     FolderDialog {
         id: exportStlsFolderDialog
         onAccepted: {
             const vm = Backend.editorViewModel
             if (!vm || !selectedFolder)
                 return
-            vm.selectAllVisibleObjects()
-            vm.exportSelectedObjects(selectedFolder.toLocalFile(), true, false)
+            vm.exportAllObjects(selectedFolder.toLocalFile(), true, false)
         }
     }
 
@@ -1779,6 +1765,8 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
+        if (stepMeshPrompt)
+            stepMeshPrompt.presenterAttached = true
         // STARTUP-DEFER: let the window paint Home first; the deferred-UI
         // timer (100ms one-shot) then flips deferredUiReady to build Plater
         // off the critical path.

@@ -1,6 +1,6 @@
 ---
 name: analyzing-source-truth-gap
-description: "Analyzing an upstream-to-Qt migration gap without making code changes. Triggers when the user asks for a read-only comparison between CrealityPrint upstream behavior and current Qt6 implementation."
+description: "Analyzing an upstream-to-Qt migration gap without making code changes. Triggers when the user asks for a read-only comparison between OrcaSlicer upstream behavior and current Qt6 implementation."
 ---
 
 # 分析源码真值差距
@@ -11,7 +11,7 @@ description: "Analyzing an upstream-to-Qt migration gap without making code chan
 
 ## 目标
 
-将当前的 Qt6/QML 实现与上游 `third_party/CrealityPrint` 的行为进行对比，识别缺失、不匹配或仅部分迁移的内容。
+将当前的 Qt6/QML 实现与上游 `third_party/OrcaSlicer` 的行为进行对比，识别缺失、不匹配或仅部分迁移的内容。
 
 ## 范围
 
@@ -21,9 +21,9 @@ description: "Analyzing an upstream-to-Qt migration gap without making code chan
 
 ## 工作流
 
-1. 阅读 `docs/源码对照迁移任务追踪.md`、`docs/项目结构.md` 和 `docs/CrealityPrint_Qt_GUI重写架构.md`
+1. 阅读 `docs/源码对照迁移任务追踪.md`、`docs/架构说明.md` 和 `docs/上游基线与功能矩阵.md`
 2. 根据参数确定目标任务（参数格式见下方）
-3. 识别 `third_party/CrealityPrint` 中对应的上游源码
+3. 识别 `third_party/OrcaSlicer` 中对应的上游源码
 4. 识别 `src/core`、`src/pages` 或 `src/qml_gui` 中当前的 Qt6 模块
 5. 对比上游行为和当前 Qt6 行为，以具体条目报告差距
 

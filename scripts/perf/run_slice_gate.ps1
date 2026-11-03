@@ -1,7 +1,7 @@
 # Slice regression gate, three layers:
 #   1. correctness (normalized golden gcode via owzx-cli + gcode_compare.py)
 #   2. efficiency  (PerfBench slice stage, min-of-N vs baseline thresholds)
-#   3. step profile (P4, docs/开发计划_2026-10-10.md §6d: 4 representative
+#   3. step profile (P4, 2026-10-10 dev plan §6d: 4 representative
 #      models x per-step wall-clock profile from the SliceService step
 #      timeline, vs baseline.step_profiles; a step regressing >+30% with a
 #      >=20ms baseline in BOTH measurement rounds is a regression)

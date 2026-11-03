@@ -6,7 +6,7 @@
 
 | 任务类型 | Agent 类型 | 说明 |
 |----------|------------|------|
-| 上游源码分析 | `Explore` | 分析 `third_party/CrealityPrint` 中的行为，返回关键发现 |
+| 上游源码分析 | `Explore` | 分析 `third_party/OrcaSlicer` 中的行为，返回关键发现 |
 | 代码搜索 | `Explore` | 搜索 QML/C++ 文件定位目标模块 |
 | 代码实现 | `general-purpose` | 独立实现迁移代码，完成后返回 diff 摘要 |
 | 构建验证 | `general-purpose` | 运行 `auto_verify_with_vcvars.ps1`，返回通过/失败 |

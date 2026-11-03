@@ -1,5 +1,7 @@
 #include "ConfigViewModel.h"
 
+#include <QColor>
+
 #include <algorithm>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -639,46 +641,162 @@ int ConfigViewModel::filamentSlotCount() const
 
 bool ConfigViewModel::setFilamentColourForSlot(int slot, const QString &colour)
 {
-  // F1 (R1C-10): see the header note. The colour lives on the slot's
-  // filament preset as default_filament_colour (coStrings, first entry is
-  // the swatch source — PresetService::activeFilamentColours reads it).
-  PresetService *svc = presetService();
-  if (!svc || slot < 0 || colour.isEmpty())
+  // C6 (review 2026-11-03): upstream writes project_config.filament_colour[idx]
+  // and re-runs the flush-volume calculation (PresetComboBoxes.cpp:267-290,
+  // Plater.cpp EVT_FILAMENT_COLOR_CHANGED). The former implementation wrote
+  // default_filament_colour into the slot's preset FILE (recolouring every
+  // slot and project sharing that preset) or derived a "(modified)" preset,
+  // which failed for the second slot on the same system preset.
+  if (slot < 0 || slot >= filamentSlotCount() || !QColor::isValidColorName(colour))
     return false;
-  const QString presetName = filamentPresetForSlot(slot);
-  if (presetName.isEmpty())
-    return false;
-  QHash<QString, QVariant> values = svc->presetValues(presetName);
-  values.insert(QStringLiteral("default_filament_colour"), QStringList{colour});
-  if (!svc->savePresetValues(presetName, values)) {
-    // Read-only (system) preset: derive "<name> (modified)" as a durable
-    // user preset and re-point the slot to it (upstream marks the modified
-    // preset instead of writing the system one).
-    const QString derived = presetName + QStringLiteral(" (modified)");
-    QHash<QString, QVariant> overrides;
-    overrides.insert(QStringLiteral("default_filament_colour"), QStringList{colour});
-    if (!svc->deriveUserPresetFrom(presetName, derived, overrides))
-      return false;
-    if (!requestFilamentPresetForSlot(slot, derived))
-      return false;
-    refreshPresetLists();
-    if (derived == currentFilamentPreset_) {
-      filamentPresetValues_ = svc->presetValues(derived);
-      updateMergedPresetValues();
-      applyScopeValues();
-    }
-    emit stateChanged();
+  const QString normalized = QColor(colour).name(QColor::HexRgb).toUpper();
+  while (filamentSlotColours_.size() <= slot)
+    filamentSlotColours_.append(QString());
+  if (filamentSlotColours_.at(slot) == normalized)
     return true;
-  }
-  // Keep the viewmodel caches coherent (saveCurrentPreset pattern) when the
-  // edited slot holds the current filament preset.
-  if (presetName == currentFilamentPreset_) {
-    filamentPresetValues_ = values;
-    updateMergedPresetValues();
-    applyScopeValues();
-  }
+  filamentSlotColours_[slot] = normalized;
   emit stateChanged();
+  // The colour lands in the G-code header/preview and the flush matrix.
+  emit sliceAffectingConfigChanged();
   return true;
+}
+
+namespace
+{
+// "<model> (<d> nozzle)" -> "<model>": the fallback grouping for presets
+// without printer_model (user presets created from scratch).
+QString printerNameBase(const QString &name)
+{
+  static const QRegularExpression re(QStringLiteral("^(.*) \\([^()]* nozzle\\)$"));
+  const auto m = re.match(name);
+  return m.hasMatch() ? m.captured(1) : name;
+}
+QString firstValueText(const QVariant &v)
+{
+  if (v.userType() == QMetaType::QStringList)
+  {
+    const QStringList l = v.toStringList();
+    return l.isEmpty() ? QString() : l.first();
+  }
+  if (v.userType() == QMetaType::QVariantList)
+  {
+    const QVariantList l = v.toList();
+    return l.isEmpty() ? QString() : l.first().toString();
+  }
+  return v.toString();
+}
+} // namespace
+
+QStringList ConfigViewModel::printerVariantPresets() const
+{
+  QStringList out;
+  if (currentPrinterPreset_.isEmpty())
+    return out;
+  const QString model = presetService_
+      ? firstValueText(presetService_->presetValue(currentPrinterPreset_, QStringLiteral("printer_model")))
+      : QString();
+  const QString base = printerNameBase(currentPrinterPreset_);
+  for (const QString &name : printerPresetNames())
+  {
+    const QString otherModel = presetService_
+        ? firstValueText(presetService_->presetValue(name, QStringLiteral("printer_model")))
+        : QString();
+    const bool sameModel = !model.isEmpty() ? otherModel == model
+                                            : printerNameBase(name) == base;
+    if (sameModel)
+      out.append(name);
+  }
+  if (!out.contains(currentPrinterPreset_))
+    out.prepend(currentPrinterPreset_);
+  return out;
+}
+
+QStringList ConfigViewModel::printerVariantLabels() const
+{
+  static const QRegularExpression re(QStringLiteral("\\(([^()]*) nozzle\\)$"));
+  QStringList labels;
+  for (const QString &name : printerVariantPresets())
+  {
+    QString label = presetService_
+        ? firstValueText(presetService_->presetValue(name, QStringLiteral("nozzle_diameter")))
+        : QString();
+    if (label.isEmpty())
+    {
+      const auto m = re.match(name);
+      label = m.hasMatch() ? m.captured(1) : QStringLiteral("0.4");
+    }
+    labels.append(label);
+  }
+  return labels;
+}
+
+QString ConfigViewModel::nozzleTypeLabel() const
+{
+  if (!presetService_ || currentPrinterPreset_.isEmpty())
+    return QString();
+  const QString v = firstValueText(presetService_->presetValue(currentPrinterPreset_,
+                                                               QStringLiteral("nozzle_type")));
+  // Upstream NozzleType enum (PrintConfig.cpp) with the zh terms of
+  // OrcaSlicer_zh_CN.po; unknown values pass through.
+  if (v == QLatin1String("brass")) return tr("黄铜");
+  if (v == QLatin1String("hardened_steel") || v == QLatin1String("hardened")) return tr("硬化钢");
+  if (v == QLatin1String("stainless_steel") || v == QLatin1String("steel")) return tr("不锈钢");
+  if (v == QLatin1String("tungsten_carbide")) return tr("碳化钨");
+  if (v == QLatin1String("undefine")) return tr("未定义");
+  if (v == QLatin1String("bi_metal")) return tr("双金属");
+  return v;
+}
+
+QString ConfigViewModel::filamentColourForSlot(int slot) const
+{
+  if (slot >= 0 && slot < filamentSlotColours_.size() && !filamentSlotColours_.at(slot).isEmpty())
+    return filamentSlotColours_.at(slot);
+  if (presetService_)
+  {
+    const QString preset = filamentPresetForSlot(slot);
+    if (!preset.isEmpty())
+      return presetService_->filamentColourForPreset(preset);
+  }
+  return QStringLiteral("#F2754E");
+}
+
+QStringList ConfigViewModel::slotFilamentPresetNames() const
+{
+  QStringList names;
+  const int count = filamentSlotCount();
+  names.reserve(count);
+  for (int slot = 0; slot < count; ++slot)
+    names.append(filamentPresetForSlot(slot));
+  return names;
+}
+
+QList<QHash<QString, QVariant>> ConfigViewModel::slotFilamentPresetValues() const
+{
+  QList<QHash<QString, QVariant>> values;
+  const int count = filamentSlotCount();
+  values.reserve(count);
+  for (int slot = 0; slot < count; ++slot)
+  {
+    const QString preset = filamentPresetForSlot(slot);
+    // Slot 0 is the edited global selection: use its live (possibly unsaved)
+    // values, like upstream's edited preset.
+    if (slot == 0 || preset == currentFilamentPreset_)
+      values.append(filamentPresetValues_);
+    else
+      values.append(presetService_ ? presetService_->presetValues(preset)
+                                   : QHash<QString, QVariant>{});
+  }
+  return values;
+}
+
+QStringList ConfigViewModel::slotFilamentColours() const
+{
+  QStringList colours;
+  const int count = filamentSlotCount();
+  colours.reserve(count);
+  for (int slot = 0; slot < count; ++slot)
+    colours.append(filamentColourForSlot(slot));
+  return colours;
 }
 
 bool ConfigViewModel::isPresetDirty() const
@@ -687,7 +805,7 @@ bool ConfigViewModel::isPresetDirty() const
   return effectivePresetValuesForTier(tier) != persistedEffectiveValuesForTier(tier);
 }
 
-// 鈹€鈹€ 3-tier preset inheritance (瀵归綈涓婃父 PresetBundle) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ── 3-tier preset inheritance (对齐上游 PresetBundle) ──────────
 
 QStringList ConfigViewModel::printerPresetNames() const
 {
@@ -1882,8 +2000,8 @@ bool ConfigViewModel::presetIsReadOnly(const QString &presetName) const
 
 void ConfigViewModel::autoMatchFilament()
 {
-  // 瀵归綈涓婃父 PresetBundle::update_compatible
-  // 鍒囨崲鎵撳嵃鏈哄悗锛岃嚜鍔ㄩ€夋嫨鍏煎鐨勮€楁潗棰勮锛堝熀浜?nozzle diameter / max_temp 鍖归厤锛?
+  // 对齐上游 PresetBundle::update_compatible
+  // 切换打印机后，自动选择兼容的耗材预设（基于 nozzle diameter / max_temp 匹配）
   if (!presetService_)
     return;
 
@@ -2006,7 +2124,7 @@ void ConfigViewModel::activateObjectScope(const QString &targetType, const QStri
   settingsTargetObjectIndex_ = objectIndex;
   settingsTargetVolumeIndex_ = volumeIndex;
   settingsTargetPlateIndex_ = -1;
-  // Distinguish volume scope from object scope (瀵归綈涓婃父 Tab scope semantics)
+  // Distinguish volume scope from object scope (对齐上游 Tab scope semantics)
   if (targetName.isEmpty())
     settingsScope_ = QStringLiteral("global");
   else if (volumeIndex >= 0)
@@ -2076,7 +2194,14 @@ bool ConfigViewModel::requestFilamentPresetForSlot(int slot, const QString &name
 {
   const QString plain = plainPresetName(name);
   if (slot <= 0)
-    return requestCurrentFilamentPreset(plain);
+  {
+    const bool switched = requestCurrentFilamentPreset(plain);
+    // A new preset brings its own colour (upstream sets the slot colour from
+    // the selected preset's default_filament_colour).
+    if (switched && !filamentSlotColours_.isEmpty())
+      filamentSlotColours_[0].clear();
+    return switched;
+  }
   if (queuePendingAction(QStringLiteral("switch-filament-preset-%1").arg(slot), plain))
   {
     while (filamentSlotPresets_.size() < slot)
@@ -2084,6 +2209,8 @@ bool ConfigViewModel::requestFilamentPresetForSlot(int slot, const QString &name
     if (filamentSlotPresets_.at(slot - 1) == plain)
       return true;
     filamentSlotPresets_[slot - 1] = plain;
+    if (slot < filamentSlotColours_.size())
+      filamentSlotColours_[slot].clear();
     emit stateChanged();
     // A per-slot preset change alters the effective multi-material config.
     emit sliceAffectingConfigChanged();
@@ -2112,6 +2239,9 @@ void ConfigViewModel::setExtruderCount(int count)
     filamentSlotPresets_.removeLast();
   while (filamentSlotPresets_.size() < slotCount)
     filamentSlotPresets_.append(currentFilamentPreset_);
+  // Colours follow the slot vector (slot 0 + the per-slot entries).
+  while (filamentSlotColours_.size() > slotCount + 1)
+    filamentSlotColours_.removeLast();
   emit stateChanged();
 }
 
@@ -2131,6 +2261,14 @@ QVariantMap ConfigViewModel::projectPresetConfigOverlay() const
   slotList.append(currentFilamentPreset_);
   slotList.append(filamentSlotPresets_);
   overlay.insert(QStringLiteral("filament_presets"), slotList.join(QLatin1Char(';')));
+  // C6: the upstream project-config keys, so Orca/CP read the selection and
+  // the per-slot colours back (PresetBundle s_project_options +
+  // full_fff_config's *_settings_id). QStringList values are written as
+  // ConfigOptionStrings.
+  overlay.insert(QStringLiteral("printer_settings_id"), currentPrinterPreset_);
+  overlay.insert(QStringLiteral("print_settings_id"), currentPrintPreset_);
+  overlay.insert(QStringLiteral("filament_settings_id"), slotList);
+  overlay.insert(QStringLiteral("filament_colour"), slotFilamentColours());
   return overlay;
 }
 
@@ -2513,7 +2651,7 @@ QString ConfigViewModel::materialPresetName(int localIndex) const
   return globalIdx >= 0 ? presetList_->presetName(globalIdx) : QString{};
 }
 
-// 鈹€鈹€ Layer range support (瀵归綈涓婃父 ModelObject::layer_config_ranges) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ── Layer range support (对齐上游 ModelObject::layer_config_ranges) ──────────
 
 int ConfigViewModel::layerRangeCount() const
 {
@@ -2576,13 +2714,13 @@ QVariant ConfigViewModel::layerRangeValue(int rangeIndex, const QString &key, co
   return projectService_->layerRangeValue(settingsTargetObjectIndex_, rangeIndex, key, fallback);
 }
 
-// 鈹€鈹€ Enhanced search (瀵归綈涓婃父 OptionsSearcher + fts_fuzzy_match) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ── Enhanced search (对齐上游 OptionsSearcher + fts_fuzzy_match) ──────────
 
 namespace {
 
-/// 瀵归綈涓婃父 fts_fuzzy_match锛氳交閲忕骇妯＄硦鍖归厤绠楁硶
-/// 杩斿洖鍖归厤鍒嗘暟锛?=鏃犲尮閰嶏紝姝ｅ€艰秺楂樺尮閰嶅害瓒婂ソ锛夛紝鍚屾椂杈撳嚭鏄惁鍏ㄩ儴瀛楃杩炵画
-/// 绠楁硶锛氳椽蹇冨瓧绗﹀尮閰?+ 婊戝姩绐楀彛杩炵画鍖归厤 + 鍓嶇紑/杈圭晫濂栧姳
+/// 对齐上游 fts_fuzzy_match：轻量级模糊匹配算法
+/// 返回匹配分数（0=无匹配，正值越高匹配度越好），同时输出是否全部字符连续
+/// 算法：贪心字符匹配 + 滑动窗口连续匹配 + 前缀/边界奖励
 int fuzzyMatch(const QString &pattern, const QString &text, bool *outAllConsecutive = nullptr)
 {
   if (pattern.isEmpty() || text.isEmpty())
@@ -2593,7 +2731,7 @@ int fuzzyMatch(const QString &pattern, const QString &text, bool *outAllConsecut
   const int patLen = pattern.length();
   const int strLen = text.length();
 
-  // 璐績鍖归厤锛氬厑璁稿瓧绗﹂棿璺宠繃锛坓ap锛夛紝缁熻鍖归厤寰楀垎
+  // 贪心匹配：允许字符间跳过（gap），统计匹配得分
   int score = 0;
   int patIdx = 0;
   int consecutiveCount = 0;
@@ -2602,7 +2740,7 @@ int fuzzyMatch(const QString &pattern, const QString &text, bool *outAllConsecut
 
   for (int i = 0; i < strLen && patIdx < patLen; ++i) {
     if (str[i].toLower() == pat[patIdx].toLower()) {
-      // 杩炵画鍖归厤濂栧姳锛堝榻愪笂娓?sequential bonus锛?
+      // 连续匹配奖励（对齐上游 sequential bonus）
       if (lastMatchPos == i - 1) {
         consecutiveCount++;
         score += 15 + consecutiveCount * 2;
@@ -2616,10 +2754,10 @@ int fuzzyMatch(const QString &pattern, const QString &text, bool *outAllConsecut
       // 鍓嶇紑鍖归厤棰濆濂栧姳
       if (patIdx == 0)
         score += 5;
-      // 鍗曡瘝杈圭晫鍖归厤濂栧姳锛堥瀛楁瘝鎴栧墠涓€涓瓧绗︽槸鍒嗛殧绗︼級
+      // 单词边界匹配奖励（首字母或前一个字符是分隔符）
       if (i == 0 || (str[i - 1] == '_' || str[i - 1] == ' ' || str[i - 1] == '-'))
         score += 10;
-      // 鍏ㄩ儴瀛楃澶у啓鍖归厤鏃堕澶栧鍔憋紙缂╁啓鍖归厤锛?
+      // 全部字符大写匹配时额外奖励（缩写匹配）
       if (pat[patIdx].isUpper())
         score += 5;
 
@@ -2634,7 +2772,7 @@ int fuzzyMatch(const QString &pattern, const QString &text, bool *outAllConsecut
     return 0;
   }
 
-  // 鎯╃綒璺宠繃鐨勫瓧绗︽暟閲忥紙瀵归綈涓婃父 gap penalty锛?
+  // 惩罚跳过的字符数量（对齐上游 gap penalty）
   int gaps = strLen - (lastMatchPos - patIdx + 1 + (patLen - consecutiveCount));
   score -= gaps;
 
@@ -2670,7 +2808,7 @@ QList<int> ConfigViewModel::searchOptions(const QString &query) const
     return {};
 
   const QString needle = query.toLower().trimmed();
-  // 瀵归綈涓婃父 OptionsSearcher锛歴core > 闃堝€兼墠杩斿洖
+  // 对齐上游 OptionsSearcher：score > 阈值才返回
   static constexpr int MIN_SCORE = 10;
 
   struct ScoredIndex { int index; int score; };
@@ -2691,7 +2829,7 @@ QList<int> ConfigViewModel::searchOptions(const QString &query) const
     }
   }
 
-  // 鎸夊垎鏁伴檷搴忔帓搴忥紙瀵归綈涓婃父锛氶珮鍒嗕紭鍏堬紝鍚屽垎鎸夊瓧姣嶅簭锛?
+  // 按分数降序排序（对齐上游：高分优先，同分按字母序）
   QObject *opts = printOptions_;
   std::sort(scored.begin(), scored.end(), [opts](const ScoredIndex &a, const ScoredIndex &b) {
     if (a.score != b.score)
@@ -2950,7 +3088,7 @@ QString ConfigViewModel::valueChainForKey(const QString &key) const
 bool ConfigViewModel::resetOptionToLevel(const QString &key, int level)
 {
   // level: 0=default, 1=print, 2=filament, 3=printer
-  // 瀵归綈涓婃父 Tab reset_to_level
+  // 对齐上游 Tab reset_to_level
   if (!printOptions_ || !presetService_)
     return false;
 
@@ -3028,7 +3166,7 @@ QString ConfigViewModel::searchResultPage(int searchIndex) const
   return printOptions_->optPage(m_lastSearchResults_[searchIndex]);
 }
 
-// 鈹€鈹€ Scope difference (瀵归綈涓婃父 Tab::is_modified_value per-scope diff) 鈹€鈹€
+// ── Scope difference (对齐上游 Tab::is_modified_value per-scope diff) ──
 
 QString ConfigViewModel::scopeDiffSummary(const QString &key) const
 {
@@ -3118,7 +3256,7 @@ void ConfigViewModel::resetAllScopeOverrides()
     resetScopeOverride(key);
 }
 
-// 鈹€鈹€ Global modified options (瀵归綈涓婃父 Tab::modified_options) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ── Global modified options (对齐上游 Tab::modified_options) ──────────
 
 int ConfigViewModel::globalModifiedCount() const
 {
@@ -3144,7 +3282,7 @@ void ConfigViewModel::applyProjectConfig(const QHash<QString, QVariant> &config)
   if (config.isEmpty()) return;
 
   // Try to match printer/filament/print presets from loaded config
-  // Upstream maps: printer_preset_id 鈫?PresetBundle printer, etc.
+  // Upstream maps: printer_preset_id → PresetBundle printer, etc.
   const auto printerIt = config.find(QStringLiteral("printer_preset_id"));
   if (printerIt != config.end() && !printerIt.value().toString().isEmpty())
   {
@@ -3169,14 +3307,33 @@ void ConfigViewModel::applyProjectConfig(const QHash<QString, QVariant> &config)
       setCurrentPrintPreset(name);
   }
 
+  // Upstream project config (Orca/CP 3MFs): printer_settings_id /
+  // print_settings_id name the selected presets when the OWzx ids are absent.
+  if (!config.contains(QStringLiteral("printer_preset_id")))
+  {
+    const QString name = config.value(QStringLiteral("printer_settings_id")).toString();
+    if (!name.isEmpty() && presetService_ && presetService_->hasPreset(name))
+      setCurrentPrinterPreset(name);
+  }
+  if (!config.contains(QStringLiteral("print_preset_id")))
+  {
+    const QString name = config.value(QStringLiteral("print_settings_id")).toString();
+    if (!name.isEmpty() && presetService_ && presetService_->hasPreset(name))
+      setCurrentPrintPreset(name);
+  }
+
   // v5.16 (PSET2-06): restore the per-slot filament preset vector. The key
   // carries every slot including 0 (the global selection — upstream
   // filament_presets semantics); the first entry wins over
-  // filament_preset_id when both are present.
+  // filament_preset_id when both are present. Upstream 3MFs carry the same
+  // vector as filament_settings_id.
+  QStringList slotNames;
   const auto slotsIt = config.find(QStringLiteral("filament_presets"));
   if (slotsIt != config.end())
+    slotNames = slotsIt.value().toString().split(QLatin1Char(';'), Qt::SkipEmptyParts);
+  else if (config.contains(QStringLiteral("filament_settings_id")))
+    slotNames = config.value(QStringLiteral("filament_settings_id")).toStringList();
   {
-    const QStringList slotNames = slotsIt.value().toString().split(QLatin1Char(';'), Qt::SkipEmptyParts);
     if (!slotNames.isEmpty())
     {
       const QString globalName = plainPresetName(slotNames.first());
@@ -3190,6 +3347,18 @@ void ConfigViewModel::applyProjectConfig(const QHash<QString, QVariant> &config)
     }
   }
 
+  // C6: per-slot colours (upstream project_config.filament_colour). Entries
+  // equal to the slot preset's own colour stay implicit.
+  filamentSlotColours_.clear();
+  const QStringList colours = config.value(QStringLiteral("filament_colour")).toStringList();
+  for (int slot = 0; slot < colours.size() && slot < filamentSlotCount(); ++slot)
+  {
+    const QString c = colours.at(slot).trimmed();
+    filamentSlotColours_.append(QColor::isValidColorName(c)
+                                    ? QColor(c).name(QColor::HexRgb).toUpper()
+                                    : QString());
+  }
+
   // Apply remaining config keys into the editable print-tier state.
   for (auto it = config.constBegin(); it != config.constEnd(); ++it)
   {
@@ -3199,6 +3368,10 @@ void ConfigViewModel::applyProjectConfig(const QHash<QString, QVariant> &config)
         key == QStringLiteral("filament_preset_id") ||
         key == QStringLiteral("print_preset_id") ||
         key == QStringLiteral("filament_presets") ||
+        key == QStringLiteral("printer_settings_id") ||
+        key == QStringLiteral("print_settings_id") ||
+        key == QStringLiteral("filament_settings_id") ||
+        key == QStringLiteral("filament_colour") ||
         key == QStringLiteral("print_sequence") ||
         key == QStringLiteral("total_filament_names"))
       continue;

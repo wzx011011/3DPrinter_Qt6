@@ -294,6 +294,58 @@ CxDialog {
                         }
                     }
 
+                    // STEP import (upstream Preferences import_export group:
+                    // enable_step_mesh_setting, linear_deflection [0.001, 0.1],
+                    // angle_deflection [0.01, 1], is_split_compound).
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("导入 STEP 文件时显示选项"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
+                        CxSwitch {
+                            checked: root.settingsVm.stepMeshDialogEnabled
+                            onToggled: root.settingsVm.setStepMeshDialogEnabled(checked)
+                        }
+                    }
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("STEP 导入：线性偏差"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
+                        CxTextField {
+                            Layout.preferredWidth: 100
+                            text: Number(root.settingsVm.stepLinearDeflection).toFixed(3)
+                            onEditingFinished: {
+                                root.settingsVm.setStepLinearDeflection(Number(text))
+                                text = Number(root.settingsVm.stepLinearDeflection).toFixed(3)
+                            }
+                        }
+                        Text { text: "mm"; color: Theme.textTertiary; font.pixelSize: Theme.fontSizeSM }
+                    }
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("STEP 导入：角度偏差"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
+                        CxTextField {
+                            Layout.preferredWidth: 100
+                            text: Number(root.settingsVm.stepAngleDeflection).toFixed(2)
+                            onEditingFinished: {
+                                root.settingsVm.setStepAngleDeflection(Number(text))
+                                text = Number(root.settingsVm.stepAngleDeflection).toFixed(2)
+                            }
+                        }
+                    }
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("STEP 导入：拆分为多个对象"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
+                        CxSwitch {
+                            checked: root.settingsVm.stepSplitCompound
+                            onToggled: root.settingsVm.setStepSplitCompound(checked)
+                        }
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 196
+                        text: qsTr("偏差越小网格质量越高，但处理时间更长。作为导入对话框的默认值；关闭导入对话框时直接使用。")
+                        color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS; wrapMode: Text.Wrap
+                        Layout.preferredWidth: 320
+                    }
+
                     // Notification preferences（对齐上游 notification_manager preferences）
                     // R1B-14: section titles live on the theme-following content
                     // pane, so they take content tokens (textPrimary) — chromeText

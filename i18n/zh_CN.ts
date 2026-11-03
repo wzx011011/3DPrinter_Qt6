@@ -270,6 +270,18 @@
 </context>
 <context>
     <name>BBLTopbar</name>
+    <message>
+        <source>Export all objects as STLs...</source>
+        <translation>导出所有对象为多个STL...</translation>
+    </message>
+    <message>
+        <source>Export all objects as one DRC...</source>
+        <translation>将所有对象导出为一个 DRC...</translation>
+    </message>
+    <message>
+        <source>Export all objects as DRCs...</source>
+        <translation>将所有对象导出为 DRC...</translation>
+    </message>
         <message>
         <source>Export as one DRC...</source>
         <translation>作为一个 DRC 导出...</translation>
@@ -7048,6 +7060,18 @@
 <context>
     <name>PreparePage</name>
     <message>
+        <source>Reset current rotation to the value when open the rotation tool.</source>
+        <translation>重置当前旋转为打开旋转工具时的值</translation>
+    </message>
+    <message>
+        <source>Reset current rotation to real zeros.</source>
+        <translation>重置当前旋转为真实零位</translation>
+    </message>
+    <message>
+        <source>Reset scale</source>
+        <translation>重置缩放</translation>
+    </message>
+    <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="264"/>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="768"/>
         <source>添加模型...</source>
@@ -9768,6 +9792,65 @@
     <message>
         <location filename="../src/qml_gui/dialogs/SpeedLimitDialog.qml" line="169"/>
         <source>取消</source>
+        <translation>取消</translation>
+    </message>
+</context>
+<context>
+    <name>StepMeshDialog</name>
+    <message>
+        <source>Step file import parameters</source>
+        <translation>STEP 文件导入参数</translation>
+    </message>
+    <message>
+        <source>Smaller linear and angular deflections result in higher-quality transformations but increase the processing time.</source>
+        <translation>较小的线性和角度偏差会产生更高质量的转换，但会增加处理时间。</translation>
+    </message>
+    <message>
+        <source>Wiki Guide</source>
+        <translation>维基指南</translation>
+    </message>
+    <message>
+        <source>Linear Deflection</source>
+        <translation>线性偏差</translation>
+    </message>
+    <message>
+        <source>Angle Deflection</source>
+        <translation>角度偏差</translation>
+    </message>
+    <message>
+        <source>Please input a valid value (0.001 &lt; linear deflection &lt; 0.1)</source>
+        <translation>请输入有效值（0.001 &lt; 线性偏差 &lt; 0.1）</translation>
+    </message>
+    <message>
+        <source>Please input a valid value (0.01 &lt; angle deflection &lt; 1.0)</source>
+        <translation>请输入有效值（0.01 &lt; 角度偏差 &lt; 1.0）</translation>
+    </message>
+    <message>
+        <source>Split compound and compsolid into multiple objects</source>
+        <translation>将复合体和复合实体拆分为多个对象</translation>
+    </message>
+    <message>
+        <source>Number of triangular facets</source>
+        <translation>三角面片数量</translation>
+    </message>
+    <message>
+        <source>Calculating, please wait...</source>
+        <translation>正在计算，请稍候...</translation>
+    </message>
+    <message>
+        <source>Save these settings as default</source>
+        <translation>将这些设置保存为默认值</translation>
+    </message>
+    <message>
+        <source>Don&apos;t show again</source>
+        <translation>不再显示</translation>
+    </message>
+    <message>
+        <source>OK</source>
+        <translation>确定</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
         <translation>取消</translation>
     </message>
 </context>

@@ -1,17 +1,17 @@
 ---
 name: migrating-source-truth
-description: "Migrating source-truth tasks from CrealityPrint upstream to Qt6/QML. Triggers when the user asks to continue migration, pick up the next task, or run migration in batch mode."
+description: "Migrating source-truth tasks from OrcaSlicer upstream to Qt6/QML. Triggers when the user asks to continue migration, pick up the next task, or run migration in batch mode."
 ---
 
 # 源码真值迁移
 
-推进本仓库从 CrealityPrint 到 Qt6/QML 的源码真值迁移。
+推进本仓库从 OrcaSlicer 到 Qt6/QML 的源码真值迁移。
 
 遵循 `.claude/rules/source-truth-migration.md` 中的规范，不在此重复全局规则。
 
 ## 目标
 
-从 `docs/源码对照迁移任务追踪.md` 中选取当前最高优先级且未完成的任务，以 `third_party/CrealityPrint` 为工作基础推进有边界的迁移工作单元。
+从 `docs/源码对照迁移任务追踪.md` 中选取当前最高优先级且未完成的任务，以 `third_party/OrcaSlicer` 为工作基础推进有边界的迁移工作单元。
 
 ## 参数
 
@@ -21,12 +21,12 @@ description: "Migrating source-truth tasks from CrealityPrint upstream to Qt6/QM
 ## 工作流
 
 1. 读取 `docs/源码对照迁移任务追踪.md`，显示任务队列总览（格式见 `reference/output-format.md`）
-2. **跨节扫描选任务**：按优先级顺序扫描 P0→P2→P3→P4→P5→P6→P7→P8→P9→P10 所有节，跳过被外部依赖阻塞（需 CGAL/SLA/harfbuzz 等）的任务，选择第一个可推进的 `[-]` 或 `[ ]` 任务。如果当前节剩余任务全部被阻塞，**必须自动跳到下一节**，不得停在同一节内
+2. **选任务**：按追踪文档第 7 节"建议顺序"依次扫描第 4 节缺陷（C*/P* 编号）和第 5 节功能缺口；跳过第 5.3 节外部阻塞项和第 6 节待决策项，选择第一个可推进的条目。某一类剩余条目全部被阻塞时，**必须自动跳到下一类**，不得停住
 3. 报告任务 ID、上游模块、Qt6 目标模块、当前状态
-4. 在 `third_party/CrealityPrint` 中定位上游源码，在 `src/core` 或 `src/qml_gui` 中定位 Qt6 目标
+4. 在 `third_party/OrcaSlicer` 中定位上游源码，在 `src/core` 或 `src/qml_gui` 中定位 Qt6 目标
 5. 实现最小、可验证的根因迁移
 6. 运行 `scripts/auto_verify_with_vcvars.ps1` 验证，报告结果
-7. 仅当任务状态确实变化时更新追踪文档（状态语义见 rules）
+7. 更新追踪文档：条目修复并验证后**直接删除该条**（历史在 git 里）；领域状态确实变化时更新第 3 节（状态语义见 rules）
 8. **单任务模式**：停止并报告完成。**批量模式**：按 `reference/stop-conditions.md` 决定是否继续
 
 ## 跨节扫描规则（批量模式关键）
@@ -36,7 +36,7 @@ description: "Migrating source-truth tasks from CrealityPrint upstream to Qt6/QM
 - 当前节的剩余任务都被外部依赖阻塞（如 CGAL/SLA/harfbuzz）
 - 当前节已无 `[-]` 或 `[ ]` 任务
 
-**禁止行为**：完成 P2.7 的部分任务后，发现 P2.7 其余任务被阻塞就停止。必须继续扫描 P2.8、P3、P4 等节。
+**禁止行为**：完成第 4 节部分缺陷后，发现其余缺陷被阻塞就停止。必须继续扫描第 5 节的功能缺口。
 
 ## 上下文预算管理（批量模式关键）
 
@@ -48,9 +48,9 @@ description: "Migrating source-truth tasks from CrealityPrint upstream to Qt6/QM
 ```
 ## 批量迁移恢复点
 **Last update:** YYYY-MM-DD
-**Tasks completed this session:** Px.x, Py.y
+**Tasks completed this session:** <ID>, <ID>
 **Last verification:** 编译数/smoke test数, QML warnings数
-**Next task:** Pz.z - 任务简述
+**Next task:** <ID> - 任务简述
 **Blocked:** 被阻塞的任务及原因
 ```
 

@@ -69,28 +69,27 @@ __pycache__/
 # === Third-party dependencies (will be managed by submodule or vcpkg) ===
 # third_party/ directories are tracked individually
 
-# docs/ is ignored by default, but the migration ledgers are force-tracked
-# (canonical cross-clone progress sources; see .planning/WORK_ITEMS.yaml).
+# docs/ is ignored by default so ad-hoc reports stay local; every maintained
+# doc is listed here explicitly (curated 2026-11-03, code is the source of truth).
 docs/*
 !docs/源码对照迁移任务追踪.md
-!docs/代码评审报告_2026-09-04.md
+!docs/架构说明.md
+!docs/上游基线与功能矩阵.md
+!docs/services-status.md
+!docs/依赖与协议边界审计.md
+!docs/ai-control.md
+!docs/LAN打印机接入.md
+!docs/创想云模型库接入.md
+!docs/qt612-upgrade-notes.md
 !docs/perf-baseline.md
-# qmllint ratchet gate allowlist is part of the build system (phase 1, 2026-10-23)
+# gate allowlists (qmllint ratchet, style-literal ratchet) are build inputs
 !docs/qmllint-baseline/
 !docs/qmllint-baseline/*
-# style-literal ratchet gate allowlist (2026-10-26 UI-consistency batch)
 !docs/style-baseline/
 !docs/style-baseline/*
-!docs/代码债与架构审计_2026-10-10.md
-!docs/开发计划_2026-10-10.md
-!docs/UX细节扫描报告_2026-10-11.md
-# feature 接入文档（2026-10-23：创想云模型库 / LAN 打印机）
-!docs/创想云模型库接入.md
-!docs/LAN打印机接入.md
-!docs/Qt6现代化扫描报告_2026-10-12.md
-!docs/UX细节扫描报告_2026-10-11.md
-!docs/Qt6现代化扫描报告_2026-10-12.md
-!docs/ui-full-restoration-inventory.md
+# UI reference material consumed by scripts/ui_diff_*.{py,ps1}
+!docs/ui-reference/
+!docs/ui-reference/*
 !docs/visual-compare/
 !docs/visual-compare/*
 docs/visual-compare/*.png
@@ -113,8 +112,3 @@ nul
 # 生成的压测产物与 ASan 构建（>100MB，禁止入库）
 --out/
 build-asan/
-# convergence-campaign ledger: UI restoration + feature audit (2026-10-29)
-!docs/ui-feature-audit-202610.md
-# Track A API-surface gap scan orphan lists (2026-10-30)
-!docs/api-orphans-raw-20261030.txt
-!docs/api-orphans-curated-20261030.txt

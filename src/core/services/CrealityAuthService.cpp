@@ -84,6 +84,9 @@ void CrealityAuthService::invalidate()
 
 void CrealityAuthService::exchangeCode(const QString &code)
 {
+    // C12: only a login the user started may consume a code.
+    if (!loginInProgress_)
+        return;
     const int port = effectiveCallbackPort();
     QJsonObject body;
     body.insert(QStringLiteral("code"), code);

@@ -855,6 +855,7 @@ private:
   /// feature/lan-printers L2：Device/Backend 装配开关
   /// （"mock"=演示设备 | "moonraker"=局域网真打印机），照抄 Cloud/Backend 先例。
   IDeviceDataPlane *deviceService_ = nullptr;
+  int m_lastNozzleCount = 0;  ///< P6: grow-only slot rider fires on nozzle-count changes
   QString deviceBackendKind_ = QStringLiteral("mock");
   // U11: send-print（FTP+MQTT）桥接状态——printSendUpload* 属性的存储。
   bool m_printSendUploadActive = false;

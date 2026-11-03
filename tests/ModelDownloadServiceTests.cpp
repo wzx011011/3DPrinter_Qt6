@@ -145,6 +145,53 @@ private slots:
     QVERIFY(!svc.busy());
   }
 
+  void webSuppliedPathsStayUnderDownloadRoot()
+  {
+    // C5 (review 2026-11-03): name/userId/modelId/fileFormat come from the
+    // mall page. Traversal, executable formats and non-https remote URLs are
+    // refused or neutralised; the file always lands under the download root.
+    DownloadStub stub;
+    stub.payload = QByteArray(64, 'B');
+    QVERIFY(stub.start());
+
+    ModelDownloadService svc;
+    svc.setDownloadRoot(dir_.path());
+    QSignalSpy finishedSpy(&svc, &ModelDownloadService::downloadFinished);
+    QSignalSpy failedSpy(&svc, &ModelDownloadService::downloadFailed);
+
+    // Executable format: refused before any request.
+    svc.startDownload(QStringLiteral("http://127.0.0.1:%1/x.bin").arg(stub.port()),
+                      QStringLiteral("u1"), QStringLiteral("m1"),
+                      QStringLiteral("evil1"), QStringLiteral("bat"),
+                      QStringLiteral("../../../../Startup/x"));
+    QCOMPARE(failedSpy.count(), 1);
+    // Remote plain http: refused.
+    svc.startDownload(QStringLiteral("http://example.com/x.stl"),
+                      QStringLiteral("u1"), QStringLiteral("m1"),
+                      QStringLiteral("evil2"), QStringLiteral("stl"),
+                      QStringLiteral("x"));
+    QCOMPARE(failedSpy.count(), 2);
+    QCOMPARE(stub.hits, 0);
+
+    // Traversal in every component: neutralised, lands under the root.
+    QEventLoop loop;
+    connect(&svc, &ModelDownloadService::downloadFinished, &loop, &QEventLoop::quit);
+    svc.startDownload(QStringLiteral("http://127.0.0.1:%1/x.bin").arg(stub.port()),
+                      QStringLiteral("../../u"), QStringLiteral("..\\..\\m"),
+                      QStringLiteral("../f"), QStringLiteral(".STL"),
+                      QStringLiteral("../../../../escape"));
+    QTimer::singleShot(10000, &loop, &QEventLoop::quit);
+    loop.exec();
+    QCOMPARE(finishedSpy.count(), 1);
+    const QString path = finishedSpy.first().at(1).toString();
+    const QString root = QDir::cleanPath(QFileInfo(dir_.path()).absoluteFilePath());
+    QVERIFY2(QDir::cleanPath(QFileInfo(path).absoluteFilePath()).startsWith(root + QLatin1Char('/')),
+             qPrintable(path));
+    QVERIFY(!path.contains(QStringLiteral("..")));
+    QVERIFY(path.endsWith(QStringLiteral(".stl")));
+    QVERIFY(QFile::exists(path));
+  }
+
   void stateReportShapes()
   {
     ModelDownloadService svc;

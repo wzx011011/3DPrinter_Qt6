@@ -71,8 +71,14 @@ Item {
         enabled: root.ctxAvail("changeFilament")
         onAboutToShow: ++root.menuRefreshTick
         Instantiator {
-            // index 0 = "Default" row, 1..N = the filament slots
-            model: root.configVm ? root.configVm.filamentSlotCount() + 1 : 1
+            // index 0 = "Default" row, 1..N = the filament slots. C8: the
+            // count is a Q_INVOKABLE (untracked), so tie it to the per-popup
+            // refresh tick or the row count goes stale after adding/removing
+            // filaments or loading a project.
+            model: {
+                void root.menuRefreshTick
+                return root.configVm ? root.configVm.filamentSlotCount() + 1 : 1
+            }
             delegate: CxMenuItem {
                 id: filItem
                 required property int index
@@ -91,7 +97,9 @@ Item {
                     if (_isDefaultRow)
                         return qsTr("Default")
                     if (root.configVm) {
-                        var preset = root.configVm.filamentPresetForSlot(index)
+                        // Row n is "Filament n"; filamentPresetForSlot is
+                        // 0-based (slot 0 = filament 1, as in LeftSidebar). C8.
+                        var preset = root.configVm.filamentPresetForSlot(index - 1)
                         if (preset && preset.length > 0)
                             return preset
                     }
@@ -438,11 +446,12 @@ Item {
             enabled: root.editorVm && root.editorVm.selectedObjectCount > 0
             onTriggered: root.editorVm.scaleSelectionToFitBed()
         }
-        // Track A: 填充热床 (upstream "Fill bed with copies",
-        // GUI_Factories.cpp:903) — fills the remaining bed area with copies
-        // of the single selected object.
+        // Upstream "Fill bed with instances" (GUI_Factories.cpp:2031; the
+        // "Fill bed with copies" variant at :903 is disabled upstream, :1470)
+        // -- fills the plate's free area with instances of the selected
+        // object (FillBedJob, one arrange run, undoable).
         CxMenuItem {
-            text: qsTr("铺满打印板")
+            text: qsTr("用实例铺满打印板...")
             enabled: root.editorVm && root.editorVm.selectedObjectCount === 1
             onTriggered: root.editorVm.fillBedWithCopies()
         }

@@ -4,32 +4,34 @@
 # checkout (gitlink pinned to the upstream baseline commit) so it can be
 # advanced/synced with upstream without carrying local edits. Every OWzx
 # compatibility change lives instead in this repository under
-# patches/orcaslicer/*.patch as an ordered series (format-patch exports of
-# the former owzx-cgal54-on-0632 compat branch, oldest first), applied onto
-# the submodule working tree at CONFIGURE time, before the from-source
-# libslic3r build globs its sources.
+# patches/orcaslicer/*.patch as an ordered series, applied onto the submodule
+# working tree at CONFIGURE time, before the from-source libslic3r build globs
+# its sources.
 #
-# Applied-state detection (robust against series evolution):
-#   A SHA-256 fingerprint of the whole series (per-file hashes, in order) is
-#   stamped into third_party/OrcaSlicer/.owzx-patches-applied after a
-#   successful apply. A configure run treats the submodule as already patched
-#   only when the stamp matches the CURRENT series fingerprint AND the
-#   working tree actually carries modifications relative to its HEAD (a bare
-#   `git submodule update` resets the tree but not the untracked stamp, so
-#   the dirty-tree check is what makes the stamp trustworthy).
-#   Otherwise each patch is forward-checked and applied IN ORDER (later
-#   patches rework files created by earlier ones, and a single multi-file
-#   `git apply` invocation does not compose those intermediate states); if
-#   the tree is in any other state (wrong baseline, partial series, series
-#   changed under a patched tree) configure fails hard rather than building
-#   libslic3r from a tree of unknown provenance.
+# Applied-state detection (C2, 2026-11-03):
+#   After a successful apply, a stamp in the BUILD tree records the series
+#   fingerprint (per-file hashes, in order) and the SHA-256 of the resulting
+#   `git diff HEAD` of the submodule. A configure run treats the submodule as
+#   already patched only when both match exactly, i.e. the tracked tree holds
+#   precisely the patched content. (The old stamp lived inside the submodule
+#   as an untracked file, which made `git status --porcelain` permanently
+#   non-empty: a `git checkout .` in the submodule then built libslic3r
+#   UNPATCHED with no error.)
+#
+#   Otherwise the tree is brought back to a known state: if every modified
+#   tracked file is one the series touches (partial apply, edited or appended
+#   series), those files are restored from HEAD and the whole series is
+#   re-applied in order. Modifications to any other file are foreign edits;
+#   configure then fails hard rather than discard them or build libslic3r from
+#   a tree of unknown provenance.
 #
 # A fresh clone therefore self-heals: `git submodule update` checks out the
 # pristine baseline, the next configure re-applies the whole series.
 
 set(OWZX_ORCASLICER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/OrcaSlicer")
 set(OWZX_ORCASLICER_PATCH_DIR "${CMAKE_CURRENT_SOURCE_DIR}/patches/orcaslicer")
-set(OWZX_PATCH_STAMP "${OWZX_ORCASLICER_DIR}/.owzx-patches-applied")
+set(OWZX_PATCH_STAMP "${CMAKE_BINARY_DIR}/owzx-orcaslicer-patches.stamp")
+set(OWZX_LEGACY_PATCH_STAMP "${OWZX_ORCASLICER_DIR}/.owzx-patches-applied")
 
 if(NOT EXISTS "${OWZX_ORCASLICER_DIR}/.git")
     message(STATUS
@@ -46,6 +48,10 @@ if(NOT OWZX_ORCASLICER_PATCHES)
     return()
 endif()
 
+# Editing a patch in place must re-run configure (C2b).
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    ${OWZX_ORCASLICER_PATCHES})
+
 # Resolve git once up front: execute_process resolves commands through PATH at
 # spawn time, and a configure environment without git on PATH would otherwise
 # surface as a misleading "patch does not apply" failure.
@@ -56,47 +62,115 @@ if(NOT OWZX_GIT_EXECUTABLE)
         "the OrcaSlicer compatibility series at configure time")
 endif()
 
+# The pre-2026-11-03 stamp lived inside the submodule; remove it so the
+# submodule status is honest again.
+if(EXISTS "${OWZX_LEGACY_PATCH_STAMP}")
+    file(REMOVE "${OWZX_LEGACY_PATCH_STAMP}")
+endif()
+
 # Fingerprint of the current series (file order is part of the identity).
 set(OWZX_SERIES_FINGERPRINT "")
+set(OWZX_SERIES_FILES "")
 foreach(patch_file IN LISTS OWZX_ORCASLICER_PATCHES)
     file(SHA256 "${patch_file}" patch_file_hash)
     string(APPEND OWZX_SERIES_FINGERPRINT "${patch_file_hash};")
+    # Files the series touches (the "+++ b/<path>" headers).
+    file(STRINGS "${patch_file}" patch_targets REGEX "^\\+\\+\\+ b/")
+    foreach(target_line IN LISTS patch_targets)
+        string(REGEX REPLACE "^\\+\\+\\+ b/" "" target_path "${target_line}")
+        list(APPEND OWZX_SERIES_FILES "${target_path}")
+    endforeach()
 endforeach()
+list(REMOVE_DUPLICATES OWZX_SERIES_FILES)
 string(SHA256 OWZX_SERIES_HASH "${OWZX_SERIES_FINGERPRINT}")
 
-# Already-applied check: stamp matches the current series AND the working
-# tree is actually modified relative to the submodule HEAD.
-set(OWZX_SERIES_ALREADY_APPLIED FALSE)
+# SHA-256 of the submodule's tracked changes relative to HEAD.
+function(owzx_submodule_diff_hash out_var)
+    execute_process(
+        COMMAND "${OWZX_GIT_EXECUTABLE}" diff --binary HEAD
+        WORKING_DIRECTORY "${OWZX_ORCASLICER_DIR}"
+        OUTPUT_VARIABLE diff_output
+        RESULT_VARIABLE diff_result)
+    if(NOT diff_result EQUAL 0)
+        message(FATAL_ERROR
+            "[OrcaSlicerPatches] git diff failed in ${OWZX_ORCASLICER_DIR}")
+    endif()
+    string(SHA256 diff_hash "${diff_output}")
+    set(${out_var} "${diff_hash}" PARENT_SCOPE)
+endfunction()
+
+owzx_submodule_diff_hash(OWZX_CURRENT_DIFF_HASH)
+
+# Already-applied check: the stamp must match both the current series and
+# the exact content of the tracked tree.
 if(EXISTS "${OWZX_PATCH_STAMP}")
-    file(READ "${OWZX_PATCH_STAMP}" stamped_hash)
-    string(STRIP "${stamped_hash}" stamped_hash)
-    if(stamped_hash STREQUAL OWZX_SERIES_HASH)
-        execute_process(
-            COMMAND "${OWZX_GIT_EXECUTABLE}" status --porcelain
-            WORKING_DIRECTORY "${OWZX_ORCASLICER_DIR}"
-            OUTPUT_VARIABLE submodule_status_output
-            RESULT_VARIABLE submodule_status_result)
-        if(submodule_status_result EQUAL 0
-                AND NOT submodule_status_output STREQUAL "")
-            set(OWZX_SERIES_ALREADY_APPLIED TRUE)
+    file(STRINGS "${OWZX_PATCH_STAMP}" stamp_lines)
+    list(LENGTH stamp_lines stamp_line_count)
+    if(stamp_line_count EQUAL 2)
+        list(GET stamp_lines 0 stamped_series)
+        list(GET stamp_lines 1 stamped_diff)
+        if(stamped_series STREQUAL OWZX_SERIES_HASH
+                AND stamped_diff STREQUAL OWZX_CURRENT_DIFF_HASH)
+            message(STATUS
+                "[OrcaSlicerPatches] series already applied (fingerprint "
+                "${OWZX_SERIES_HASH}); skipping")
+            return()
         endif()
     endif()
 endif()
 
-if(OWZX_SERIES_ALREADY_APPLIED)
+# Not in the recorded patched state. Restore series-touched files to HEAD;
+# refuse to touch anything else.
+execute_process(
+    COMMAND "${OWZX_GIT_EXECUTABLE}" diff --name-only HEAD
+    WORKING_DIRECTORY "${OWZX_ORCASLICER_DIR}"
+    OUTPUT_VARIABLE dirty_output
+    RESULT_VARIABLE dirty_result
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+if(NOT dirty_result EQUAL 0)
+    message(FATAL_ERROR
+        "[OrcaSlicerPatches] git diff --name-only failed in ${OWZX_ORCASLICER_DIR}")
+endif()
+set(OWZX_FOREIGN_EDITS "")
+set(OWZX_RESTORE_FILES "")
+if(NOT dirty_output STREQUAL "")
+    string(REPLACE "\n" ";" dirty_files "${dirty_output}")
+    foreach(dirty_file IN LISTS dirty_files)
+        list(FIND OWZX_SERIES_FILES "${dirty_file}" series_index)
+        if(series_index EQUAL -1)
+            list(APPEND OWZX_FOREIGN_EDITS "${dirty_file}")
+        else()
+            list(APPEND OWZX_RESTORE_FILES "${dirty_file}")
+        endif()
+    endforeach()
+endif()
+if(OWZX_FOREIGN_EDITS)
+    string(REPLACE ";" "\n  " foreign_list "${OWZX_FOREIGN_EDITS}")
+    message(FATAL_ERROR
+        "[OrcaSlicerPatches] third_party/OrcaSlicer has edits to files the "
+        "patch series does not touch:\n  ${foreign_list}\n"
+        "The submodule must stay pristine; move the change into "
+        "patches/orcaslicer/ or revert it, then re-run configure.")
+endif()
+if(OWZX_RESTORE_FILES)
     message(STATUS
-        "[OrcaSlicerPatches] series already applied (fingerprint "
-        "${OWZX_SERIES_HASH}); skipping")
-    return()
+        "[OrcaSlicerPatches] submodule is not in the recorded patched state; "
+        "restoring ${OWZX_RESTORE_FILES} from HEAD and re-applying the series")
+    execute_process(
+        COMMAND "${OWZX_GIT_EXECUTABLE}" checkout HEAD -- ${OWZX_RESTORE_FILES}
+        WORKING_DIRECTORY "${OWZX_ORCASLICER_DIR}"
+        RESULT_VARIABLE restore_result)
+    if(NOT restore_result EQUAL 0)
+        message(FATAL_ERROR
+            "[OrcaSlicerPatches] failed to restore series files from HEAD")
+    endif()
 endif()
 
-# Check-and-apply each patch IN ORDER. Later patches rework files created by
-# earlier ones, so a patch must be applied before the next one is checked --
-# a "check the whole series first, apply afterwards" pass would judge every
-# post-creation patch against a tree missing the created files. A mid-series
-# failure therefore leaves a partially patched tree; the fatal message
-# directs the reset that restores a known state (the stamp is only written
-# after the whole series lands).
+# Check-and-apply each patch IN ORDER. Later patches rework files touched by
+# earlier ones, so a patch must be applied before the next one is checked. A
+# mid-series failure leaves a partially patched tree; the next configure
+# restores the series files and retries.
+file(REMOVE "${OWZX_PATCH_STAMP}")
 foreach(patch_file IN LISTS OWZX_ORCASLICER_PATCHES)
     get_filename_component(patch_name "${patch_file}" NAME)
 
@@ -112,13 +186,10 @@ foreach(patch_file IN LISTS OWZX_ORCASLICER_PATCHES)
     endif()
     if(NOT patch_check_result EQUAL 0)
         message(FATAL_ERROR
-            "[OrcaSlicerPatches] ${patch_name} does not apply to the "
-            "submodule checkout and no matching applied-state stamp exists. "
-            "The submodule is out of sync with patches/orcaslicer (wrong "
-            "baseline commit, partially applied series, or the series "
-            "changed under a patched tree). Reset third_party/OrcaSlicer to "
-            "the pinned baseline commit, drop untracked files created by the "
-            "series, and re-run configure.")
+            "[OrcaSlicerPatches] ${patch_name} does not apply to the pristine "
+            "submodule checkout. Either the submodule pin does not match the "
+            "baseline the series was written against, or the patch itself is "
+            "stale; regenerate it against third_party/OrcaSlicer HEAD.")
     endif()
 
     execute_process(
@@ -134,11 +205,12 @@ foreach(patch_file IN LISTS OWZX_ORCASLICER_PATCHES)
     if(NOT patch_apply_result EQUAL 0)
         message(FATAL_ERROR
             "[OrcaSlicerPatches] ${patch_name} passed --check but failed to "
-            "apply; reset the submodule working tree and re-run configure")
+            "apply; re-run configure to restore and retry")
     endif()
 endforeach()
 
-file(WRITE "${OWZX_PATCH_STAMP}" "${OWZX_SERIES_HASH}\n")
+owzx_submodule_diff_hash(OWZX_APPLIED_DIFF_HASH)
+file(WRITE "${OWZX_PATCH_STAMP}" "${OWZX_SERIES_HASH}\n${OWZX_APPLIED_DIFF_HASH}\n")
 message(STATUS
     "[OrcaSlicerPatches] applied ${OWZX_ORCASLICER_PATCHES} onto the "
     "pristine submodule checkout (fingerprint ${OWZX_SERIES_HASH})")

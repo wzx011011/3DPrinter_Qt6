@@ -202,9 +202,14 @@ Item {
         canvasType: GLViewport.CanvasAssembleView
         // FB-R9-01: entering the assembly view left the camera at whatever
         // pose the prepare viewport had — the user had to zoom out manually
-        // to find the objects. Select the default plate framing on first
-        // show (upstream CanvasAssembleView re-frames on entry).
-        onVisibleChanged: if (visible) assembleViewport.selectView("plate")
+        // to find the objects. Upstream zooms to the volumes on the FIRST
+        // entry only (Plater.cpp:12076-12079 first_enter_assemble) and keeps
+        // the assembly camera's own pose afterwards (C13).
+        property bool framedOnce: false
+        onVisibleChanged: if (visible && !framedOnce) {
+            framedOnce = true
+            assembleViewport.selectView("plate")
+        }
         // Upstream CanvasAssembleView does not render the bed or the world
         // axes (GLCanvas3D.cpp:2100-2108: both _render_bed and the axes
         // render are commented out on the assemble branch; the ref canvas is

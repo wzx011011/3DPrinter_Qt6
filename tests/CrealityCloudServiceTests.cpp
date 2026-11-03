@@ -146,6 +146,36 @@ private slots:
     QVERIFY(!server.listening());
   }
 
+  void callbackServerHandlesSplitRequestAndIsSingleUse()
+  {
+    // C12 (review 2026-11-03): a request line split across TCP segments must
+    // still yield the code, and the listener stops after the first code so a
+    // second (forged) /login?code= finds nobody listening.
+    OAuthCallbackServer server;
+    QSignalSpy codeSpy(&server, &OAuthCallbackServer::codeReceived);
+    QVERIFY(server.start(15899));
+
+    QTcpSocket socket;
+    QEventLoop loop;
+    QTimer::singleShot(3000, &loop, &QEventLoop::quit);
+    QObject::connect(&server, &OAuthCallbackServer::codeReceived, &loop, &QEventLoop::quit);
+    socket.connectToHost(QHostAddress::LocalHost, 15899);
+    QVERIFY(socket.waitForConnected(2000));
+    socket.write("GET /login?co");
+    socket.flush();
+    QTest::qWait(150);
+    socket.write("de=split42 HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    loop.exec();
+    QCOMPARE(codeSpy.count(), 1);
+    QCOMPARE(codeSpy.first().first().toString(), QStringLiteral("split42"));
+    QVERIFY(!server.listening());
+
+    QTcpSocket second;
+    second.connectToHost(QHostAddress::LocalHost, 15899);
+    QVERIFY(!second.waitForConnected(500));
+    QCOMPARE(codeSpy.count(), 1);
+  }
+
   void callbackServerRejectsNonLoginPath()
   {
     OAuthCallbackServer server;

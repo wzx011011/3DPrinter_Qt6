@@ -11,6 +11,7 @@
 #endif
 
 #include "ProjectService.h"
+#include "StepMeshPrompt.h"
 
 #include "core/util/PrintableArea.h"  // owzx::flatPointCoords (MP8 bed geometry parse)
 
@@ -67,6 +68,7 @@
 #include <libslic3r/Orient.hpp>
 #include <libslic3r/ModelArrange.hpp>
 #include <libslic3r/Arrange.hpp>
+#include <libslic3r/ClipperUtils.hpp>
 #include <libslic3r/GCode/WipeTower.hpp>
 #include <libslic3r/TriangleMeshSlicer.hpp>
 #include <libslic3r/MeshBoolean.hpp>
@@ -114,6 +116,7 @@ struct ProjectEmbeddedPreset
   QHash<QString, QVariant> values;
 };
 static QList<ProjectEmbeddedPreset> readProjectEmbeddedPresets(const QString &archivePath);
+static QVariantMap readProjectPresetSelection(const QString &archivePath);
 #endif
 
 namespace
@@ -440,6 +443,7 @@ namespace
 ProjectService::ProjectService(QObject *parent)
     : QObject(parent)
     , m_plateList(std::make_unique<OWzx::PartPlateList>())
+    , stepMeshPrompt_(new StepMeshPrompt(), [](StepMeshPrompt *p) { p->deleteLater(); })
 {
 #ifdef HAS_LIBSLIC3R
   Slic3r::set_temporary_dir(QDir::tempPath().toStdString());
@@ -493,14 +497,36 @@ namespace
     const QString suffix = QFileInfo(path).suffix().toLower();
     return suffix == QStringLiteral("step") || suffix == QStringLiteral("stp");
   }
-  // Upstream Plater::load_files STEP branch with the app_config defaults
-  // (linear_deflection 0.003, angle_deflection 0.5, is_split_compound false,
-  // enable_step_mesh_setting off -> no StepMeshDialog).
-  Slic3r::Model readStepModel(const QString &path, Slic3r::LoadStrategy strategy)
+  // Upstream Plater::load_files STEP branch: the stored linear/angle
+  // deflection and split-compound values seed step_mesh_fn, which shows
+  // StepMeshDialog when enable_step_mesh_setting is on (default) and uses the
+  // stored values directly otherwise. Cancel returns an empty model and sets
+  // *userCancelled (upstream is_user_cancel: no error is reported).
+  Slic3r::Model readStepModel(const QString &path, Slic3r::LoadStrategy strategy,
+                              const std::shared_ptr<StepMeshPrompt> &prompt,
+                              bool *userCancelled)
   {
+    if (userCancelled)
+      *userCancelled = false;
+    const StepMeshPrompt::Params defaults = StepMeshPrompt::storedDefaults();
+    const QString fileName = QFileInfo(path).fileName();
+    auto meshFn = [prompt, fileName, userCancelled](Slic3r::Step &file, double &linear,
+                                                    double &angle, bool &split) -> int {
+      StepMeshPrompt::Params p = StepMeshPrompt::storedDefaults();
+      if (prompt && !prompt->ask(file, fileName, p)) {
+        if (userCancelled)
+          *userCancelled = true;
+        return -1;
+      }
+      linear = p.linear;
+      angle = p.angle;
+      split = p.splitCompound;
+      return 1;
+    };
     return Slic3r::Model::read_from_step(path.toStdString(), strategy,
-                                         nullptr, nullptr, nullptr,
-                                         0.003, 0.5, false);
+                                         nullptr, nullptr, meshFn,
+                                         defaults.linear, defaults.angle,
+                                         defaults.splitCompound);
   }
   QList<MeshBatchIdentity> collectMeshBatchIdentities(const Slic3r::Model *model)
   {
@@ -669,6 +695,8 @@ QList<int> ProjectService::meshBatchPrintableFlags() const
 
 ProjectService::~ProjectService()
 {
+  if (stepMeshPrompt_)
+    stepMeshPrompt_->cancelPending();
 #ifdef HAS_LIBSLIC3R
   delete model_;
 #endif
@@ -1130,7 +1158,8 @@ bool ProjectService::loadFile(const QString &filePath)
   // while QThreadPool::start(Callable&&) (Qt's suggested replacement) would
   // std::terminate on any throw escaping these lambdas -- their try/catch
   // coverage is partial by design (failures are delivered via signals below).
-  (void)QtConcurrent::run([receiver, localPath, cancelFlag]()
+  const std::shared_ptr<StepMeshPrompt> stepPrompt = stepMeshPrompt_;
+  (void)QtConcurrent::run([receiver, localPath, cancelFlag, stepPrompt]()
                     {
     auto *loadedModel = new Slic3r::Model();
     std::string err;
@@ -1172,6 +1201,7 @@ bool ProjectService::loadFile(const QString &filePath)
     QList<QList<int>> pendingFilamentMaps;
     QList<int> pendingFilamentMapMode;
     QVariantList embeddedPayload;  // G-13: filled in the plate-data block below
+    QVariantMap selectionPayload;  // C6: project preset selection + slot colours
 
     Slic3r::Import3mfProgressFn progressFn = [receiver, cancelFlag](int import_stage, int current, int total, bool &cancel) {
       cancel = cancelFlag && cancelFlag->load();
@@ -1223,8 +1253,9 @@ bool ProjectService::loadFile(const QString &filePath)
         qInfo("[import-prof] %-42s %10.0f ms", what, ms);
       };
       prof_mark("start");
+      bool stepCancelled = false;
       Slic3r::Model loaded = isStepModelPath(localPath)
-          ? readStepModel(localPath, loadStrategy)
+          ? readStepModel(localPath, loadStrategy, stepPrompt, &stepCancelled)
           : Slic3r::Model::read_from_file(localPath.toStdString(),
                                           nullptr,
                                           nullptr,
@@ -1236,6 +1267,9 @@ bool ProjectService::loadFile(const QString &filePath)
                                           nullptr,
                                           progressFn);
       prof_mark("read_from_file done");
+      // StepMeshDialog Cancel rides the existing cancel delivery.
+      if (stepCancelled && cancelFlag)
+        cancelFlag->store(true);
       *loadedModel = std::move(loaded);
       prof_mark("model moved");
       // MP8: the bed geometry comes from the archive's project_settings
@@ -1298,6 +1332,7 @@ bool ProjectService::loadFile(const QString &filePath)
           // storeProject3mf -> params.project_presets).
           const QList<ProjectEmbeddedPreset> embeddedPresets =
               readProjectEmbeddedPresets(localPath);
+          selectionPayload = readProjectPresetSelection(localPath);
           embeddedPayload.reserve(embeddedPresets.size());
           for (const ProjectEmbeddedPreset &preset : embeddedPresets)
           {
@@ -1537,7 +1572,7 @@ bool ProjectService::loadFile(const QString &filePath)
       return;
     }
 
-    QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, errorText, loadedProjectName, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices, loadedPlateInstancePairs, loadedRealPlateData, loadedBedWidthMm, loadedBedDepthMm, embeddedPayload, pendingLocked, pendingBedType, pendingPrintSeq, pendingSpiral, pendingFirstLayerSeq, pendingOtherLayersSeq, pendingOtherLayersSeqNums, pendingThumbnails, pendingFilamentMaps, pendingFilamentMapMode]() {
+    QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, errorText, loadedProjectName, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices, loadedPlateInstancePairs, loadedRealPlateData, loadedBedWidthMm, loadedBedDepthMm, embeddedPayload, selectionPayload, pendingLocked, pendingBedType, pendingPrintSeq, pendingSpiral, pendingFirstLayerSeq, pendingOtherLayersSeq, pendingOtherLayersSeqNums, pendingThumbnails, pendingFilamentMaps, pendingFilamentMapMode]() {
       if (!receiver)
       {
         delete loadedModel;
@@ -1559,6 +1594,7 @@ bool ProjectService::loadFile(const QString &filePath)
       // G-13: hand the embedded presets to BackendContext via take() on
       // loadFinished (the same lambda emits loadFinished below).
       receiver->m_projectEmbeddedPresetsFromLoad = embeddedPayload;
+      receiver->m_projectPresetSelectionFromLoad = selectionPayload;
 
       receiver->loading_ = false;
       receiver->activeCancelFlag_.reset();
@@ -1934,6 +1970,13 @@ bool ProjectService::exportModel(const QString &filePath, const QString &format)
 #else
     return false;
 #endif
+}
+
+QVariantMap ProjectService::takeProjectPresetSelection()
+{
+  QVariantMap out = m_projectPresetSelectionFromLoad;
+  m_projectPresetSelectionFromLoad.clear();
+  return out;
 }
 
 QVariantList ProjectService::takeProjectEmbeddedPresets()
@@ -3812,9 +3855,14 @@ bool ProjectService::addVolumeFromFile(int objectIndex, const QString &filePath,
 
   try
   {
+    bool stepCancelled = false;
     Slic3r::Model loaded = isStepModelPath(filePath)
-        ? readStepModel(filePath, Slic3r::LoadStrategy::Default)
+        ? readStepModel(filePath, Slic3r::LoadStrategy::Default, stepMeshPrompt_, &stepCancelled)
         : Slic3r::Model::read_from_file(filePath.toStdString());
+    if (stepCancelled) {
+      lastError_.clear();
+      return false;
+    }
     Slic3r::TriangleMesh mesh;
 
     for (const auto *loadedObj : loaded.objects)
@@ -5390,12 +5438,182 @@ bool ProjectService::arrangeObjects(float spacing, bool allowRotation, bool alig
 #endif
 }
 
+int ProjectService::fillBedWithInstances(int objectIndex, float spacing, bool allowRotation,
+                                         const QString &printableArea,
+                                         const QVariantMap &wipeTowerContext)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return -1;
+  Slic3r::ModelObject *object = model_->objects[size_t(objectIndex)];
+  if (!object || object->instances.empty())
+    return -1;
+
+  Slic3r::Points bedShape;
+  const auto coords = printableArea.split(QLatin1Char(','));
+  for (int i = 0; i + 1 < coords.size(); i += 2)
+  {
+    bool okX = false, okY = false;
+    const coord_t x = static_cast<coord_t>(scale_(coords[i].trimmed().toDouble(&okX)));
+    const coord_t y = static_cast<coord_t>(scale_(coords[i + 1].trimmed().toDouble(&okY)));
+    if (okX && okY)
+      bedShape.emplace_back(x, y);
+  }
+  if (bedShape.size() < 3)
+    return -1;
+  const Slic3r::BoundingBox bedBox(bedShape);
+
+  try
+  {
+    // The plate that holds the template instance is the plate being filled
+    // (FillBedJob::prepare selects the plate of the selected object).
+    const Slic3r::Vec2d templateOffset = object->instances.front()->get_offset().head<2>();
+    const int plateIdx = m_plateList
+        ? m_plateList->computePlateIndex(templateOffset.x(), templateOffset.y()) : 0;
+    if (m_plateList && plateIdx >= 0 && plateIdx < m_plateList->plateCount()
+        && m_plateList->plate(plateIdx)->isLocked())
+      return 0;
+    double offX = 0.0, offY = 0.0;
+    if (m_plateList && plateIdx >= 0 && plateIdx < m_plateList->plateCount())
+      OWzx::PartPlateGridLayout::gridOffset(plateIdx, m_plateList->plateCount(),
+                                            m_plateList->plateWidth(),
+                                            m_plateList->plateDepth(), &offX, &offY);
+    const Slic3r::Vec2crd plateShift(scale_(offX), scale_(offY));
+
+    Slic3r::ArrangeParams params;
+    params.min_obj_distance = static_cast<coord_t>(scale_(spacing));
+    params.allow_rotations = allowRotation;
+    params.parallel = false;
+    params.progressind = [](unsigned, std::string) {};
+
+    Slic3r::ModelInstancePtrs allInstances;
+    auto allInput = Slic3r::get_arrange_polys(*model_, allInstances);
+    Slic3r::ArrangePolygons fixedItems;
+    appendArrangeExcludeAreas(m_plateList.get(), fixedItems);
+    appendArrangeWipeTowers(m_plateList.get(), model_, wipeTowerContext, fixedItems);
+
+    Slic3r::ArrangePolygons items;
+    Slic3r::ModelInstancePtrs existingInstances;
+    double fixedArea = 0.0;
+    for (qsizetype i = 0; i < allInput.size(); ++i)
+    {
+      Slic3r::ModelInstance *instance = allInstances[size_t(i)];
+      const Slic3r::Vec2d offset = instance->get_offset().head<2>();
+      const int instancePlate = m_plateList
+          ? m_plateList->computePlateIndex(offset.x(), offset.y()) : 0;
+      if (instancePlate != plateIdx)
+        continue;  // other plates are not part of this bed
+      auto ap = allInput[i];
+      ap.translation -= plateShift;  // virtualize into the bed-0 frame
+      if (instance->get_object() == object && instance->printable)
+      {
+        ++ap.priority;  // existing copies are always kept (FillBedJob ++priority)
+        items.emplace_back(ap);
+        existingInstances.emplace_back(instance);
+      }
+      else
+      {
+        ap.bed_idx = 0;
+        fixedItems.emplace_back(ap);
+        fixedArea += ap.poly.area();
+      }
+    }
+    if (items.empty())
+      return 0;
+
+    // Candidate count: free bed area / footprint incl. half the spacing on
+    // each side (FillBedJob: "the real number will always be close but less").
+    const Slic3r::ExPolygon &templatePoly = items.front().poly;
+    const auto inflated = Slic3r::offset_ex(templatePoly, float(params.min_obj_distance) / 2.f);
+    const double footprint = (inflated.empty() ? templatePoly : inflated.front()).area();
+    if (footprint <= 0.0)
+      return 0;
+    const double bedArea = Slic3r::Polygon(bedShape).area();
+    const double freeArea = bedArea - fixedArea - double(items.size()) * footprint;
+    // Upstream switches to a grid fill above 100 candidates; one nesting run
+    // over a bounded candidate set keeps this a single, short operation.
+    const int candidates = std::clamp(int(freeArea / footprint), 0, 200);
+    if (candidates == 0)
+      return 0;
+    const size_t existingCount = items.size();
+    for (int k = 0; k < candidates; ++k)
+    {
+      auto ap = items.front();
+      ap.priority = 0;
+      // FillBedJob::prepare: candidates start "off the plates"
+      // (PartPlateList::MAX_PLATES_COUNT) so the nester places them.
+      ap.bed_idx = OWzx::kMaxPlateCount;
+      ap.itemid = -1;
+      items.emplace_back(ap);
+    }
+
+    // Stop as soon as a candidate spills onto a second bed: the plate is full
+    // (FillBedJob::process on_packed).
+    bool stop = false;
+    params.stopcondition = [&stop]() { return stop; };
+    params.on_packed = [&stop](const Slic3r::arrangement::ArrangePolygon &ap) {
+      stop = ap.bed_idx > 0 && ap.priority == 0;
+    };
+    Slic3r::arrangement::arrange(items, fixedItems, bedBox, params);
+
+    const auto toWorld = [&plateShift](const Slic3r::arrangement::ArrangePolygon &ap) {
+      return Slic3r::Vec2crd(ap.translation.x() + plateShift.x(),
+                             ap.translation.y() + plateShift.y()).cast<double>();
+    };
+    for (size_t i = 0; i < existingCount; ++i)
+      if (items[i].bed_idx == 0)
+        existingInstances[i]->apply_arrange_result(toWorld(items[i]), items[i].rotation);
+
+    // Instances are heap objects; the pointer survives add_instance growth.
+    const Slic3r::ModelInstance *templateInstance = object->instances.front();
+    int added = 0;
+    for (size_t i = existingCount; i < items.size(); ++i)
+    {
+      if (items[i].bed_idx != 0)
+        continue;
+      Slic3r::ModelInstance *instance = object->add_instance(*templateInstance);
+      instance->apply_arrange_result(toWorld(items[i]), items[i].rotation);
+      ++added;
+    }
+    if (added > 0)
+    {
+      object->invalidate_bounding_box();
+      if (m_plateList)
+      {
+        OWzx::PartPlate *plate = m_plateList->plate(plateIdx);
+        if (plate)
+          for (int instanceIndex = 0; instanceIndex < int(object->instances.size()); ++instanceIndex)
+            plate->addInstance(objectIndex, instanceIndex);
+        emit plateDataLoaded(m_plateList->plateCount());
+      }
+      syncTransformsFromModel();
+      emit projectChanged();
+    }
+    lastError_.clear();
+    return added;
+  }
+  catch (const std::exception &e)
+  {
+    lastError_ = QString::fromLatin1(e.what());
+    return -1;
+  }
+#else
+  Q_UNUSED(objectIndex);
+  Q_UNUSED(spacing);
+  Q_UNUSED(allowRotation);
+  Q_UNUSED(printableArea);
+  Q_UNUSED(wipeTowerContext);
+  lastError_ = tr("Instance operations require libslic3r");
+  return -1;
+#endif
+}
+
 #ifdef HAS_LIBSLIC3R
 namespace {
 // Upstream plane-cut attributes for the gizmo's keep mode (0=both, 1=upper,
-// 2=lower). KeepAsParts is deliberately NOT set: it merges the pieces into one
-// object and, without KeepUpper, makes Cut::perform_with_plane dereference a
-// null "upper" object and spin forever (FB-R4-04).
+// 2=lower). KeepAsParts ("Cut to parts") merges the pieces into one object;
+// without KeepUpper it makes Cut::perform_with_plane dereference a null
+// "upper" object and spin forever (FB-R4-04), so parts mode forces keep-both.
 Slic3r::ModelObjectCutAttributes planeCutAttributes(int keepMode, bool placeOnCut,
                                                     bool cutAsParts)
 {
@@ -5405,6 +5623,14 @@ Slic3r::ModelObjectCutAttributes planeCutAttributes(int keepMode, bool placeOnCu
   // PlaceOnCutUpper/Lower (the engine's post_process then rests that part's
   // cut face on the plane).
   using MCA = Slic3r::ModelObjectCutAttribute;
+  // Parts mode always keeps both halves and never places on cut
+  // (GLGizmoCut.cpp:2961-2965); enforce it here too so no caller can build
+  // KeepAsParts without KeepUpper (null upper object in perform_with_plane).
+  if (cutAsParts)
+  {
+    keepMode = 0;
+    placeOnCut = false;
+  }
   // Assembled as one only_if chain: enum_bitmask's operator|= has never
   // been instantiated anywhere in the engine and does not compile (the
   // private int ctor result has no conversion back to m_bits).
@@ -8755,6 +8981,59 @@ bool ProjectService::duplicateInstanceAsObject(int objectIndex, int instanceInde
 #endif
 }
 
+QVariantList ProjectService::objectInstanceTransforms(int objectIndex) const
+{
+  QVariantList out;
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return out;
+  for (const Slic3r::ModelInstance *instance : model_->objects[size_t(objectIndex)]->instances)
+  {
+    const Slic3r::Transform3d m = instance->get_transformation().get_matrix();
+    QVariantList cells;
+    cells.reserve(16);
+    for (int r = 0; r < 4; ++r)
+      for (int c = 0; c < 4; ++c)
+        cells.append(m(r, c));
+    out.append(QVariant(cells));
+  }
+#else
+  Q_UNUSED(objectIndex);
+#endif
+  return out;
+}
+
+bool ProjectService::setObjectInstanceTransforms(int objectIndex, const QVariantList &transforms)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
+      || transforms.isEmpty())
+    return false;
+  if (!setObjectInstanceCount(objectIndex, int(transforms.size())))
+    return false;
+  Slic3r::ModelObject *object = model_->objects[size_t(objectIndex)];
+  for (int i = 0; i < transforms.size() && size_t(i) < object->instances.size(); ++i)
+  {
+    const QVariantList cells = transforms.at(i).toList();
+    if (cells.size() != 16)
+      return false;
+    Slic3r::Transform3d m = Slic3r::Transform3d::Identity();
+    for (int r = 0; r < 4; ++r)
+      for (int c = 0; c < 4; ++c)
+        m(r, c) = cells.at(r * 4 + c).toDouble();
+    object->instances[size_t(i)]->set_transformation(Slic3r::Geometry::Transformation(m));
+  }
+  object->invalidate_bounding_box();
+  syncTransformsFromModel();
+  emit projectChanged();
+  return true;
+#else
+  Q_UNUSED(objectIndex);
+  Q_UNUSED(transforms);
+  return false;
+#endif
+}
+
 bool ProjectService::setObjectInstanceCount(int objectIndex, int count)
 {
   if (objectIndex < 0 || objectIndex >= objectNames_.size() || count < 1 || count > 1000) {
@@ -9318,7 +9597,7 @@ bool ProjectService::addFilesToPlate(int plateIndex, const QStringList &filePath
   const QSet<QString> supportedSuffixes = {
       QStringLiteral("3mf"), QStringLiteral("stl"), QStringLiteral("obj"),
       QStringLiteral("step"), QStringLiteral("stp"), QStringLiteral("amf"),
-      QStringLiteral("drc")};
+      QStringLiteral("drc"), QStringLiteral("svg")};  // upstream pattern_drop (Plater.cpp:17321)
   QList<Slic3r::Model> importedModels;
   importedModels.reserve(filePaths.size());
   for (const QString &pathValue : filePaths) {
@@ -9332,10 +9611,13 @@ bool ProjectService::addFilesToPlate(int plateIndex, const QStringList &filePath
     try {
       const Slic3r::LoadStrategy loadStrategy =
           Slic3r::LoadStrategy::AddDefaultInstances | Slic3r::LoadStrategy::LoadModel;
+      bool stepCancelled = false;
       Slic3r::Model imported = isStepModelPath(localPath)
-          ? readStepModel(fileInfo.absoluteFilePath(), loadStrategy)
+          ? readStepModel(fileInfo.absoluteFilePath(), loadStrategy, stepMeshPrompt_, &stepCancelled)
           : Slic3r::Model::read_from_file(
                 fileInfo.absoluteFilePath().toStdString(), nullptr, nullptr, loadStrategy);
+      if (stepCancelled)
+        continue;  // upstream skips a cancelled STEP file without an error
       const bool hasImportableObject = std::any_of(imported.objects.cbegin(), imported.objects.cend(),
           [](const Slic3r::ModelObject *object) { return object != nullptr; });
       if (!hasImportableObject) {
@@ -9347,6 +9629,11 @@ bool ProjectService::addFilesToPlate(int plateIndex, const QStringList &filePath
       lastError_ = QString::fromLatin1(exception.what());
       return false;
     }
+  }
+
+  if (importedModels.isEmpty()) {
+    lastError_.clear();  // every file was cancelled in StepMeshDialog
+    return false;
   }
 
   if (!model_)
@@ -9586,7 +9873,7 @@ bool ProjectService::replaceAllOnPlateWithFiles(int plateIndex, const QStringLis
   const QSet<QString> supportedSuffixes = {
       QStringLiteral("3mf"), QStringLiteral("stl"), QStringLiteral("obj"),
       QStringLiteral("step"), QStringLiteral("stp"), QStringLiteral("amf"),
-      QStringLiteral("drc")};
+      QStringLiteral("drc"), QStringLiteral("svg")};  // upstream pattern_drop (Plater.cpp:17321)
   QList<Slic3r::Model> importedModels;
   importedModels.reserve(filePaths.size());
   for (const QString &pathValue : filePaths) {
@@ -9600,10 +9887,13 @@ bool ProjectService::replaceAllOnPlateWithFiles(int plateIndex, const QStringLis
     try {
       const Slic3r::LoadStrategy loadStrategy =
           Slic3r::LoadStrategy::AddDefaultInstances | Slic3r::LoadStrategy::LoadModel;
+      bool stepCancelled = false;
       Slic3r::Model imported = isStepModelPath(localPath)
-          ? readStepModel(fileInfo.absoluteFilePath(), loadStrategy)
+          ? readStepModel(fileInfo.absoluteFilePath(), loadStrategy, stepMeshPrompt_, &stepCancelled)
           : Slic3r::Model::read_from_file(
                 fileInfo.absoluteFilePath().toStdString(), nullptr, nullptr, loadStrategy);
+      if (stepCancelled)
+        continue;  // upstream skips a cancelled STEP file without an error
       const bool hasImportableObject = std::any_of(imported.objects.cbegin(), imported.objects.cend(),
           [](const Slic3r::ModelObject *object) { return object != nullptr; });
       if (!hasImportableObject) {
@@ -9615,6 +9905,11 @@ bool ProjectService::replaceAllOnPlateWithFiles(int plateIndex, const QStringLis
       lastError_ = QString::fromLatin1(exception.what());
       return false;
     }
+  }
+
+  if (importedModels.isEmpty()) {
+    lastError_.clear();  // every file was cancelled in StepMeshDialog
+    return false;
   }
 
   OWzx::PartPlate *targetPlate = m_plateList->plate(plateIndex);
@@ -11192,6 +11487,59 @@ static bool extractBedGeometryFrom3mf(const QString &archivePath,
   return true;
 }
 
+// C6: the preset selection + per-slot colours of a 3MF project, from the
+// same Metadata/project_settings.config JSON the bed geometry comes from.
+// Upstream (Orca/CP) writes printer_settings_id / print_settings_id /
+// filament_settings_id / filament_colour there; OWzx additionally writes
+// printer_preset_id / filament_preset_id / print_preset_id / filament_presets.
+static QVariantMap readProjectPresetSelection(const QString &archivePath)
+{
+  QVariantMap selection;
+  if (archivePath.isEmpty())
+    return selection;
+  mz_zip_archive archive;
+  mz_zip_zero_struct(&archive);
+  if (!Slic3r::open_zip_reader(&archive, QDir::toNativeSeparators(archivePath).toStdString()))
+    return selection;
+  QByteArray payload;
+  const int index = mz_zip_reader_locate_file(&archive, "Metadata/project_settings.config",
+                                              nullptr, 0);
+  if (index >= 0) {
+    mz_zip_archive_file_stat stat;
+    if (mz_zip_reader_file_stat(&archive, static_cast<mz_uint>(index), &stat)
+        && stat.m_uncomp_size <= 16 * 1024 * 1024) {
+      payload.resize(static_cast<int>(stat.m_uncomp_size));
+      if (!mz_zip_reader_extract_to_mem(&archive, static_cast<mz_uint>(index),
+                                        payload.data(), payload.size(), 0))
+        payload.clear();
+    }
+  }
+  Slic3r::close_zip_reader(&archive);
+  const QJsonDocument doc = QJsonDocument::fromJson(payload);
+  if (!doc.isObject())
+    return selection;
+  const QJsonObject root = doc.object();
+  for (const char *key : {"printer_settings_id", "print_settings_id", "printer_preset_id",
+                          "filament_preset_id", "print_preset_id", "filament_presets"}) {
+    const QJsonValue v = root.value(QLatin1String(key));
+    if (v.isString() && !v.toString().isEmpty())
+      selection.insert(QLatin1String(key), v.toString());
+  }
+  for (const char *key : {"filament_settings_id", "filament_colour"}) {
+    const QJsonValue v = root.value(QLatin1String(key));
+    QStringList list;
+    if (v.isArray()) {
+      for (const QJsonValue &item : v.toArray())
+        list.append(item.toString());
+    } else if (v.isString() && !v.toString().isEmpty()) {
+      list = v.toString().split(QLatin1Char(';'));
+    }
+    if (!list.isEmpty())
+      selection.insert(QLatin1String(key), list);
+  }
+  return selection;
+}
+
 static constexpr const char *kOwzxPlateStateEntry = "Metadata/owzx_plate_state.json";
 
 static OwzxPlateFilamentStates readOwzxPlateFilamentStates(const QString &archivePath)
@@ -11793,6 +12141,16 @@ static bool buildProjectSavePayload(const Slic3r::Model *liveModel,
   for (auto it = configOverlay.constBegin();
        it != configOverlay.constEnd(); ++it)
   {
+    // C6: list values (filament_settings_id, filament_colour) are string
+    // VECTORS in the upstream project config.
+    if (it.value().userType() == QMetaType::QStringList) {
+      std::vector<std::string> values;
+      for (const QString &item : it.value().toStringList())
+        values.push_back(item.toStdString());
+      overlayConfig.set_key_value(it.key().toStdString(),
+                                  new Slic3r::ConfigOptionStrings(values));
+      continue;
+    }
     overlayConfig.set_key_value(it.key().toStdString(),
                                 new Slic3r::ConfigOptionString(
                                     it.value().toString().toStdString()));

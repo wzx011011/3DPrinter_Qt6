@@ -77,7 +77,15 @@ void OAuthCallbackServer::handleConnection()
         // The request is complete when the blank line terminates the headers;
         // there is never a request body on this endpoint.
         connect(socket, &QTcpSocket::readyRead, this, [this, socket]() {
-            const QByteArray raw = socket->readAll();
+            // C12: accumulate per socket -- a request line split across TCP
+            // segments must not lose its first part.
+            QByteArray raw = socket->property("owzxRequest").toByteArray();
+            raw += socket->readAll();
+            if (raw.size() > 16 * 1024) {
+                socket->abort();  // not an oauth redirect navigation
+                return;
+            }
+            socket->setProperty("owzxRequest", raw);
             const QString request = QString::fromLatin1(raw);
             const int lineEnd = int(request.indexOf(QStringLiteral("\r\n")));
             if (lineEnd == -1)
@@ -103,8 +111,15 @@ void OAuthCallbackServer::handleConnection()
             socket->write(bounce);
             socket->write("\r\n\r\n", 4);
             socket->disconnectFromHost();
-            if (!code.isEmpty())
+            if (!code.isEmpty()) {
+                // C12: one code per login attempt. The callback protocol
+                // carries no OAuth `state` (the public oauth page only
+                // echoes back_url), so the listener stops at the first code
+                // and later requests -- e.g. a forged /login?code= from
+                // another local page -- find no listener.
+                stop();
                 emit codeReceived(code);
+            }
         });
     }
 }

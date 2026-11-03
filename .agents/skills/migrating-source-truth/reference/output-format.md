@@ -5,19 +5,19 @@
 ```
 ## 任务队列
 
-| 优先级 | 任务ID | 简述 | 状态 | 剩余差距 |
-|--------|--------|------|------|----------|
-| P1 | P1.1 | 顶栏导航... | [-] | 缺通知管理器UI |
-| P2 | P2.1 | Prepare平板... | [-] | 缺真实切片引擎 |
+| 顺序 | 条目ID | 简述 | 领域 | 位置 |
+|------|--------|------|------|------|
+| 1 | C1 | 切割为零件+只保留下半崩溃 | 3D 视口与 Gizmo | ProjectService.cpp planeCutAttributes |
+| 2 | C2 | 补丁状态检测可被绕过 | 构建 | cmake/ApplyOrcaSlicerPatches.cmake |
 | ... | ... | ... | ... | ... |
 
-**当前选中:** Px.x - 任务简述
+**当前选中:** <条目ID> - 简述
 ```
 
 ## 2. 当前任务进度（任务执行中持续更新）
 
 ```
-## 当前进度: Px.x - 任务简述
+## 当前进度: <条目ID> - 简述
 
 **Upstream:** `path/to/upstream/file.cpp:line`
 **Target:** `path/to/qt6/file.qml`
@@ -37,7 +37,7 @@
 ## 3. 任务完成报告（每个任务完成后）
 
 ```
-## 完成: Px.x
+## 完成: <ID>
 
 **Change:** 具体修改内容
 **Gap remaining:** 剩余差距（如无则写"无"）
@@ -50,10 +50,10 @@
 ```
 ## 迁移会话结束
 
-**Tasks completed:** Px.x, Py.y, Pz.z
+**Tasks completed:** <ID>, <ID>, <ID>
 **Final verification status:** 通过/失败
 **Stop reason:** 为什么停止
-**Next recommended task:** Px.x - 任务简述
+**Next recommended task:** <ID> - 任务简述
 ```
 
 ## 5. 恢复点摘要（批量模式每完成 2 个任务必须输出）
@@ -64,9 +64,9 @@
 ## 恢复点
 
 **Session:** 2026-03-18
-**Tasks completed this session:** Px.x, Py.y
+**Tasks completed this session:** <ID>, <ID>
 **Last verification:** 271/271 编译, 61/61 smoke test, 0 QML warnings
-**Resume point:** 下一个应执行的任务是 Pz.z - 任务简述
-**Blocked tasks:** P2.7 GLGizmoDrill (需 CGAL), P2.7 GLGizmoFaceDetector (需 SLA)
-**Next scan order:** Pz.z → Pa.a → Pb.b (按优先级)
+**Resume point:** 下一个应执行的任务是 <ID> - 任务简述
+**Blocked tasks:** <条目ID> (原因)
+**Next scan order:** <ID> → Pa.a → Pb.b (按优先级)
 ```

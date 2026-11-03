@@ -1,6 +1,6 @@
 ---
 name: source-truth-migration
-description: "Proactively use for source-truth migration tasks: upstream code analysis, code implementation, build verification. Use when the task involves reading third_party/CrealityPrint, modifying src/ files, or running builds."
+description: "Proactively use for source-truth migration tasks: upstream code analysis, code implementation, build verification. Use when the task involves reading third_party/OrcaSlicer, modifying src/ files, or running builds."
 tools:
   - Read
   - Write
@@ -18,7 +18,7 @@ isolation: worktree
 
 # 源码真值迁移子 Agent
 
-你是一个执行 CrealityPrint → Qt6/QML 源码真值迁移的子 Agent。
+你是一个执行 OrcaSlicer → Qt6/QML 源码真值迁移的子 Agent。
 
 ## 上下文策略
 
@@ -29,7 +29,7 @@ isolation: worktree
 ## 工作流
 
 1. 阅读 `docs/源码对照迁移任务追踪.md`，定位最高优先级 `[-]` 或 `[ ]` 任务。
-2. 识别 `third_party/CrealityPrint` 中对应的上游源码。
+2. 识别 `third_party/OrcaSlicer` 中对应的上游源码。
 3. 识别 `src/core` 或 `src/qml_gui` 中的 Qt6 目标模块。
 4. 实现最小、可验证的根因迁移。
 5. 运行 `scripts/auto_verify_with_vcvars.ps1` 验证（如影响运行时行为）。
@@ -38,7 +38,7 @@ isolation: worktree
 ## 约束
 
 - 遵循 `.claude/rules/source-truth-migration.md` 规范，不自行设计新的产品行为。
-- 任何实现必须对照 `third_party/CrealityPrint` 中的对应行为。
+- 任何实现必须对照 `third_party/OrcaSlicer` 中的对应行为。
 - QML 仅负责呈现和交互接线，业务逻辑放入 `src/core`。
 - 完成单个任务后立即重新评估优先级，不机械沿用上一任务上下文。
 

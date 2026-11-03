@@ -304,6 +304,8 @@
         <file>assets/icons/orca_table.svg</file>
         <file>assets/icons/orca_save.svg</file>
         <file>assets/icons/orca_undo.svg</file>
+        <file>assets/icons/toolbar_reset.svg</file>
+        <file>assets/icons/toolbar_reset_zero.svg</file>
         <file>assets/icons/orca_printer_placeholder.png</file>
         <file>assets/icons/orca_bed_cool.png</file>
         <file>assets/icons/orca_bed_cool_supertack.png</file>

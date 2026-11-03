@@ -357,8 +357,11 @@ QtObject {
     readonly property color caliCardTextDim:  "#cecece"
     readonly property color caliCardText:     "#eeeeee"
     // Viewport tooltip glass (ToolPositionTooltip / GLToolbars family)
-    readonly property color tipGlassBg:       "#11151dcc"
-    readonly property color tipGlassBorder:   "#ffffff99"
+    // Qt reads 8-digit colours as #AARRGGBB. These glass tokens were written
+    // RGBA (alpha last), which turned the dark 80% glass into a 7% blue tint
+    // and the 60% white border into opaque yellow (2026-11-03).
+    readonly property color tipGlassBg:       "#cc11151d"
+    readonly property color tipGlassBorder:   "#99ffffff"
     readonly property color tipGlassDim:      "#80808080"
     readonly property color tipGlassShadow:   "#40333333"
     // Extruder / filament swatch data palette (PreparePage squeeze colors)
@@ -376,11 +379,11 @@ QtObject {
     // literals at their call sites. They stay theme-independent (canvas
     // content, not chrome) but are now named so pages stay token-clean and
     // the style_literal_gate can hold the line.
-    readonly property color glassWindow:      "#20242bd0"  // gcode-window glass (PreviewPage)
-    readonly property color glassWindowHover: "#20242bcc"  // gcode-window glass, hovered
-    readonly property color glassFloor:       "#262627cc"  // gcode-window floor (ref-measured)
-    readonly property color glassPanel:       "#1a1a1cd1"  // floating panel glass (AI edge panel)
-    readonly property color scrimCardBorder:  "#00000052"  // card-image border scrim (plugin cards)
+    readonly property color glassWindow:      "#d020242b"  // gcode-window glass (PreviewPage)
+    readonly property color glassWindowHover: "#cc20242b"  // gcode-window glass, hovered
+    readonly property color glassFloor:       "#cc262627"  // gcode-window floor (ref-measured)
+    readonly property color glassPanel:       "#d11a1a1c"  // floating panel glass (AI edge panel)
+    readonly property color scrimCardBorder:  "#52000000"  // card-image border scrim (plugin cards)
     readonly property color markerOrange:     "#f2754e"    // unsliced plate / gcode-window hot
     readonly property color markerAmber:      "#eb8043"    // Color.hpp:136 heat marker
     readonly property color markerRust:       "#c16737"    // gcode-window outline

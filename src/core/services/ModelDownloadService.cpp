@@ -28,6 +28,65 @@ QString ensureUnique(const QString &path)
             return candidate;
     }
 }
+
+/// C5 (review 2026-11-03): every path component below comes straight from
+/// the mall page's WebChannel message. Reduce each to a single, harmless
+/// file-name component: no separators, drive colons, wildcard/reserved
+/// characters or control characters, no leading/trailing dots or spaces (so
+/// "." / ".." cannot survive), length-capped. Returns `fallback` when nothing
+/// is left.
+QString safeComponent(const QString &raw, const QString &fallback)
+{
+    static const QString kReserved = QStringLiteral("/\\:*?\"<>|");
+    QString out;
+    out.reserve(raw.size());
+    for (const QChar c : raw) {
+        if (c.unicode() < 0x20 || kReserved.contains(c))
+            out.append(QLatin1Char('_'));
+        else
+            out.append(c);
+    }
+    while (!out.isEmpty() && (out.front() == QLatin1Char('.') || out.front().isSpace()))
+        out.remove(0, 1);
+    while (!out.isEmpty() && (out.back() == QLatin1Char('.') || out.back().isSpace()))
+        out.chop(1);
+    if (out.size() > 120)
+        out.truncate(120);
+    return out.isEmpty() ? fallback : out;
+}
+
+/// Model files only: a short ASCII alphanumeric extension that is not an
+/// executable/script type Windows would run on open.
+bool isAllowedExtension(const QString &ext)
+{
+    static const QStringList kBlocked = {
+        QStringLiteral("exe"), QStringLiteral("bat"), QStringLiteral("cmd"),
+        QStringLiteral("com"), QStringLiteral("ps1"), QStringLiteral("vbs"),
+        QStringLiteral("vbe"), QStringLiteral("js"),  QStringLiteral("jse"),
+        QStringLiteral("wsf"), QStringLiteral("msi"), QStringLiteral("msp"),
+        QStringLiteral("lnk"), QStringLiteral("scr"), QStringLiteral("dll"),
+        QStringLiteral("reg"), QStringLiteral("hta"), QStringLiteral("jar"),
+        QStringLiteral("cpl"), QStringLiteral("pif"), QStringLiteral("url")};
+    if (ext.isEmpty() || ext.size() > 8)
+        return false;
+    for (const QChar c : ext)
+        if (c.unicode() >= 0x80 || !c.isLetterOrNumber())
+            return false;
+    return !kBlocked.contains(ext.toLower());
+}
+
+/// https everywhere; plain http only to the loopback host (local stubs).
+bool isAllowedUrl(const QUrl &url)
+{
+    if (!url.isValid())
+        return false;
+    const QString scheme = url.scheme().toLower();
+    if (scheme == QStringLiteral("https"))
+        return true;
+    const QString host = url.host().toLower();
+    return scheme == QStringLiteral("http")
+           && (host == QStringLiteral("127.0.0.1") || host == QStringLiteral("localhost"));
+}
 } // namespace
 
 ModelDownloadService::ModelDownloadService(QObject *parent)
@@ -53,30 +112,59 @@ void ModelDownloadService::startDownload(const QString &url,
         return;
     }
 
+    const QUrl sourceUrl(url);
+    if (!isAllowedUrl(sourceUrl)) {
+        emit downloadFailed(fileId, QStringLiteral("refused download url (https required)"));
+        return;
+    }
+    QString format = fileFormat;
+    while (format.startsWith(QLatin1Char('.')))
+        format.remove(0, 1);
+    format = format.toLower();
+    if (!isAllowedExtension(format)) {
+        emit downloadFailed(fileId, QStringLiteral("refused file format: %1").arg(fileFormat));
+        return;
+    }
+
     // Storage layout: <root>/<userId>/models/<modelId>/<name><ext> and
     // <root>/<userId>/3mfs/<name> (upstream ModelDownloader.cpp:444-481).
-    const QString ext = fileFormat.startsWith(QStringLiteral("."))
-                            ? fileFormat
-                            : (fileFormat.isEmpty()
-                                   ? QString()
-                                   : QStringLiteral(".") + fileFormat);
+    // Every component is sanitised (C5) and the result must stay under the
+    // download root.
+    const QString ext = QStringLiteral(".") + format;
+    const QString safeUser = safeComponent(userId, QStringLiteral("anonymous"));
+    const QString safeModel = safeComponent(modelId, QStringLiteral("misc"));
+    const QString safeName = safeComponent(name, QStringLiteral("model"));
+    const QString safeFileId = safeComponent(fileId, QStringLiteral("download"));
     QDir rootDir(downloadRoot_);
     QString directory;
     if (ext == QStringLiteral(".3mf")) {
-        directory = rootDir.filePath(userId + QStringLiteral("/3mfs"));
+        directory = rootDir.filePath(safeUser + QStringLiteral("/3mfs"));
     } else {
-        directory = rootDir.filePath(userId + QStringLiteral("/models/")
-                                     + (modelId.isEmpty() ? QStringLiteral("misc") : modelId));
+        directory = rootDir.filePath(safeUser + QStringLiteral("/models/") + safeModel);
     }
-    QDir().mkpath(directory);
     // The dup-rule numbering happens at COMPLETION (upstream semantics);
     // at start we only reserve a per-fileId unique temp name so parallel
     // same-name downloads cannot collide on the .part file.
-    const QString intendedPath = directory + QStringLiteral("/") + name + ext;
-    const QString partPath = intendedPath + QStringLiteral(".") + fileId
+    const QString intendedPath =
+        QDir::cleanPath(QFileInfo(directory + QStringLiteral("/") + safeName + ext).absoluteFilePath());
+    const QString rootPath = QDir::cleanPath(QFileInfo(downloadRoot_).absoluteFilePath());
+    if (!intendedPath.startsWith(rootPath + QLatin1Char('/'))) {
+        emit downloadFailed(fileId, QStringLiteral("refused download path"));
+        return;
+    }
+    QDir().mkpath(directory);
+    const QString partPath = intendedPath + QStringLiteral(".") + safeFileId
                              + QStringLiteral(".part");
 
-    QNetworkRequest request{QUrl(url)};
+    QFile *sink = new QFile(partPath);
+    if (!sink->open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        const QString reason = sink->errorString();
+        delete sink;
+        emit downloadFailed(fileId, QStringLiteral("cannot write %1: %2").arg(partPath, reason));
+        return;
+    }
+
+    QNetworkRequest request{sourceUrl};
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QNetworkRequest::NoLessSafeRedirectPolicy);
     QNetworkReply *reply = manager_->get(request);
@@ -92,9 +180,6 @@ void ModelDownloadService::startDownload(const QString &url,
     latestProgress_ = 0;
     emit stateChanged();
     emit progressChanged();
-
-    QFile *sink = new QFile(partPath);
-    sink->open(QIODevice::WriteOnly | QIODevice::Truncate);
 
     connect(reply, &QNetworkReply::downloadProgress, this,
             [this, fileId](qint64 received, qint64 total) {

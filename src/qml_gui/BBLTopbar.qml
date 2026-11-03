@@ -1036,19 +1036,19 @@ Item {
             }
             CxMenuItem {
                 enabled: Backend.canExport && Backend.editorViewModel
-                text: qsTr("分别导出 STL...")
+                text: qsTr("Export all objects as STLs...")
                 onTriggered: root.exportStlsRequested()
             }
-            // Track A: upstream object-export family "Export as one DRC" /
-            // "Export as DRCs" (Draco-compressed mesh).
+            // Upstream export family (MainFrame.cpp:2895-2906): every model
+            // object, as one Draco-compressed DRC or one DRC per object.
             CxMenuItem {
                 enabled: Backend.canExport && Backend.editorViewModel
-                text: qsTr("Export as one DRC...")
+                text: qsTr("Export all objects as one DRC...")
                 onTriggered: root.exportOneDrcRequested()
             }
             CxMenuItem {
                 enabled: Backend.canExport && Backend.editorViewModel
-                text: qsTr("Export as DRCs...")
+                text: qsTr("Export all objects as DRCs...")
                 onTriggered: root.exportDrcsRequested()
             }
             MenuSeparator {}

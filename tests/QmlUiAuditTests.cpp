@@ -7713,7 +7713,7 @@ void QmlUiAuditTests::legacyDeadCodePagesRemoved()
 {
   // Wave 3 (MALL-01): simulated Model Mall implementations remain banned. The
   // real integration was unblocked on 2026-10-23 via the official open-source
-  // contract (docs/依赖与协议边界审计.md, Model Mall 解除阻塞决策记录) and uses
+  // contract (docs/依赖与协议边界审计.md §3.1) and uses
   // the CloudModelLibrary*/CrealityCloud* naming. This lock still bans the
   // legacy ModelMall* names, any static catalog, and any timer-driven fake
   // download completion.
@@ -7929,7 +7929,7 @@ void QmlUiAuditTests::translationPipelineDocumented()
   // The doc lives in i18n/ (tracked) -- it originally sat in the untracked
   // .planning/ scratch dir, so a local cleanup of that directory turned this
   // gate permanently red (2026-10-09). Content restored verbatim from
-  // archive/gsd-planning/i18n-workflow.md.
+  // the former archived GSD planning copy (removed 2026-11-03; in git history).
   const QString workflow = readSource(QStringLiteral("i18n/workflow.md"));
   const QString zhCn = readSource(QStringLiteral("i18n/zh_CN.ts"));
   QVERIFY2(!workflow.isEmpty(), "I18N-01: unable to read i18n/workflow.md");
@@ -10155,15 +10155,6 @@ void QmlUiAuditTests::v54RegressionLocked()
              "REGRESS-08/FEAT-04: ConfigOptionModel::extractDefault must handle coBools");
   }
 
-  // -- v5.4 META-01 (Phase 186): sync closure documentation landed.
-  {
-    const QString tracker = readSource(QStringLiteral("docs/源码对照迁移任务追踪.md"));
-    QVERIFY2(tracker.contains(QStringLiteral("absorbed by bb3")),
-             "REGRESS-08/META-01: P11.A tracker must record cherry-picks absorbed by bb3");
-    QVERIFY2(tracker.contains(QStringLiteral("NOT APPLICABLE")),
-             "REGRESS-08/META-01: P11.B tracker must record N/A verdicts for Qt6 architecture immunity");
-  }
-
   // -- v5.3 re-assertion (carry forward from v53RegressionLocked).
   {
     const QString themeQml = readSource(QStringLiteral("src/qml_gui/Theme.qml"));
@@ -11004,6 +10995,9 @@ void QmlUiAuditTests::dialogReachabilitySourceAudit()
       {QStringLiteral("TroubleshootDialog.qml"), QStringLiteral("troubleshootDialog.open()")},
       {QStringLiteral("SelectMachineDialog.qml"), QStringLiteral("selectMachineDialog.open()")},
       {QStringLiteral("RecenterDialog.qml"), QStringLiteral("recenterPromptRequested")},
+      // Upstream StepMeshDialog: opened from StepMeshPrompt::dialogRequested
+      // while a STEP import waits for its mesh parameters.
+      {QStringLiteral("StepMeshDialog.qml"), QStringLiteral("stepMeshDialog.open()")},
       {QStringLiteral("FileArchiveDialog.qml"), QStringLiteral("fileArchiveDialog.invoke(\"openFor\"")},
       {QStringLiteral("ObjColorDialog.qml"), QStringLiteral("objColorMappingRequested")},
       {QStringLiteral("SysInfoDialog.qml"), QStringLiteral("showSysInfoDialog()")},
@@ -11344,8 +11338,8 @@ void QmlUiAuditTests::viewMenuShortcutsAndImportSourceAudit()
            "VIEW-03: multi-file drops must import through addFilesToCurrentPlate");
   QVERIFY2(mainQml.contains(QStringLiteral("Backend.requestSelectTab(Backend.tp3DEditor)")),
            "VIEW-03: drops must switch to the Prepare tab (upstream Plater.cpp:2745-2748)");
-  QVERIFY2(mainQml.contains(QStringLiteral("Backend.editorViewModel.importSVG()")),
-           "VIEW-03: single .svg drops must route into the SVG emboss flow");
+  QVERIFY2(mainQml.contains(QStringLiteral("Backend.editorViewModel.importSvgFile(paths[0])")),
+           "VIEW-03: single .svg drops must route into the SVG import (emboss or new object)");
 
   // ── VIEW-04/05/06: service + viewmodel plumbing exists ────────────────
   const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
@@ -12157,7 +12151,7 @@ void QmlUiAuditTests::pageHonestyAndCliSourceAudit()
 //   - SpeedLimitDialog stays deleted (Q11-③: it was a pure mock -- hardcoded
 //     rows, handler-less reset, non-persisting OK -- so the fake entry was
 //     taken down instead of pretending; rebuilt only on the X1 real send
-//     chain per docs/代码债与架构审计_2026-10-10.md X1(d)).
+//     chain per the 2026-10-10 debt audit X1(d); doc in git history).
 //   - PreferencesPage "check now" drives Backend.checkForUpdates.
 void QmlUiAuditTests::deadControlEliminationAudit()
 {

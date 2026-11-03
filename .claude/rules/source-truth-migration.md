@@ -33,8 +33,7 @@
 
 ## 架构边界
 
-- 保持架构与 `docs/CrealityPrint_Qt_GUI重写架构.md` 对齐。
-- 保持模块边界与 `docs/项目结构.md` 对齐。
+- 保持分层、目录与模块边界与 `docs/架构说明.md` 对齐。
 - 优先将上游行为适配到 `src/core/services`、`src/core/viewmodels` 和 `src/core/rendering`。
 - QML 仅负责呈现、组合和交互接线，不承载业务逻辑。
 

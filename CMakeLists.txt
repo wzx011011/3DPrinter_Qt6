@@ -177,6 +177,8 @@ endif()
         src/core/services/LanErrorCodes.cpp
         src/core/services/ProjectService.cpp
         src/core/services/ProjectService.h
+        src/core/services/StepMeshPrompt.cpp
+        src/core/services/StepMeshPrompt.h
         src/core/services/UndoRedoManager.cpp
         src/core/services/UndoRedoManager.h
         src/core/services/UndoCommands.cpp
@@ -1192,6 +1194,8 @@ if(BUILD_CLI AND BUILD_LIBSLIC3R AND TARGET libslic3r)
         src/core/model/PartPlateList.h
         src/core/services/ProjectService.cpp
         src/core/services/ProjectService.h
+        src/core/services/StepMeshPrompt.cpp
+        src/core/services/StepMeshPrompt.h
         src/core/services/SliceService.cpp
         src/core/services/SliceService.h
         src/core/services/PresetService.cpp

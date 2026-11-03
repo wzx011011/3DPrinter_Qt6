@@ -11,7 +11,7 @@ Outputs (default build/perf_models/):
   bench_overhang_tower.stl  shrinking/stacked box tower, every level
                           overhangs the previous one; sliced with
                           enable_support it loads the support steps (the P4
-                          step-profile tier, docs/开发计划_2026-10-10.md §6d)
+                          step-profile tier, 2026-10-10 dev plan §6d)
 
 Usage:  python scripts/perf/gen_benchmark_models.py [output_dir]
 Binary STL: 80-byte header, uint32 count, then per triangle

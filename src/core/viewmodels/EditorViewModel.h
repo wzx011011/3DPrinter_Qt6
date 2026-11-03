@@ -420,9 +420,9 @@ public:
   void setCutPosition(qreal pos);
   int cutKeepMode() const { return m_cutKeepMode; }
   bool cutPlaceOnCut() const { return m_cutPlaceOnCut; }
-  void setCutPlaceOnCut(bool on) { m_cutPlaceOnCut = on; emit stateChanged(); }
+  void setCutPlaceOnCut(bool on);
   bool cutToParts() const { return m_cutToParts; }
-  void setCutToParts(bool on) { m_cutToParts = on; emit stateChanged(); }
+  void setCutToParts(bool on);
   void setCutKeepMode(int mode);
   // Cut connector settings (对齐上游 GLGizmoCut connector)
   int cutMode() const;
@@ -796,6 +796,11 @@ public:
   float svgScale() const;
   void setSvgScale(float s);
   Q_INVOKABLE bool importSVG();
+  /// C10: file-import / drop entry for one .svg (upstream emboss_svg +
+  /// load_files): with a selection the SVG becomes an embossed part of the
+  /// selected object; without one it is imported as a new object on the
+  /// current plate (Model::read_from_file -> load_svg), undoable.
+  Q_INVOKABLE bool importSvgFile(const QString &filePath);
   /// Phase 240 (GIZ-06): SVG drop workbench completion (minimal port of the
   /// upstream GLGizmoSVG workbench). A dropped .svg creates a NEW object
   /// whose SVG volume is placed at the given bed point (the QML side
@@ -830,6 +835,22 @@ public:
   void setObjectScaleY(float v);
   void setObjectScaleZ(float v);
   void setUniformScale(bool v);
+
+  // Upstream GizmoObjectManipulation reset buttons
+  // (update_reset_buttons_visibility / reset_rotation_value /
+  // reset_scale_value, GizmoObjectManipulation.cpp). The rotation tool
+  // records the selection's transform when it opens (GLGizmoRotate
+  // set_init_rotation); "reset relative" restores that rotation+scale,
+  // "reset to zero" clears the rotation only.
+  Q_PROPERTY(bool canResetRotationToInitial READ canResetRotationToInitial NOTIFY transformChanged)
+  Q_PROPERTY(bool canResetRotationToZero READ canResetRotationToZero NOTIFY transformChanged)
+  Q_PROPERTY(bool canResetScale READ canResetScale NOTIFY transformChanged)
+  bool canResetRotationToInitial() const;
+  bool canResetRotationToZero() const;
+  bool canResetScale() const;
+  Q_INVOKABLE void captureRotateToolInitial();
+  Q_INVOKABLE void resetObjectRotation(bool toInitial);
+  Q_INVOKABLE void resetObjectScale();
   Q_INVOKABLE void resetObjectTransform();
   Q_INVOKABLE void applyScaleFactor(float factor);
 
@@ -1010,6 +1031,9 @@ public:
   Q_INVOKABLE bool exportSelectedObjects(const QString &outputPath,
                                          bool separateFiles = false,
                                          bool drcFormat = false);
+  /// C9: upstream "Export all objects as (one) STL/DRC(s)" (MainFrame.cpp:2895-2906)
+  /// exports EVERY model object on every plate and leaves the selection alone.
+  Q_INVOKABLE bool exportAllObjects(const QString &outputPath, bool separateFiles, bool drcFormat);
   Q_INVOKABLE bool addFilesToContextPlate(const QStringList &filePaths);
   /// Phase 237 (VIEW-03): synchronous batch import into the CURRENT plate
   /// (upstream PlaterDropTarget::OnDropFiles -> Plater::load_files,
@@ -1465,6 +1489,10 @@ public:
   /// subscriptions, not re-creation).
   Q_PROPERTY(SceneTreeModel *sceneTreeModel READ sceneTreeModel CONSTANT)
   SceneTreeModel *sceneTreeModel() const { return m_sceneTreeModel; }
+  /// Upstream StepMeshDialog bridge (ProjectService's StepMeshPrompt): the
+  /// shell opens StepMeshDialog on its dialogRequested and answers via finish.
+  Q_PROPERTY(QObject *stepMeshPrompt READ stepMeshPrompt CONSTANT)
+  QObject *stepMeshPrompt() const;
   /// 平板设置（对齐上游 PlateSettingsDialog）
   Q_INVOKABLE int plateBedType(int plateIndex) const;
   Q_INVOKABLE bool setPlateBedType(int plateIndex, int bedType);
@@ -2419,6 +2447,9 @@ private:
   /// Selection::copy_to_clipboard 的对象深拷贝语义——粘贴恢复网格/变换/覆盖而非仅名字）
   QList<QByteArray> m_clipboardSnapshots;
   int m_primarySelectedSourceIndex = -1;
+  int m_rotateInitSourceIndex = -1;
+  QVector3D m_rotateInitRotation;
+  QVector3D m_rotateInitScale{1.f, 1.f, 1.f};
   int m_selectedVolumeObjectSourceIndex = -1;
   QSet<int> m_selectedVolumeIndices;
   int m_selectedVolumeIndex = -1;

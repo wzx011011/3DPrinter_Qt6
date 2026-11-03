@@ -161,48 +161,11 @@ Rectangle {
 
     // ── Prepare-sidebar reference restoration (Orca Plater.cpp Sidebar) ────
     // Nozzle-variant cell (panel_nozzle_dia + combo_nozzle_dia,
-    // Plater.cpp:2652-2690): sibling printer presets that share the
-    // "<model> (<d> nozzle)" base name form the variant list; switching a
-    // variant = switching to that sibling preset. Name parsing stays QML-side
-    // (3-line regex); the preset SWITCH goes through the same
-    // requestCurrentPrinterPreset the printer combo uses.
-    function printerBaseName(name) {
-        var s = String(name)
-        var m = s.match(/^(.*) \([^()]* nozzle\)$/)
-        return m ? m[1] : s
-    }
-    function variantDiameterLabel(name) {
-        var m = String(name).match(/\(([^()]*) nozzle\)$/)
-        if (m) return m[1]
-        var v = root.configVm
-                ? root.configVm.wizardPresetValue(name, "nozzle_diameter") : null
-        return (v === null || v === undefined || v === "") ? "0.4" : String(v)
-    }
-    readonly property var printerVariantEntries: {
-        var out = []
-        if (!root.configVm) return out
-        var base = printerBaseName(root.configVm.currentPrinterPreset)
-        var names = root.configVm.printerPresetNames
-        for (var i = 0; i < names.length; i++) {
-            if (printerBaseName(names[i]) === base) out.push(names[i])
-        }
-        return out
-    }
-    readonly property string nozzleTypeLabelText: {
-        if (!root.configVm) return ""
-        var v = root.configVm.wizardPresetValue(
-                    root.configVm.currentPrinterPreset, "nozzle_type")
-        // R1B-24: schema enum values -> Chinese (upstream NozzleType enum,
-        // PrintConfig.cpp: hardened_steel/stainless_steel/tungsten_carbide/
-        // brass/undefine; zh terms per OrcaSlicer_zh_CN.po "Hardened steel"
-        // -> 硬化钢 etc). Unmapped values fall back to the raw string.
-        var map = { "brass": qsTr("黄铜"), "hardened_steel": qsTr("硬化钢"),
-                    "hardened": qsTr("硬化钢"), "stainless_steel": qsTr("不锈钢"),
-                    "steel": qsTr("不锈钢"), "tungsten_carbide": qsTr("碳化钨"),
-                    "undefine": qsTr("未定义"), "bi_metal": qsTr("双金属") }
-        return map[String(v)] !== undefined ? map[String(v)]
-                                            : (v ? String(v) : "")
-    }
+    // Plater.cpp:2652-2690): the variant list, its diameter labels and the
+    // nozzle-type label come from ConfigViewModel (P4: no preset parsing in
+    // QML); switching a variant goes through requestCurrentPrinterPreset.
+    readonly property var printerVariantEntries: root.configVm ? root.configVm.printerVariantPresets : []
+    readonly property string nozzleTypeLabelText: root.configVm ? root.configVm.nozzleTypeLabel : ""
     // Bed-type → thumbnail, indexed by the libslic3r BedType enum
     // (btDefault=0..btSuperTack=6) — the same image table as upstream
     // bed_type_thumbnails (Plater.cpp:320-327); btDefault follows the preset
@@ -391,8 +354,9 @@ Rectangle {
                         font.bold: true
                         model: {
                             var out = []
-                            for (var i = 0; i < root.printerVariantEntries.length; i++)
-                                out.push(root.variantDiameterLabel(root.printerVariantEntries[i]))
+                            var labels = root.configVm ? root.configVm.printerVariantLabels : []
+                            for (var i = 0; i < labels.length; i++)
+                                out.push(labels[i])
                             return out
                         }
                         currentIndex: {

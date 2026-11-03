@@ -25,6 +25,7 @@
 #include <libslic3r/Model.hpp>
 #include <libslic3r/Print.hpp>
 #include <libslic3r/PrintConfig.hpp>
+#include <libslic3r/Preset.hpp>
 #include <libslic3r/GCode/GCodeProcessor.hpp>
 #include <libslic3r/Utils.hpp>
 #endif
@@ -74,7 +75,7 @@ namespace
   // P15.11: moved to SliceService::packSequentialClearance (public static) so
   // the drag-time preview packs through the SAME stream builder.
 
-  // ── P4 (step profile, docs/开发计划_2026-10-10.md §6d) ──────────────────
+  // ── P4 (step profile, 2026-10-10 dev plan §6d; doc in git history) ──────────────────
   // Trailing sentinel key of the step timeline: recorded when the worker's
   // success path finishes. It carries no step semantics; PerfBench drops it
   // from the reported profile and uses its firstAtMs as the end anchor so
@@ -375,7 +376,7 @@ SliceService::SliceService(ProjectService *projectService, QObject *parent)
 SliceService::~SliceService()
 {
   // PLATE-PRINT-LIFECYCLE (batch 2) destruction order (design resolution of
-  // review P0-2, docs/代码评审报告_2026-09-04.md section 4):
+  // review P0-2 of the 2026-09-04 code review; doc in git history):
   //  1. Cancel first: flip the flag and cancel the active Print so a running
   //     Print::process throws at the next step boundary (PrintBase state
   //     machine calls throw_if_canceled on every step start/done,
@@ -651,6 +652,15 @@ void SliceService::clearResults()
 void SliceService::setMergedPresetConfig(const QHash<QString, QVariant> &config)
 {
   mergedPresetConfig_ = config;
+}
+
+void SliceService::setFilamentSlots(const QStringList &presetNames,
+                                    const QList<QHash<QString, QVariant>> &presetValues,
+                                    const QStringList &colours)
+{
+  filamentSlotNames_ = presetNames;
+  filamentSlotValues_ = presetValues;
+  filamentSlotColours_ = colours;
 }
 
 namespace
@@ -1212,6 +1222,55 @@ void SliceService::startSlice(const QString &projectName)
         injectPresetConfig(config, receiver->mergedPresetConfig_);
       }
 
+      // C6/P1 (review 2026-11-03): multi-filament composition, upstream
+      // PresetBundle::full_fff_config (PresetBundle.cpp, the
+      // num_filaments > 1 branch): every per-filament VECTOR option takes
+      // slot i's value from slot i's filament preset, filament_settings_id
+      // lists the slot presets and filament_colour carries the project
+      // colours. Previously every slot sliced with filament 1's settings,
+      // and only the engine-side bounds patches kept mis-sized vectors from
+      // crashing.
+      if (receiver && receiver->filamentSlotValues_.size() > 1
+          && receiver->filamentSlotValues_.size() == receiver->filamentSlotNames_.size())
+      {
+        const int slotCount = receiver->filamentSlotValues_.size();
+        std::vector<Slic3r::DynamicPrintConfig> slotConfigs(size_t(slotCount), config);
+        for (int i = 0; i < slotCount; ++i)
+          injectPresetConfig(slotConfigs[size_t(i)], receiver->filamentSlotValues_.at(i));
+        for (const std::string &key : Slic3r::Preset::filament_options())
+        {
+          if (key == "compatible_prints" || key == "compatible_printers"
+              || key == "compatible_prints_condition" || key == "compatible_printers_condition"
+              || key == "inherits")
+            continue;
+          auto *dst = dynamic_cast<Slic3r::ConfigOptionVectorBase *>(config.option(key, false));
+          if (!dst)
+            continue;
+          std::vector<const Slic3r::ConfigOption *> perSlot(size_t(slotCount), nullptr);
+          bool complete = true;
+          for (int i = 0; i < slotCount; ++i)
+          {
+            perSlot[size_t(i)] = slotConfigs[size_t(i)].option(key, false);
+            complete = complete && perSlot[size_t(i)] != nullptr;
+          }
+          if (complete)
+            dst->set(perSlot);
+        }
+        std::vector<std::string> names;
+        names.reserve(size_t(slotCount));
+        for (const QString &name : receiver->filamentSlotNames_)
+          names.push_back(name.toStdString());
+        config.set_key_value("filament_settings_id", new Slic3r::ConfigOptionStrings(names));
+      }
+      if (receiver && !receiver->filamentSlotColours_.isEmpty())
+      {
+        std::vector<std::string> colours;
+        colours.reserve(size_t(receiver->filamentSlotColours_.size()));
+        for (const QString &colour : receiver->filamentSlotColours_)
+          colours.push_back(colour.toStdString());
+        config.set_key_value("filament_colour", new Slic3r::ConfigOptionStrings(colours));
+      }
+
       // v3.0 Phase 19 (D-15): merge the FULL per-plate config (not just 3 hardcoded
       // keys), aligning with upstream update_slice_context_to_current_plate.
       // DynamicPrintConfig::apply(other) merges other's keys into this with other
@@ -1278,14 +1337,18 @@ void SliceService::startSlice(const QString &projectName)
         }
       }
 
-      // owzx-fix (TOWER-CLAMP): 3MFs authored by CP carry wipe-tower
-      // positions computed for their own bed. After the MODEL-BED
+      // owzx-fix (TOWER-CLAMP, CP-DIALECT): 3MFs authored by CP carry
+      // wipe-tower positions computed for their own bed. After the MODEL-BED
       // translation the engine validates the tower footprint against the
       // configured bed and hard-fails when it pokes out (CP's GUI instead
-      // reclamps the tower into the bed). Clamp the saved tower position
-      // back inside the configured bed, keeping a small safety margin —
-      // this matches CP's GUI behavior and rescues edge-positioned towers
-      // (e.g. y=320 with a 40mm tower on a 350mm bed).
+      // reclamps the tower into the bed). Upstream Orca has no such input:
+      // its own projects always store an in-bed position, so this shim only
+      // MOVES a tower whose footprint leaves the bed and leaves every valid
+      // position untouched (C11). Bounds come from the bed polygon's min/max
+      // (beds with a negative or centred origin), and lo <= hi always holds
+      // so std::clamp stays defined on beds narrower than the tower. Depth
+      // uses prime_tower_width as an estimate: the real depth depends on the
+      // purge volume, known only after slicing.
       if (const auto *towerX =
               config.option<Slic3r::ConfigOptionFloats>("wipe_tower_x", false);
       towerX && !towerX->values.empty()) {
@@ -1295,28 +1358,39 @@ void SliceService::startSlice(const QString &projectName)
           if (const auto *bedPts =
                   config.option<Slic3r::ConfigOptionPoints>("bed_shape", false);
               bedPts && bedPts->values.size() >= 3) {
-            float bedW = 0.f, bedD = 0.f;
+            double bedMinX = bedPts->values.front().x(), bedMaxX = bedMinX;
+            double bedMinY = bedPts->values.front().y(), bedMaxY = bedMinY;
             for (const auto &p : bedPts->values) {
-              bedW = std::max(bedW, static_cast<float>(p.x()));
-              bedD = std::max(bedD, static_cast<float>(p.y()));
+              bedMinX = std::min(bedMinX, p.x());
+              bedMaxX = std::max(bedMaxX, p.x());
+              bedMinY = std::min(bedMinY, p.y());
+              bedMaxY = std::max(bedMaxY, p.y());
             }
-            float towerW = 60.f, towerD = 60.f;
+            double towerW = 60.0, towerD = 60.0;
             if (const auto *ptw =
                     config.option<Slic3r::ConfigOptionFloat>("prime_tower_width",
                                                              false);
-                ptw && ptw->value > 0.f) {
+                ptw && ptw->value > 0.0) {
               towerW = ptw->value;
               towerD = ptw->value;
             }
-            constexpr float kMargin = 2.f;
-            const float maxX = std::max(0.f, bedW - towerW - kMargin);
-            const float maxY = std::max(0.f, bedD - towerD - kMargin);
+            constexpr double kMargin = 2.0;
+            // [lo, hi] is the valid range of the tower's min corner; hi never
+            // drops below lo (tower wider than the bed: pin it at lo).
+            const auto fitInto = [kMargin](double v, double bedMin, double bedMax,
+                                    double size) {
+              if (v >= bedMin && v + size <= bedMax)
+                return v;  // already inside the bed: leave it alone
+              const double lo = bedMin + kMargin;
+              const double hi = std::max(lo, bedMax - size - kMargin);
+              return std::clamp(v, lo, hi);
+            };
             auto *mutX = const_cast<Slic3r::ConfigOptionFloats *>(towerX);
             auto *mutY = const_cast<Slic3r::ConfigOptionFloats *>(towerY);
             for (auto &v : mutX->values)
-              v = std::clamp(v, static_cast<double>(kMargin), static_cast<double>(maxX));
+              v = fitInto(v, bedMinX, bedMaxX, towerW);
             for (auto &v : mutY->values)
-              v = std::clamp(v, static_cast<double>(kMargin), static_cast<double>(maxY));
+              v = fitInto(v, bedMinY, bedMaxY, towerD);
           }
         }
       }
@@ -1334,6 +1408,25 @@ void SliceService::startSlice(const QString &projectName)
                                QString::fromStdString(st.text), st.percent);
         if (!receiver)
           return;
+        // Per-step slicing warnings (upstream Plater::priv::on_slicing_update,
+        // Plater.cpp:12416-12448 -> push_slicing_warning_notification). The
+        // message travels in st.text (PrintBase::status_update_warnings); it
+        // is NOT a progress update (percent -1 used to reset the bar to 0).
+        if (st.flags & (Slic3r::PrintBase::SlicingStatus::UPDATE_PRINT_STEP_WARNINGS
+                        | Slic3r::PrintBase::SlicingStatus::UPDATE_PRINT_OBJECT_STEP_WARNINGS))
+        {
+          if (st.text.empty())
+            return;
+          const QString message = QString::fromStdString(st.text);
+          const bool serious =
+              st.message_type == Slic3r::PrintStateBase::SlicingNotificationType::SlicingReplaceInitEmptyLayers
+              || st.message_type == Slic3r::PrintStateBase::SlicingNotificationType::SlicingEmptyGcodeLayers;
+          QMetaObject::invokeMethod(receiver, [receiver, message, serious]() {
+            if (receiver)
+              emit receiver->sliceStepWarning(message, serious);
+          }, Qt::QueuedConnection);
+          return;
+        }
         const int p = qBound(0, st.percent, 100);
         const QString label = st.text.empty() ? QObject::tr("Slicing") : QString::fromStdString(st.text);
         QMetaObject::invokeMethod(receiver, [receiver, p, label]() {

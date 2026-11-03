@@ -146,6 +146,7 @@ qt_add_qml_module(owzx_qml
         dialogs/SelectMachineDialog.qml
         dialogs/SingleChoiceDialog.qml
         dialogs/RecenterDialog.qml
+        dialogs/StepMeshDialog.qml
         dialogs/FileArchiveDialog.qml
         dialogs/ObjColorDialog.qml
         dialogs/SysInfoDialog.qml

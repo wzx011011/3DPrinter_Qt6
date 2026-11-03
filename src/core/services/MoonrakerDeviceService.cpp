@@ -591,6 +591,9 @@ bool MoonrakerDeviceService::uploadAndStart(int filteredIndex, const QString &gc
 
     QNetworkRequest request{url};
     QNetworkReply *reply = manager_->post(request, multi);
+    // C4: the multipart (and the G-code QFile it owns) must die with the
+    // reply, otherwise every send leaks it and keeps the file handle open.
+    multi->setParent(reply);
     uploadReply_ = reply; // 收尾#3：取消句柄
 
     connect(reply, &QNetworkReply::uploadProgress, this,

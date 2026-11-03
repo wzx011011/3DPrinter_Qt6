@@ -1,4 +1,4 @@
-﻿import QtQuick
+import QtQuick
 pragma ComponentBehavior: Bound
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -72,12 +72,32 @@ Item {
                 width: 20; height: 20
                 Layout.alignment: Qt.AlignVCenter
                 TapHandler { onTapped: root.groupExpanded = !root.groupExpanded }
-                Image {
+                // The sidebutton_dropdown.svg chevron is stroked white for the
+                // dark top chrome; on this page surface it vanished in the
+                // light theme. Same polyline (12.5,5.5 7,8.5 1.5,5.5 in a 14
+                // box), stroked with the theme text colour.
+                Canvas {
+                    id: groupChevron
                     anchors.centerIn: parent
                     width: 12; height: 12
-                    source: "qrc:/qml/assets/icons/sidebutton_dropdown.svg"
                     rotation: root.groupExpanded ? 180 : 0
                     Behavior on rotation { NumberAnimation { duration: Theme.motionFast } }
+                    property color strokeColor: Theme.textSecondary
+                    onStrokeColorChanged: requestPaint()
+                    onPaint: {
+                        const ctx = getContext("2d")
+                        ctx.reset()
+                        const k = width / 14
+                        ctx.strokeStyle = strokeColor
+                        ctx.lineWidth = 1.2
+                        ctx.lineCap = "round"
+                        ctx.lineJoin = "round"
+                        ctx.beginPath()
+                        ctx.moveTo(12.5 * k, 5.5 * k)
+                        ctx.lineTo(7 * k, 8.5 * k)
+                        ctx.lineTo(1.5 * k, 5.5 * k)
+                        ctx.stroke()
+                    }
                 }
             }
 
@@ -640,7 +660,9 @@ Item {
                                                     radius: Theme.radiusLG
                                                     color: {
                                                         if (devData.status === "printing") return Theme.bgCard
-                                                        if (devData.status === "idle")     return Theme.chromePressed
+                                                        // chromePressed is pinned to the dark top chrome: a
+                                                        // dark pill with blue text on the light page.
+                                                        if (devData.status === "idle")     return Theme.bgElevated
                                                         if (devData.status === "offline")  return Theme.bgFloating
                                                         if (devData.status === "connecting") return Theme.bgWarningSubtle
                                                         return Theme.bgElevated

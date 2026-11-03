@@ -2,7 +2,7 @@
 
 > 建立日期：2026-09-24。配套工具：[index.html](index.html)（上游视觉真值的网页化重建）。
 > 口径不变：**上游运行截图 = 视觉真值**（`docs/visual-compare/upstream_*.png`），
-> `third_party/OrcaSlicer` 源码 = 行为真值（[ui-full-restoration-inventory.md](../ui-full-restoration-inventory.md)）。
+> `third_party/OrcaSlicer` 源码 = 行为真值（现状与缺口见 [源码对照迁移任务追踪.md](../源码对照迁移任务追踪.md)）。
 
 ## 1. 设计基准网页是什么
 

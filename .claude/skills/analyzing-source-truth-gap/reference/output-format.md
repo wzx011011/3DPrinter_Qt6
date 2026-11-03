@@ -3,12 +3,12 @@
 ## 分析报告模板
 
 ```
-## 差距分析: Px.x - 任务简述
+## 差距分析: <ID> - 任务简述
 
 | 项目 | 内容 |
 |------|------|
-| 任务 ID | Px.x |
-| 上游模块 | `third_party/CrealityPrint/path/to/file.cpp` |
+| 任务 ID | <ID> |
+| 上游模块 | `third_party/OrcaSlicer/path/to/file.cpp` |
 | Qt6 目标 | `src/core/...` 或 `src/qml_gui/pages/...` |
 | 当前状态 | `[-]` / `[ ]` |
 

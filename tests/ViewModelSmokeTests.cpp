@@ -14,6 +14,7 @@
 #include <QJsonObject>
 #include <QMetaEnum>
 #include <QSettings>
+#include <QTimer>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QHostAddress>
@@ -25,6 +26,7 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <QElapsedTimer>
 #include <QtTest>
 
 #ifdef HAS_LIBSLIC3R
@@ -49,6 +51,7 @@
 #include "core/services/PresetService.h"
 #include "core/services/ProjectService.h"
 #include "core/services/SliceService.h"
+#include "core/services/StepMeshPrompt.h"
 #include "core/services/PluginService.h"
 #include "core/services/UndoRedoManager.h"
 #include "core/services/UndoCommands.h"
@@ -429,6 +432,8 @@ private slots:
   void loadProjectReplacesPlateSequenceState();
   void loadProjectAcceptsCxprjAndFailedLoadKeepsScene();
   void stepFileImportsThroughOcct();
+  void stepMeshPromptAppliesChoiceAndPersistsDefaults();
+  void stepMeshPromptCancelAbortsImport();
   // Phase 138 (ASM-01): per-instance assemble transform survives a real 3MF
   // save (saveProjectAs -> store_3mf) + reload (loadProject) through the upstream
   // <assemble> block (bbs_3mf.cpp:8070-8088 write, 4734-4741 read). Proves the
@@ -465,6 +470,7 @@ private slots:
   void gizmoMoveDragCoalescesIntoSingleUndoCommand();
   // v3.8 Phase 70: rotate/scale gizmo drags coalesce into one undo command.
   void gizmoRotateDragCoalescesIntoSingleUndoCommand();
+  void rotateAndScaleResetButtonsFollowUpstream();
   void gizmoScaleDragCoalescesIntoSingleUndoCommand();
   // Phase 53-01: Prepare object/plate/gizmo gates live in C++, not QML.
   void prepareWorkflowGatesExposeSourceTruthState();
@@ -721,6 +727,9 @@ private slots:
   // RG-R4-02 (F8-e): "Cut to parts" merges the results back into ONE object;
   // "Place on cut" rests the kept parts' cut faces on the plane.
   void cutToPartsKeepsOneObjectAndPlaceOnCutRestsOnBed();
+  void cutToPartsForcesKeepBothSoKeepLowerCannotCrash();
+  void slotColoursAreProjectStateNotPresetEdits();
+  void svgImportWithoutSelectionCreatesObject();
   // Track A: 填充热床 (upstream "Fill bed with copies") menu wiring.
   // FB-TA-01: fillBedWithCopies stalls >300s on small objects (the
   // fill loop re-arranges the whole bed per added instance, up to 1000) —
@@ -3038,6 +3047,60 @@ void ViewModelSmokeTests::filamentSlotVectorResizesAndPersistsWithProject()
                        overlay.value(QStringLiteral("filament_presets")));
   config.applyProjectConfig(projectConfig);
   QCOMPARE(config.filamentPresetForSlot(2), other);
+}
+
+// C6 (review 2026-11-03): the plater colour chip edits the PROJECT's
+// per-slot colour (upstream project_config.filament_colour[idx]). Two slots on
+// the same preset keep independent colours, the preset itself is untouched,
+// and the colours round-trip through the project config (also from the
+// upstream filament_settings_id / filament_colour keys of Orca/CP 3MFs).
+void ViewModelSmokeTests::slotColoursAreProjectStateNotPresetEdits()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("SlotColours"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  PresetService preset;
+  ProjectService project;
+  ConfigViewModel config(&preset, &project);
+  config.setExtruderCount(2);
+  const QString shared = config.currentFilamentPreset();
+  QCOMPARE(config.filamentPresetForSlot(1), shared);
+  const QHash<QString, QVariant> presetBefore = preset.presetValues(shared);
+  const QStringList namesBefore = preset.presetNamesForCategory(PresetService::FilamentCat);
+
+  QSignalSpy sliceSpy(&config, &ConfigViewModel::sliceAffectingConfigChanged);
+  QVERIFY(config.setFilamentColourForSlot(0, QStringLiteral("#ff0000")));
+  QVERIFY(config.setFilamentColourForSlot(1, QStringLiteral("#00ff00")));
+  QCOMPARE(config.filamentColourForSlot(0), QStringLiteral("#FF0000"));
+  QCOMPARE(config.filamentColourForSlot(1), QStringLiteral("#00FF00"));
+  QVERIFY(sliceSpy.count() >= 2);  // P7: colour edits invalidate the slice
+  // No preset was written or derived.
+  QCOMPARE(preset.presetValues(shared), presetBefore);
+  QCOMPARE(preset.presetNamesForCategory(PresetService::FilamentCat), namesBefore);
+  QCOMPARE(config.filamentPresetForSlot(1), shared);
+
+  // The overlay carries the upstream vectors.
+  const QVariantMap overlay = config.projectPresetConfigOverlay();
+  QCOMPARE(overlay.value(QStringLiteral("filament_colour")).toStringList(),
+           (QStringList{QStringLiteral("#FF0000"), QStringLiteral("#00FF00")}));
+  QCOMPARE(overlay.value(QStringLiteral("filament_settings_id")).toStringList().size(), 2);
+
+  // Restore from an upstream-style project config (no OWzx keys).
+  ConfigViewModel reloaded(&preset, &project);
+  QHash<QString, QVariant> projectConfig;
+  projectConfig.insert(QStringLiteral("filament_settings_id"),
+                       overlay.value(QStringLiteral("filament_settings_id")));
+  projectConfig.insert(QStringLiteral("filament_colour"),
+                       overlay.value(QStringLiteral("filament_colour")));
+  reloaded.applyProjectConfig(projectConfig);
+  QCOMPARE(reloaded.filamentSlotCount(), 2);
+  QCOMPARE(reloaded.slotFilamentColours(),
+           (QStringList{QStringLiteral("#FF0000"), QStringLiteral("#00FF00")}));
 }
 
 // -- Phase 02-01: TabPosition Q_ENUM + requestSelectTab unit tests --
@@ -6636,6 +6699,54 @@ void ViewModelSmokeTests::gizmoMoveDragCoalescesIntoSingleUndoCommand()
   QCOMPARE(undoManager.stack()->count(), 2);
 }
 
+// Upstream GizmoObjectManipulation reset buttons: "reset relative" returns
+// to the rotation (and scale) recorded when the rotation tool opened,
+// "reset to zero" clears the rotation and keeps the scale, the scale reset
+// returns to 100%; each shows only when it would change something and each
+// is one undo step.
+void ViewModelSmokeTests::rotateAndScaleResetButtonsFollowUpstream()
+{
+  ProjectService project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.selectSourceObject(0));
+  const int obj = editor.selectedSourceObjectIndex();
+  QVERIFY(!editor.canResetRotationToZero());
+  QVERIFY(!editor.canResetScale());
+
+  editor.setObjectRotZ(30.0f);
+  editor.captureRotateToolInitial();  // rotation tool opens at Z=30
+  QVERIFY(!editor.canResetRotationToInitial());
+  QVERIFY(editor.canResetRotationToZero());
+
+  editor.setObjectRotX(15.0f);
+  QVERIFY(editor.canResetRotationToInitial());
+  const int before = undoManager.stack()->count();
+  editor.resetObjectRotation(true);
+  QVERIFY(qAbs(project.objectRotation(obj).x()) < 1e-3f);
+  QVERIFY(qAbs(project.objectRotation(obj).z() - 30.0f) < 1e-3f);
+  QVERIFY(!editor.canResetRotationToInitial());
+  QCOMPARE(undoManager.stack()->count(), before + 1);
+
+  editor.setObjectScaleX(1.5f);
+  QVERIFY(editor.canResetScale());
+  const QVector3D scaled = project.objectScale(obj);
+  editor.resetObjectRotation(false);
+  QVERIFY(project.objectRotation(obj).length() < 1e-3f);
+  QVERIFY((project.objectScale(obj) - scaled).length() < 1e-4f);  // zero reset keeps scale
+  QVERIFY(!editor.canResetRotationToZero());
+
+  editor.resetObjectScale();
+  QVERIFY((project.objectScale(obj) - QVector3D(1, 1, 1)).length() < 1e-4f);
+  QVERIFY(!editor.canResetScale());
+  undoManager.undo();
+  QVERIFY((project.objectScale(obj) - scaled).length() < 1e-4f);
+}
+
 void ViewModelSmokeTests::gizmoRotateDragCoalescesIntoSingleUndoCommand()
 {
   ProjectService project;
@@ -7041,6 +7152,116 @@ void ViewModelSmokeTests::stepFileImportsThroughOcct()
   QVERIFY(project.modelCount() >= 1);
 #endif
 }
+// Upstream StepMeshDialog: with a presenter attached the STEP import pauses
+// for the dialog, the facet count is computed from the loaded Step, OK
+// validates the ranges, "Save these settings as default" / "Don't show again"
+// write the stored keys, and a disabled prompt imports with the stored values.
+void ViewModelSmokeTests::stepMeshPromptAppliesChoiceAndPersistsDefaults()
+{
+#ifndef HAS_LIBSLIC3R
+  QSKIP("STEP import requires libslic3r");
+#else
+  const QStringList keys{QStringLiteral("enableStepMeshSetting"),
+                         QStringLiteral("stepLinearDeflection"),
+                         QStringLiteral("stepAngleDeflection"),
+                         QStringLiteral("stepSplitCompound")};
+  ScopedSettingsSnapshot snapshot(keys);
+  snapshot.clear();
+  const QString stepPath = QDir(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR)))
+      .filePath(QStringLiteral("tests/data/cube_10mm.step"));
+
+  ProjectService project;
+  StepMeshPrompt *prompt = project.stepMeshPrompt();
+  QVERIFY(prompt);
+  QVERIFY(StepMeshPrompt::promptEnabled());  // upstream default: enabled
+  prompt->setPresenterAttached(true);
+  QSignalSpy dialogSpy(prompt, &StepMeshPrompt::dialogRequested);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
+
+  QVERIFY(project.loadFile(stepPath));
+  QTRY_COMPARE_WITH_TIMEOUT(dialogSpy.count(), 1, 20000);
+  QVERIFY(prompt->active());
+  QCOMPARE(prompt->fileName(), QStringLiteral("cube_10mm.step"));
+  QCOMPARE(prompt->initialLinear(), 0.003);
+  QCOMPARE(prompt->initialAngle(), 0.5);
+  QTRY_VERIFY_WITH_TIMEOUT(prompt->facetCount() > 0, 20000);  // a cube meshes to >= 12 facets
+  QVERIFY(prompt->facetCount() >= 12);
+  QCOMPARE(loadSpy.count(), 0);  // the import waits for the answer
+
+  // Out-of-range OK is refused and the dialog stays up (upstream OK handler).
+  QVERIFY(!prompt->finish(true, 0.5, 0.2, false, true, true));
+  QVERIFY(prompt->active());
+  QVERIFY(prompt->finish(true, 0.01, 0.2, false, true, true));
+  QVERIFY(!prompt->active());
+  QTRY_COMPARE_WITH_TIMEOUT(loadSpy.count(), 1, 20000);
+  QVERIFY2(loadSpy.last().at(0).toBool(), qPrintable(project.lastError()));
+  QVERIFY(project.modelCount() >= 1);
+
+  QSettings settings;
+  QCOMPARE(settings.value(keys.at(1)).toDouble(), 0.01);
+  QCOMPARE(settings.value(keys.at(2)).toDouble(), 0.2);
+  QVERIFY(!StepMeshPrompt::promptEnabled());
+  const StepMeshPrompt::Params stored = StepMeshPrompt::storedDefaults();
+  QCOMPARE(stored.linear, 0.01);
+  QCOMPARE(stored.angle, 0.2);
+
+  // Don't show again: the next import uses the stored values, no dialog.
+  ProjectService second;
+  second.stepMeshPrompt()->setPresenterAttached(true);
+  QSignalSpy secondDialog(second.stepMeshPrompt(), &StepMeshPrompt::dialogRequested);
+  QSignalSpy secondLoad(&second, &ProjectService::loadFinished);
+  QVERIFY(second.loadFile(stepPath));
+  QTRY_COMPARE_WITH_TIMEOUT(secondLoad.count(), 1, 20000);
+  QVERIFY(secondLoad.last().at(0).toBool());
+  QCOMPARE(secondDialog.count(), 0);
+#endif
+}
+
+// Cancel aborts the import without an error, on both the worker-thread path
+// (loadFile) and the synchronous GUI-thread path (addFilesToPlate, where the
+// prompt runs a modal loop like ShowModal).
+void ViewModelSmokeTests::stepMeshPromptCancelAbortsImport()
+{
+#ifndef HAS_LIBSLIC3R
+  QSKIP("STEP import requires libslic3r");
+#else
+  const QStringList keys{QStringLiteral("enableStepMeshSetting"),
+                         QStringLiteral("stepLinearDeflection"),
+                         QStringLiteral("stepAngleDeflection"),
+                         QStringLiteral("stepSplitCompound")};
+  ScopedSettingsSnapshot snapshot(keys);
+  snapshot.clear();
+  const QString stepPath = QDir(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR)))
+      .filePath(QStringLiteral("tests/data/cube_10mm.step"));
+
+  ProjectService project;
+  StepMeshPrompt *prompt = project.stepMeshPrompt();
+  prompt->setPresenterAttached(true);
+  QSignalSpy dialogSpy(prompt, &StepMeshPrompt::dialogRequested);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
+  QVERIFY(project.loadFile(stepPath));
+  QTRY_COMPARE_WITH_TIMEOUT(dialogSpy.count(), 1, 20000);
+  QVERIFY(prompt->finish(false, 0.003, 0.5, false, true, true));
+  QTRY_COMPARE_WITH_TIMEOUT(loadSpy.count(), 1, 20000);
+  QVERIFY(!loadSpy.last().at(0).toBool());
+  QCOMPARE(project.modelCount(), 0);
+  // Cancel never writes the stored keys, even with the boxes ticked.
+  QVERIFY(StepMeshPrompt::promptEnabled());
+  QVERIFY(!QSettings().contains(keys.at(1)));
+
+  // Synchronous path: answer from inside the modal loop.
+  QObject::connect(prompt, &StepMeshPrompt::dialogRequested, prompt, [prompt]() {
+    QTimer::singleShot(0, prompt, [prompt]() {
+      prompt->finish(false, 0.003, 0.5, false, false, false);
+    });
+  });
+  QVERIFY(!project.addFilesToPlate(0, QStringList{stepPath}));
+  QVERIFY(project.lastError().isEmpty());
+  QCOMPARE(project.modelCount(), 0);
+  QVERIFY(!prompt->active());
+#endif
+}
+
 void ViewModelSmokeTests::loadProjectReplacesPlateSequenceState()
 {
 #ifndef HAS_LIBSLIC3R
@@ -11259,7 +11480,11 @@ void ViewModelSmokeTests::cutToPartsKeepsOneObjectAndPlaceOnCutRestsOnBed()
   editor.rebuildAndNotify();
   editor.selectObject(0);
   editor.setCutToParts(true);
+  // Upstream GLGizmoCut.cpp:2943/2961-2965: parts mode disables and clears
+  // "Place on cut" and forces both halves kept.
   editor.setCutPlaceOnCut(true);
+  QVERIFY(!editor.cutPlaceOnCut());
+  QCOMPARE(editor.cutKeepMode(), 0);
   const auto bedBox = [&project](int index) {
     const QVariantMap b = project.selectionWorldBoundingBox({index});
     const auto v = [&b](const char *k) { return b.value(QLatin1String(k)).toDouble(); };
@@ -11288,16 +11513,42 @@ void ViewModelSmokeTests::cutToPartsKeepsOneObjectAndPlaceOnCutRestsOnBed()
   QVERIFY(project.objectVolumeCount(0) >= 2);
 }
 
-void ViewModelSmokeTests::fillBedWithCopiesAddsInstancesAndUndoRestores()
+void ViewModelSmokeTests::svgImportWithoutSelectionCreatesObject()
 {
-  // Track A (api-orphans): the 填满打印板 context-menu item wires the
-  // orphaned fillBedWithCopies (upstream "Fill bed with copies",
-  // GUI_Factories.cpp:903 — fills the remaining bed area with instances of
-  // the single selected object). Undo must restore the single object.
-  // FB-TA-01: SKIPPED — the fill loop re-arranges the whole bed per added
-  // instance and stalls past the 300s QtTest timeout on small objects.
-  QSKIP("FB-TA-01: fill-bed stalls >300s on small objects — perf defect "
-        "pending arrange batching");
+  // C10 (review 2026-11-03): importing an .svg with nothing selected used to
+  // do nothing. Upstream load_files reads it through Model::read_from_file
+  // (load_svg) into a NEW object; with a selection it becomes an embossed
+  // part (emboss_svg). The new-object path is undoable like any import.
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString svgPath = dir.filePath(QStringLiteral("square.svg"));
+  {
+    QFile svg(svgPath);
+    QVERIFY(svg.open(QIODevice::WriteOnly));
+    svg.write("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20mm\" height=\"20mm\" "
+              "viewBox=\"0 0 20 20\"><path d=\"M0 0 L20 0 L20 20 L0 20 Z\" "
+              "fill=\"#000000\"/></svg>");
+  }
+  ProjectService project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+  QCOMPARE(project.modelCount(), 0);
+  QVERIFY(!editor.hasSelection());
+  QVERIFY2(editor.importSvgFile(svgPath), qPrintable(project.lastError()));
+  QCOMPARE(project.modelCount(), 1);
+  QVERIFY(undoManager.canUndo());
+  undoManager.undo();
+  QCOMPARE(project.modelCount(), 0);
+}
+
+void ViewModelSmokeTests::cutToPartsForcesKeepBothSoKeepLowerCannotCrash()
+{
+  // C1 (review 2026-11-03): keep=lower + "Cut to parts" built KeepAsParts
+  // without KeepUpper, so Cut::perform_with_plane dereferenced a null upper
+  // object. Upstream forces keep-both in parts mode (GLGizmoCut.cpp:2961-2965)
+  // and locks the keep choice while it is on (:2937).
   ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
@@ -11306,14 +11557,60 @@ void ViewModelSmokeTests::fillBedWithCopiesAddsInstancesAndUndoRestores()
   QVERIFY(project.addPrimitiveToPlate(0) >= 0);
   editor.rebuildAndNotify();
   editor.selectObject(0);
+  editor.setCutKeepMode(2);
+  editor.setCutToParts(true);
+  QCOMPARE(editor.cutKeepMode(), 0);
+  editor.setCutKeepMode(2);
+  QCOMPARE(editor.cutKeepMode(), 0);
+  editor.cutSelected(2, 0.0);
   QCOMPARE(project.modelCount(), 1);
+  QVERIFY(project.objectVolumeCount(0) >= 2);
+  // Service-level guard: a direct keep-lower + parts call must not hang.
+  undoManager.undo();
+  QCOMPARE(project.objectVolumeCount(0), 1);
+  QVERIFY(project.cutObject(0, 2, 0.0, 2, false, true) >= 0);
+  QVERIFY(project.objectVolumeCount(0) >= 2);
+  // Leaving parts mode unlocks the keep choice again.
+  editor.setCutToParts(false);
+  editor.setCutKeepMode(2);
+  QCOMPARE(editor.cutKeepMode(), 2);
+}
+
+void ViewModelSmokeTests::fillBedWithCopiesAddsInstancesAndUndoRestores()
+{
+  // Track A (api-orphans): the 填满打印板 context-menu item wires the
+  // orphaned fillBedWithCopies (upstream "Fill bed with copies",
+  // GUI_Factories.cpp:903 — fills the remaining bed area with instances of
+  // the single selected object). Undo must restore the single object.
+  // C3 (review 2026-11-03): the fill is ONE arrange run (upstream
+  // FillBedJob), so it finishes quickly; it adds INSTANCES of the object
+  // (not objects), keeps other objects in place and is undoable.
+  ProjectService project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);
+  editor.rebuildAndNotify();
+  const QVector3D otherBefore = project.objectPosition(1);
+  editor.selectObject(0);
+  QCOMPARE(project.objectInstanceCount(0), 1);
+  QElapsedTimer timer;
+  timer.start();
   editor.fillBedWithCopies();
-  QVERIFY2(project.modelCount() > 1,
-           qPrintable(QStringLiteral("modelCount=%1 after fill")
-                          .arg(project.modelCount())));
+  QVERIFY2(timer.elapsed() < 60000,
+           qPrintable(QStringLiteral("fill took %1 ms").arg(timer.elapsed())));
+  const int filled = project.objectInstanceCount(0);
+  QVERIFY2(filled > 1, qPrintable(QStringLiteral("instances=%1 after fill").arg(filled)));
+  QCOMPARE(project.modelCount(), 2);
+  // The other object is a fixed obstacle, not re-packed.
+  QCOMPARE(project.objectPosition(1), otherBefore);
   QVERIFY(undoManager.canUndo());
   undoManager.undo();
-  QCOMPARE(project.modelCount(), 1);
+  QCOMPARE(project.objectInstanceCount(0), 1);
+  undoManager.redo();
+  QCOMPARE(project.objectInstanceCount(0), filled);
 }
 
 void ViewModelSmokeTests::embossAddsMillimetreTextOnceAndUndoRemovesIt()
@@ -11437,6 +11734,8 @@ void ViewModelSmokeTests::orientAndFlattenRotateInstanceAndUndoRestoreWorldGeome
 }
 void ViewModelSmokeTests::cutKeepModesReplaceSplitAndUndoRestore() { QSKIP("FB-R4-04 cut requires libslic3r"); }
 void ViewModelSmokeTests::cutToPartsKeepsOneObjectAndPlaceOnCutRestsOnBed() { QSKIP("needs libslic3r"); }
+void ViewModelSmokeTests::cutToPartsForcesKeepBothSoKeepLowerCannotCrash() { QSKIP("needs libslic3r"); }
+void ViewModelSmokeTests::svgImportWithoutSelectionCreatesObject() { QSKIP("needs libslic3r"); }
 void ViewModelSmokeTests::fillBedWithCopiesAddsInstancesAndUndoRestores() { QSKIP("FB-TA-01: fill-bed stalls >300s on small objects — perf defect pending batching"); }
 void ViewModelSmokeTests::embossAddsMillimetreTextOnceAndUndoRemovesIt() { QSKIP("needs libslic3r"); }
 void ViewModelSmokeTests::splitUndoRestoresMergedObject()

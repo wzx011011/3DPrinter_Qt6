@@ -325,7 +325,9 @@ $patchSeriesFiles = @(
   Get-ChildItem '..\patches\orcaslicer' -Filter '*.patch' -File -ErrorAction SilentlyContinue | Sort-Object Name
 )
 $cmakeInputs = @(
-  '..\CMakeLists.txt'
+  '..\CMakeLists.txt',
+  # The -D switches above live in this script; changing them must reconfigure.
+  $PSCommandPath
 ) + (
   (Get-ChildItem '..\cmake' -Filter '*.cmake' -File -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }) +
   @($patchSeriesFiles | ForEach-Object { $_.FullName })
@@ -356,9 +358,73 @@ if ($null -ne $submoduleHead -and (Test-Path $submodulePinFile)) {
   $pinnedHead = (Get-Content $submodulePinFile -Raw).Trim()
   if ($pinnedHead -eq $submoduleHead.Trim()) { $submodulePinMatches = $true }
 }
+# C2 (2026-11-03): the pin and the series files say nothing about the
+# submodule WORKING TREE. A `git checkout .` inside third_party/OrcaSlicer
+# reverts the configure-time patches without touching any input above, so the
+# fast path would build libslic3r unpatched. Fingerprint the tracked diff of
+# the submodule as well; any change forces a real configure, where
+# ApplyOrcaSlicerPatches.cmake restores and re-applies the series.
+$submoduleDiffFile = Join-Path (Get-Location) 'owzx_orcaslicer_diff.txt'
+$submoduleDiffFingerprint = $null
+try {
+  $diffText = (& git -C (Join-Path $repoRoot 'third_party\OrcaSlicer') diff --binary HEAD 2>$null) -join "`n"
+  if ($LASTEXITCODE -eq 0) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $submoduleDiffFingerprint = [System.BitConverter]::ToString($sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($diffText))).Replace('-', '')
+  }
+} catch {
+  $submoduleDiffFingerprint = $null
+}
+$submoduleDiffMatches = $false
+if ($null -ne $submoduleDiffFingerprint -and (Test-Path $submoduleDiffFile)) {
+  if ((Get-Content $submoduleDiffFile -Raw).Trim() -eq $submoduleDiffFingerprint) { $submoduleDiffMatches = $true }
+}
 $buildNinja = Join-Path (Get-Location) 'build.ninja'
+# Header dependency tracking (2026-11-03). Ninja learns each object's headers
+# from the cl /showIncludes lines that start with msvc_deps_prefix. On a
+# zh-CN Windows cl prints that prefix ("注意: 包含文件:") in the GBK code page,
+# but CMake's compiler detection stores it decoded as UTF-8, so ninja matched
+# NOTHING: every object had zero header deps, header edits never rebuilt
+# their dependents, and binaries silently mixed old and new class layouts
+# (ODR breakage -- also the old "stale moc / mixed PCH generation" reports).
+# CMake copies the prefix bytes verbatim from CMakeFiles/<ver>/CMake*Compiler
+# .cmake into rules.ninja, so storing the GBK bytes there once makes the
+# match exact for every later configure (including ninja's own re-runs).
+function Repair-ShowIncludesPrefix {
+  $utf8 = [System.Text.Encoding]::UTF8
+  $gbk = [System.Text.Encoding]::GetEncoding(936)
+  $prefix = [string]([char]0x6CE8) + [char]0x610F + ': ' + [char]0x5305 + [char]0x542B + [char]0x6587 + [char]0x4EF6 + ':'
+  $from = $utf8.GetBytes($prefix)
+  $to = $gbk.GetBytes($prefix)
+  $changed = $false
+  Get-ChildItem -Path 'CMakeFiles' -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+    foreach ($leaf in @('CMakeCCompiler.cmake', 'CMakeCXXCompiler.cmake')) {
+      $file = Join-Path $_.FullName $leaf
+      if (-not (Test-Path $file)) { continue }
+      $bytes = [System.IO.File]::ReadAllBytes($file)
+      $hex = [System.BitConverter]::ToString($bytes)
+      $fromHex = [System.BitConverter]::ToString($from)
+      if ($hex.Contains($fromHex)) {
+        $patched = $hex.Replace($fromHex, [System.BitConverter]::ToString($to))
+        $out = [byte[]]($patched.Split('-') | ForEach-Object { [Convert]::ToByte($_, 16) })
+        [System.IO.File]::WriteAllBytes($file, $out)
+        $changed = $true
+      }
+    }
+  }
+  return $changed
+}
+$depsPrefixStamp = Join-Path (Get-Location) 'owzx_showincludes_prefix.txt'
+if (Repair-ShowIncludesPrefix) {
+  # Objects built under the broken prefix recorded zero deps; drop the deps
+  # log once so ninja rebuilds them and records real header deps.
+  Write-Stage 'Configure' 'Header-deps prefix repaired (GBK); dropping .ninja_deps for a one-time full rebuild'
+  Remove-Item (Join-Path (Get-Location) '.ninja_deps') -Force -ErrorAction SilentlyContinue
+  Remove-Item $buildNinja -Force -ErrorAction SilentlyContinue
+  Remove-Item $depsPrefixStamp -Force -ErrorAction SilentlyContinue
+}
 $skipConfigure = $false
-if ((Test-Path $buildNinja) -and ($cmakeInputs.Count -gt 0) -and $submodulePinMatches -and $patchSeriesMatches) {
+if ((Test-Path $buildNinja) -and ($cmakeInputs.Count -gt 0) -and $submodulePinMatches -and $patchSeriesMatches -and $submoduleDiffMatches) {
   $ninjaTime = (Get-Item $buildNinja).LastWriteTimeUtc
   $newestInput = ($cmakeInputs | Get-Item | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1)
   if ($null -ne $newestInput -and $newestInput.LastWriteTimeUtc -le $ninjaTime) {
@@ -403,6 +469,26 @@ if ($null -ne $submoduleHead) {
   Set-Content -Path $submodulePinFile -Value $submoduleHead
 }
 Set-Content -Path $patchSeriesFile -Value $patchSeriesFingerprint
+# A first configure (fresh build tree) just ran compiler detection with the
+# UTF-8 prefix: repair it and regenerate rules.ninja before anything compiles.
+if (Repair-ShowIncludesPrefix) {
+  Write-Stage 'Configure' 'Header-deps prefix repaired after detection; regenerating'
+  & cmake @cmakeArgs | Out-Null
+}
+Set-Content -Path $depsPrefixStamp -Value 'gbk-showincludes-prefix'
+# Fingerprint the submodule tree AFTER configure applied the series.
+try {
+  $diffText = (& git -C (Join-Path $repoRoot 'third_party\OrcaSlicer') diff --binary HEAD 2>$null) -join "`n"
+  if ($LASTEXITCODE -eq 0) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $appliedDiff = [System.BitConverter]::ToString($sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($diffText))).Replace('-', '')
+    Set-Content -Path $submoduleDiffFile -Value $appliedDiff
+  } elseif (Test-Path $submoduleDiffFile) {
+    Remove-Item $submoduleDiffFile -Force
+  }
+} catch {
+  if (Test-Path $submoduleDiffFile) { Remove-Item $submoduleDiffFile -Force }
+}
 }  # end of skip-configure fast path
 
 # Q13 (2026-10-12): kill the stale-moc/mixed-object failure class at its

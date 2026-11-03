@@ -685,6 +685,28 @@ private:
   ProjectService *m_service;
 };
 
+// ── InstanceLayoutCommand (C3 fill bed) ────────────────────────────────────
+/// Undo/redo of an operation that adds/moves instances of ONE object (upstream
+/// "Fill bed" snapshot): restores the whole instance list, count AND
+/// placements. Construct with the BEFORE layout, call setAfter() once the
+/// operation succeeded, then push (skip-first redo).
+class InstanceLayoutCommand : public QUndoCommand
+{
+public:
+  InstanceLayoutCommand(const QString &text, int objectIndex, const QVariantList &before,
+                        ProjectService *service, QUndoCommand *parent = nullptr);
+  void setAfter(const QVariantList &after) { m_after = after; }
+  void undo() override;
+  void redo() override;
+
+private:
+  int m_objectIndex;
+  QVariantList m_before;
+  QVariantList m_after;
+  bool m_firstRedoDone = false;
+  ProjectService *m_service;
+};
+
 // ── InstanceCountCommand (P16.8) ───────────────────────────────────────────
 /// "Set number of instances" undo (upstream instances manipulations take a
 /// snapshot via Plater::TakeSnapshot, GUI_ObjectList instance handlers).

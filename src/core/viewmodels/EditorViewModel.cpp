@@ -1,6 +1,7 @@
 #include "EditorViewModel.h"
 
 #include "core/services/ProjectService.h"
+#include "core/services/StepMeshPrompt.h"
 #include "core/services/SliceService.h"
 #include "core/services/UndoRedoManager.h"
 #include "core/services/UndoCommands.h"
@@ -1754,6 +1755,114 @@ void EditorViewModel::setUniformScale(bool v)
   emitTransformEdited();
 }
 
+namespace {
+bool vecNear(const QVector3D &a, const QVector3D &b, float eps)
+{
+  return std::abs(a.x() - b.x()) <= eps && std::abs(a.y() - b.y()) <= eps
+         && std::abs(a.z() - b.z()) <= eps;
+}
+} // namespace
+
+void EditorViewModel::captureRotateToolInitial()
+{
+  const int idx = primarySelectedSourceIndex(this);
+  m_rotateInitSourceIndex = idx;
+  if (idx >= 0 && projectService_) {
+    m_rotateInitRotation = projectService_->objectRotation(idx);
+    m_rotateInitScale = projectService_->objectScale(idx);
+  }
+  emit transformChanged();
+}
+
+bool EditorViewModel::canResetRotationToInitial() const
+{
+  const int idx = primarySelectedSourceIndex(this);
+  if (idx < 0 || idx != m_rotateInitSourceIndex || !projectService_)
+    return false;
+  // upstream: !rotation.isApprox(m_init_rotation)
+  return !vecNear(projectService_->objectRotation(idx), m_rotateInitRotation, 1e-3f);
+}
+
+bool EditorViewModel::canResetRotationToZero() const
+{
+  const int idx = primarySelectedSourceIndex(this);
+  if (idx < 0 || !projectService_)
+    return false;
+  return !vecNear(projectService_->objectRotation(idx), QVector3D(), 1e-3f);
+}
+
+bool EditorViewModel::canResetScale() const
+{
+  const int idx = primarySelectedSourceIndex(this);
+  if (idx < 0 || !projectService_)
+    return false;
+  // upstream: (m_cache.scale / 100 - Ones).norm() > 0.001
+  return (projectService_->objectScale(idx) - QVector3D(1.f, 1.f, 1.f)).length() > 0.001f;
+}
+
+void EditorViewModel::resetObjectRotation(bool toInitial)
+{
+  const int idx = primarySelectedSourceIndex(this);
+  if (idx < 0 || !projectService_)
+    return;
+  if (toInitial && idx != m_rotateInitSourceIndex)
+    return;
+  const QVector3D pos = projectService_->objectPosition(idx);
+  const QVector3D oldRot = projectService_->objectRotation(idx);
+  const QVector3D oldScale = projectService_->objectScale(idx);
+  // reset_rotation_value(true) restores the initial matrix without offset
+  // (rotation and scale); (false) is Transformation::reset_rotation().
+  const QVector3D newRot = toInitial ? m_rotateInitRotation : QVector3D();
+  const QVector3D newScale = toInitial ? m_rotateInitScale : oldScale;
+  if (vecNear(oldRot, newRot, 1e-6f) && vecNear(oldScale, newScale, 1e-6f))
+    return;
+  projectService_->setObjectRotation(idx, newRot.x(), newRot.y(), newRot.z());
+  if (!vecNear(oldScale, newScale, 1e-6f))
+    projectService_->setObjectScale(idx, newScale.x(), newScale.y(), newScale.z());
+  if (m_undoManager) {
+    auto *cmd = new TransformCommand(idx, pos, oldRot, oldScale, projectService_);
+    cmd->setNewTransform(projectService_->objectPosition(idx), newRot, newScale);
+    cmd->setText(tr("Reset rotation"));
+    // Upstream snapshots each reset on its own; the macro keeps the merging
+    // TransformCommand from folding it into the preceding edit.
+    if (m_undoManager->isInMacro()) {
+      m_undoManager->push(cmd);
+    } else {
+      m_undoManager->beginMacro(tr("Reset rotation"));
+      m_undoManager->push(cmd);
+      m_undoManager->endMacro();
+    }
+  }
+  emitTransformEdited();
+}
+
+void EditorViewModel::resetObjectScale()
+{
+  const int idx = primarySelectedSourceIndex(this);
+  if (idx < 0 || !projectService_)
+    return;
+  const QVector3D oldScale = projectService_->objectScale(idx);
+  if (vecNear(oldScale, QVector3D(1.f, 1.f, 1.f), 1e-6f))
+    return;
+  // reset_scale_value: change_scale_value(axis, 100%) for X, Y, Z.
+  projectService_->setObjectScale(idx, 1.f, 1.f, 1.f);
+  if (m_undoManager) {
+    auto *cmd = new TransformCommand(idx, projectService_->objectPosition(idx),
+                                     projectService_->objectRotation(idx), oldScale, projectService_);
+    cmd->setNewTransform(projectService_->objectPosition(idx),
+                         projectService_->objectRotation(idx), QVector3D(1.f, 1.f, 1.f));
+    cmd->setText(tr("Reset scale"));
+    if (m_undoManager->isInMacro()) {
+      m_undoManager->push(cmd);
+    } else {
+      m_undoManager->beginMacro(tr("Reset scale"));
+      m_undoManager->push(cmd);
+      m_undoManager->endMacro();
+    }
+  }
+  emitTransformEdited();
+}
+
 void EditorViewModel::resetObjectTransform()
 {
   const int idx = primarySelectedSourceIndex(this);
@@ -1809,7 +1918,32 @@ void EditorViewModel::setCutPosition(double pos)
 }
 void EditorViewModel::setCutKeepMode(int mode)
 {
+  // Upstream GLGizmoCut.cpp:2937: the per-half "Keep" boxes are disabled
+  // while "Cut to parts" is on (both halves are always kept).
+  if (m_cutToParts)
+    mode = 0;
   m_cutKeepMode = mode;
+  emit stateChanged();
+}
+
+void EditorViewModel::setCutPlaceOnCut(bool on)
+{
+  // Upstream GLGizmoCut.cpp:2943: "Place on cut" is disabled in parts mode.
+  m_cutPlaceOnCut = on && !m_cutToParts;
+  emit stateChanged();
+}
+
+void EditorViewModel::setCutToParts(bool on)
+{
+  // Upstream GLGizmoCut.cpp:2961-2965: ticking "Cut to parts" forces both
+  // halves kept and clears place-on-cut. Without KeepUpper, KeepAsParts makes
+  // Cut::perform_with_plane dereference a null upper object (C1).
+  m_cutToParts = on;
+  if (on)
+  {
+    m_cutKeepMode = 0;
+    m_cutPlaceOnCut = false;
+  }
   emit stateChanged();
 }
 
@@ -4256,11 +4390,9 @@ void EditorViewModel::syncFilamentColours()
   // if not yet wired, this is a no-op.
   if (!configViewModel_ || !projectService_)
     return;
-  PresetService *presetSvc = configViewModel_->presetService();
-  if (!presetSvc)
-    return;
-  const QStringList colours = presetSvc->activeFilamentColours();
-  projectService_->setActiveFilamentColours(colours);
+  // C6: the plater's filament slots (project colours), not every loaded
+  // filament preset in the library.
+  projectService_->setActiveFilamentColours(configViewModel_->slotFilamentColours());
 }
 
 void EditorViewModel::setUndoRedoManager(UndoRedoManager *manager)
@@ -5718,20 +5850,15 @@ QVariantList EditorViewModel::extrudersColors() const
       "#9c27b0", "#4caf50", "#ff5722", "#607d8b",
   };
   const QStringList cfg = projectService_ ? projectService_->plateFilamentColours() : QStringList{};
-  // F1 (R1C-10): slot i's swatch reads slot i's preset colour — the
-  // library-enumeration order (cfg) has no per-slot meaning once slots carry
-  // their own (possibly derived) presets.
-  PresetService *presetSvc = configViewModel_ ? configViewModel_->presetService() : nullptr;
+  // C6: slot i's swatch is the project colour of slot i (falling back to
+  // its preset's colour) -- the same value the slice config carries.
   QVariantList out;
   const int n = std::max(1, m_mmuExtruderCount);
   out.reserve(n);
   for (int i = 0; i < n; ++i) {
     QString c;
-    if (presetSvc) {
-      const QString slotPreset = configViewModel_->filamentPresetForSlot(i);
-      if (!slotPreset.isEmpty())
-        c = presetSvc->filamentColourForPreset(slotPreset);
-    }
+    if (configViewModel_ && i < configViewModel_->filamentSlotCount())
+      c = configViewModel_->filamentColourForSlot(i);
     if (c.isEmpty())
       c = i < cfg.size() ? cfg[i] : QString::fromUtf8(kCycle[size_t(i) % 8]);
     out.append(QVariant(c));
@@ -9099,37 +9226,41 @@ bool EditorViewModel::fillBedWithInstances()
 
   const QString printableArea = QStringLiteral("0,0,%1,0,%1,%2,0,%2")
       .arg(m_bedWidth).arg(m_bedDepth);
-  int instanceCount = projectService_->objectInstanceCount(sourceIndex);
-  if (instanceCount < 1)
+  if (projectService_->objectInstanceCount(sourceIndex) < 1)
     return false;
 
-  bool grew = false;
-  // U4: fill-bed loops synchronous arrangements until the bed is full (up to
-  // 1000 instances) -- the single longest synchronous run in the shell. One
-  // scope covers the whole loop; the guard releases it on every break.
-  const SyncBusyScope busy(this, &EditorViewModel::m_arranging);
-  while (instanceCount < 1000) {
-    if (!projectService_->setObjectInstanceCount(sourceIndex, instanceCount + 1))
-      break;
-    if (!projectService_->arrangeObjects(m_arrangeDistance, m_arrangeRotation,
-                                         m_arrangeAlignY, printableArea,
-                                         arrangeWipeTowerContext())) {
-      projectService_->setObjectInstanceCount(sourceIndex, instanceCount);
-      projectService_->arrangeObjects(m_arrangeDistance, m_arrangeRotation,
-                                      m_arrangeAlignY, printableArea,
-                                      arrangeWipeTowerContext());
-      break;
-    }
-    ++instanceCount;
-    grew = true;
+  // C3 (review 2026-11-03): upstream FillBedJob -- ONE arrange run with the
+  // plate's other objects fixed, wrapped in a "Fill bed" undo snapshot. The
+  // former loop re-arranged the whole bed once per added copy (minutes on the
+  // GUI thread), moved every other object, and could not be undone.
+  auto *cmd = m_undoManager
+      ? new InstanceLayoutCommand(tr("Fill bed"), sourceIndex,
+                                  projectService_->objectInstanceTransforms(sourceIndex),
+                                  projectService_)
+      : nullptr;
+  int added = 0;
+  {
+    const SyncBusyScope busy(this, &EditorViewModel::m_arranging);
+    added = projectService_->fillBedWithInstances(sourceIndex, m_arrangeDistance,
+                                                  m_arrangeRotation, printableArea,
+                                                  arrangeWipeTowerContext());
   }
-
-  if (grew) {
+  if (added > 0) {
+    if (cmd) {
+      cmd->setAfter(projectService_->objectInstanceTransforms(sourceIndex));
+      m_undoManager->push(cmd);
+      cmd = nullptr;
+    }
     refreshMeshCacheAndFitHint();
     invalidateSliceResultsForCurrentPlate();
+  } else if (added == 0) {
+    statusText_ = tr("No free space left on the plate for another copy");
+  } else {
+    statusText_ = projectService_->lastError();
   }
+  delete cmd;
   emit stateChanged();
-  return grew;
+  return added > 0;
 }
 
 bool EditorViewModel::arraySelectedObject(int rows, int cols, float spacingX, float spacingY)
@@ -9192,9 +9323,44 @@ bool EditorViewModel::exportSelectedObjects(const QString &outputPath,
                                              bool separateFiles,
                                              bool drcFormat)
 {
-  if (!projectService_ || m_selectedSourceIndices.isEmpty())
+  if (!projectService_)
     return false;
+  if (m_selectedSourceIndices.isEmpty()) {
+    statusText_ = tr("Select at least one object to export");
+    emit stateChanged();
+    return false;
+  }
   const QList<int> sourceIndices = m_selectedSourceIndices.values();
+  const bool ok = projectService_->exportObjects(sourceIndices, outputPath,
+                                                  separateFiles, drcFormat);
+  statusText_ = ok ? tr("Export completed") : projectService_->lastError();
+  emit stateChanged();
+  return ok;
+}
+
+bool EditorViewModel::importSvgFile(const QString &filePath)
+{
+  if (filePath.isEmpty())
+    return false;
+  setSvgFilePath(filePath);
+  if (hasSelection())
+    return importSVG();
+  return addFilesToCurrentPlate(QStringList{filePath});
+}
+
+bool EditorViewModel::exportAllObjects(const QString &outputPath, bool separateFiles,
+                                       bool drcFormat)
+{
+  if (!projectService_)
+    return false;
+  QList<int> sourceIndices;
+  for (int index = 0; index < projectService_->modelCount(); ++index)
+    sourceIndices.append(index);
+  if (sourceIndices.isEmpty()) {
+    statusText_ = tr("Nothing to export");
+    emit stateChanged();
+    return false;
+  }
   const bool ok = projectService_->exportObjects(sourceIndices, outputPath,
                                                   separateFiles, drcFormat);
   statusText_ = ok ? tr("Export completed") : projectService_->lastError();
@@ -11394,6 +11560,11 @@ void EditorViewModel::pushSliceConfigToService()
   if (!configViewModel_ || !sliceService_)
     return;
   sliceService_->setMergedPresetConfig(configViewModel_->mergedConfigValues());
+  // C6/P1: per-slot filament presets + project colours, composed into the
+  // per-filament vectors at slice time (upstream full_fff_config).
+  sliceService_->setFilamentSlots(configViewModel_->slotFilamentPresetNames(),
+                                  configViewModel_->slotFilamentPresetValues(),
+                                  configViewModel_->slotFilamentColours());
   // v2.7 P0: ensure bed_shape is set (mirror CLI). R-P1.I: use the printer
   // preset's bed (syncBedFromPrinterPreset keeps bedWidth/bedDepth/origins in
   // sync from printable_area) instead of an unconditional 220x220 -- non-220
@@ -12830,3 +13001,8 @@ void EditorViewModel::onFilamentMapReady(const FilamentMapResult &result)
 bool EditorViewModel::hasAutoFilamentMap() const { return m_hasAutoFilamentMap; }
 int EditorViewModel::autoFilamentMapMode() const { return m_autoFilamentMapMode; }
 QVariantList EditorViewModel::autoFilamentMaps() const { return m_autoFilamentMaps; }
+
+QObject *EditorViewModel::stepMeshPrompt() const
+{
+  return projectService_ ? projectService_->stepMeshPrompt() : nullptr;
+}
