@@ -117,11 +117,8 @@ Item {
             "Skirt": "qrc:/qml/assets/icons/param_skirt.svg",
             "Brim": "qrc:/qml/assets/icons/param_adhension.svg",
             "Special mode": "qrc:/qml/assets/icons/param_special.svg",
-            // Upstream fuzzy_skin group icon (Tab.cpp:3072) has no
-            // counterpart in the project icon set (fuzzy_skin.svg is absent
-            // from disk and from qml.qrc); param_rectilinear is the closest
-            // registered line-texture glyph so the header stays filled.
-            "Fuzzy skin": "qrc:/qml/assets/icons/param_rectilinear.svg",
+            // Upstream fuzzy_skin group icon (Tab.cpp:3072), recoloured copy.
+            "Fuzzy skin": "qrc:/qml/assets/icons/param_fuzzy_skin.svg",
             "G-code output": "qrc:/qml/assets/icons/param_gcode.svg",
             "Plugin Configuration": "qrc:/qml/assets/icons/param_gcode.svg"
         }
@@ -184,9 +181,19 @@ Item {
         // Schema sidetexts arrive in English ("mm or %"); the known set is
         // translated inline — everything else passes through untouched.
         var map = { "mm or %": qsTr("mm 或 %"), "mm/s or %": qsTr("mm/s 或 %"),
-                    "mm/s² or %": qsTr("mm/s² 或 %") }
+                    "mm/s² or %": qsTr("mm/s² 或 %"),
+                    // OrcaSlicer_zh_CN.po
+                    "money/h": qsTr("钱/时"), "money/kg": qsTr("金额/kg") }
         return map[st] !== undefined ? map[st] : st
     }
+    // Upstream toggle_field: the line stays visible but its field is
+    // disabled (ConfigManipulation / Tab::toggle_options rules, computed in
+    // core and fed through the model's optEnabled role).
+    property bool oEnabled: true
+    // Upstream ConfigOptionDef::multiline: G-code / notes / post-process
+    // use a multi-line editor; every other string is one line.
+    property bool oMultiline: false
+    readonly property bool isMultilineString: root.oType === "string" && root.oMultiline
     property bool oNullable: false
     property bool oIsVector: false
     property var oEnumLabels: []
@@ -216,17 +223,22 @@ Item {
         && root.oKey.slice(-6) === "_gcode"
     readonly property bool isBedShapeOption:
         root.oKey === "printable_area" || root.oKey === "bed_shape"
-    readonly property bool hasTrailingDialogAction: root.isGcodeOption || root.isBedShapeOption
+    // printable_area renders as the upstream "Set..." button alone
+    // (Tab.cpp create_bed_shape_widget), so only G-code keeps the trailing
+    // icon action.
+    readonly property bool hasTrailingDialogAction: root.isGcodeOption
     readonly property bool hasBounds: root.isNumeric && root.oMax > root.oMin
 
     readonly property int headerHeight: root.showGroupHeader ? (root.compact ? 28 : 32) : 0
     // Compact row rhythm 26px (2026-10-26 pixel audit: upstream runs a
     // 13px label on a 26px pitch — exactly 2x — vs our previous 30px).
     readonly property int rowHeight:
-        root.compact ? (root.oType === "string" ? 48 : 26)
-        : root.oType === "string" ? 70
+        root.compact ? (root.isMultilineString ? 48 : 26)
+        : root.isMultilineString ? 70
         : 44
     readonly property int contentHeight: root.rowHeight
+    // Single-line field height shared by every control cluster.
+    readonly property int fieldHeight: root.compact ? 26 : Theme.controlHeightSM
     readonly property int totalHeight: root.headerHeight + root.rowHeight
     readonly property int controlColumnWidth:
         root.compact
@@ -401,16 +413,17 @@ Item {
                     // column's LEFT edge (Orca renders bool rows the same
                     // way), not hard against the panel edge.
                     anchors.left: parent.left
-                    // Explicit width: a bare Loader has no implicit size and
+                    // Explicit size: a bare Loader has no implicit size and
                     // the fill-anchored CxCheckBox collapsed to 0x0 — bool
                     // options rendered with no checkbox at all.
                     width: 28
+                    height: root.fieldHeight
                     sourceComponent: Component {
                         CxCheckBox {
                             anchors.fill: parent
                             text: ""
                             checked: root.oVal === true || root.oVal === "true"
-                            enabled: !root.oRO
+                            enabled: !root.oRO && root.oEnabled
                             onToggled: root.optionModel.setValue(root.optIdx, checked)
                         }
                     }
@@ -421,8 +434,14 @@ Item {
                     asynchronous: true
                     active: root.isNumeric
                     anchors.verticalCenter: parent.verticalCenter
-                    anchors.right: parent.right
+                    // Upstream OptionsGroup grid: every field starts at the
+                    // same column right after the label (bool, number and
+                    // enum alike). An explicit height keeps the loaded
+                    // cluster centred on the label -- a bare Loader is 0px
+                    // tall, which pushed the field half its height down.
+                    anchors.left: parent.left
                     width: Math.min(parent.width, root.controlColumnWidth)
+                    height: root.fieldHeight
                     sourceComponent: Component {
                         RowLayout {
                             id: numericCluster
@@ -439,7 +458,7 @@ Item {
                                 to: Math.round(root.oMax)
                                 stepSize: Math.max(1, Math.round(root.oStep))
                                 suffix: root.displayUnit
-                                enabled: !root.oRO
+                                enabled: !root.oRO && root.oEnabled
                                 editable: true
                                 onValueModified: root.optionModel.setValue(root.optIdx, value)
                             }
@@ -455,7 +474,7 @@ Item {
                                 // Unit lives inside the field, right-aligned
                                 // (upstream Field.cpp:923 combine_side_text).
                                 suffix: root.displayUnit
-                                enabled: !root.oRO
+                                enabled: !root.oRO && root.oEnabled
                                 onCommit: (valueText) => root.setNumericValue(valueText)
                             }
                         }
@@ -475,9 +494,9 @@ Item {
                     // (metadataSummary) — wide settings rows keep it.
                     active: root.isRangeLike && !root.compact
                     anchors.verticalCenter: parent.verticalCenter
-                    anchors.left: parent.left
-                    anchors.right: numericLoader.left
-                    anchors.rightMargin: 8
+                    anchors.left: numericLoader.right
+                    anchors.right: parent.right
+                    anchors.leftMargin: 8
                     sourceComponent: Component {
                         RowLayout {
                             id: rangeCluster
@@ -539,12 +558,15 @@ Item {
                     asynchronous: true
                     active: root.oType === "enum"
                     anchors.verticalCenter: parent.verticalCenter
-                    anchors.right: parent.right
-                    width: root.compact ? root.compactEnumWidth : 160
+                    anchors.left: parent.left
+                    width: Math.min(parent.width, root.compact ? root.compactEnumWidth : 160)
+                    // Without a height the fill-anchored combo collapsed to
+                    // 0px and lost its frame (only the text was painted).
+                    height: root.fieldHeight
                     sourceComponent: Component {
                         CxComboBox {
                             anchors.fill: parent
-                            enabled: !root.oRO
+                            enabled: !root.oRO && root.oEnabled
                             model: root.oEnumLabels
                             currentIndex: typeof root.oVal === "number" ? root.oVal : 0
                             onActivated: (i) => root.optionModel.setValue(root.optIdx, i)
@@ -556,8 +578,9 @@ Item {
                     asynchronous: true
                     active: root.oType === "string" && root.isColorLike
                     anchors.verticalCenter: parent.verticalCenter
-                    anchors.right: parent.right
+                    anchors.left: parent.left
                     width: Math.min(parent.width, root.controlColumnWidth)
+                    height: root.fieldHeight
                     sourceComponent: Component {
                         RowLayout {
                             anchors.fill: parent
@@ -592,7 +615,7 @@ Item {
                                 // G2: R11 compact field is 25px tall (was 24).
                                 Layout.preferredHeight: root.compact ? 26 : Theme.controlHeightSM
                                 text: typeof root.oVal === "string" ? root.oVal : ""
-                                enabled: !root.oRO
+                                enabled: !root.oRO && root.oEnabled
                                 onEditingFinished: root.optionModel.setValue(root.optIdx, text)
                             }
                         }
@@ -601,7 +624,24 @@ Item {
 
                 Loader {
                     asynchronous: true
-                    active: root.oType === "string" && !root.isColorLike
+                    active: root.oType === "string" && !root.isColorLike && !root.isMultilineString
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.rightMargin: root.hasTrailingDialogAction ? 34 : 0
+                    height: root.fieldHeight
+                    sourceComponent: Component {
+                        CxTextField {
+                            text: typeof root.oVal === "string" ? root.oVal : (root.oVal ? root.oVal.toString() : "")
+                            enabled: !root.oRO && root.oEnabled
+                            onEditingFinished: root.optionModel.setValue(root.optIdx, text)
+                        }
+                    }
+                }
+
+                Loader {
+                    asynchronous: true
+                    active: root.isMultilineString && !root.isColorLike
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: parent.left
                     anchors.right: parent.right
@@ -612,12 +652,89 @@ Item {
                             anchors.fill: parent
                             text: typeof root.oVal === "string" ? root.oVal : (root.oVal ? root.oVal.toString() : "")
                             font.pixelSize: Theme.fontSizeSM
-                            readOnly: root.oRO
+                            readOnly: root.oRO || !root.oEnabled
                             wrapMode: TextArea.Wrap
                             onTextChanged: {
                                 if (root.optionModel && activeFocus)
                                     root.optionModel.setValue(root.optIdx, text)
                             }
+                        }
+                    }
+                }
+
+                // Upstream PointCtrl (Field.cpp): X / Y pair for coPoint and
+                // per-extruder coPoints (first element). Values parse and
+                // write back through the model's point helpers.
+                Loader {
+                    asynchronous: true
+                    active: root.oType === "point"
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: parent.left
+                    width: Math.min(parent.width, root.controlColumnWidth + 60)
+                    height: root.fieldHeight
+                    sourceComponent: Component {
+                        RowLayout {
+                            anchors.fill: parent
+                            spacing: 6
+
+                            Repeater {
+                                model: 2
+                                delegate: CxNumericEdit {
+                                    required property int index
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: root.fieldHeight
+                                    decimals: 3
+                                    valueAlignment: Text.AlignLeft
+                                    text: root.formattedNumber(
+                                              root.optionModel ? root.optionModel.pointCoord(root.oVal, index) : 0)
+                                    suffix: index === 0 ? "X" : "Y"
+                                    enabled: !root.oRO && root.oEnabled
+                                    onCommit: (valueText) => {
+                                        var v = parseFloat(valueText)
+                                        if (!isNaN(v) && root.optionModel)
+                                            root.optionModel.setPointCoord(root.optIdx, index, v)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Polygon keys: bed_exclude_area / wrapping_exclude_area edit as
+                // one "XxY, XxY, ..." line (Field.cpp:689-719); printable_area
+                // is the "Set..." button that opens the bed shape dialog.
+                Loader {
+                    asynchronous: true
+                    active: root.oType === "points"
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: parent.left
+                    width: root.isBedShapeOption ? implicitWidth : parent.width
+                    height: root.fieldHeight
+                    sourceComponent: root.isBedShapeOption ? bedShapeButton : pointsField
+                }
+
+                Component {
+                    id: bedShapeButton
+                    CxButton {
+                        compact: true
+                        cxStyle: CxButton.Style.Secondary
+                        text: qsTr("设置 ...")
+                        enabled: !root.oRO && root.oEnabled
+                        onClicked: {
+                            if (typeof Backend !== "undefined" && Backend)
+                                Backend.showBedShapeDialog()
+                        }
+                    }
+                }
+
+                Component {
+                    id: pointsField
+                    CxTextField {
+                        text: root.optionModel ? root.optionModel.pointsText(root.oVal) : ""
+                        enabled: !root.oRO && root.oEnabled
+                        onEditingFinished: {
+                            if (root.optionModel && !root.optionModel.setPointsText(root.optIdx, text))
+                                text = root.optionModel.pointsText(root.oVal)
                         }
                     }
                 }

@@ -1,6 +1,7 @@
 #include "ConfigViewModel.h"
 
 #include <QColor>
+#include <QDebug>
 
 #include <algorithm>
 #include <QJsonDocument>
@@ -9,6 +10,7 @@
 #include <QRegularExpression>
 #include <QSettings>
 
+#include "core/services/OptionToggleRules.h"
 #include "core/services/PresetService.h"
 #include "core/services/ProjectService.h"
 #include "qml_gui/Models/ConfigOptionModel.h"
@@ -111,6 +113,19 @@ ConfigViewModel::ConfigViewModel(PresetService *presetService, ProjectService *p
       QStringLiteral("reduce_crossing_wall"),
       QStringLiteral("only_one_wall_top"),
       QStringLiteral("precise_outer_wall")};
+
+  {
+    // Upstream defaults to comSimple when no user_mode is saved. The former
+    // per-view 简/全 switch persisted paramsAdvancedMode ("1" showed every
+    // row), which maps onto Expert.
+    QSettings settings;
+    const QSettings uiSettings(QStringLiteral("OWzx"), QStringLiteral("UI")); // QML AppSettings store
+    if (settings.contains(QStringLiteral("Config/userMode")))
+      userMode_ = qBound(0, settings.value(QStringLiteral("Config/userMode")).toInt(), 2);
+    else if (uiSettings.contains(QStringLiteral("paramsAdvancedMode")))
+      userMode_ = uiSettings.value(QStringLiteral("paramsAdvancedMode")).toString() == QStringLiteral("1") ? 2 : 0;
+    developerMode_ = settings.value(QStringLiteral("developerMode"), false).toBool();
+  }
 
   connect(printOptions_, &ConfigOptionModel::optionValueChanged, this, &ConfigViewModel::handleOptionValueChanged);
   connect(machineOptions_, &ConfigOptionModel::optionValueChanged, this, &ConfigViewModel::handleOptionValueChanged);
@@ -2446,7 +2461,46 @@ void ConfigViewModel::applyScopeValues()
     filamentOptions_->applyValues(filamentOptions_->valuesByKey().isEmpty() ? values : effectivePresetValuesForTier(QStringLiteral("filament")));
   }
   printOptions_->setReadonlyKeys(readonlyKeysForCurrentScope());
+  applyToggleRules(values);
   applyingScopeValues_ = false;
+}
+
+void ConfigViewModel::applyToggleRules(const QHash<QString, QVariant> &scopeValues)
+{
+  // Upstream re-runs the toggle functions after every value change
+  // (Tab::update -> toggle_options, ConfigManipulation::toggle_print_fff_options).
+  const QHash<QString, QVariant> printerValues = effectivePresetValuesForTier(QStringLiteral("printer"));
+  const QHash<QString, QVariant> filamentValues = effectivePresetValuesForTier(QStringLiteral("filament"));
+  OptionToggleRules::Context ctx;
+  ctx.print = [&scopeValues](const QString &key) { return scopeValues.value(key); };
+  ctx.printer = [&printerValues](const QString &key) { return printerValues.value(key); };
+  ctx.filament = [&filamentValues](const QString &key) { return filamentValues.value(key); };
+  ctx.project = ctx.print; // curr_bed_type rides on the merged scope values
+  ctx.isBblPrinter = presetService_ && presetService_->isBblVendorPreset(currentPrinterPreset_);
+  ctx.isGlobalConfig = settingsScope_ == QStringLiteral("global") ||
+                       (settingsScope_ != QStringLiteral("plate") && settingsTargetObjectIndex_ < 0);
+
+  // The rules read libslic3r option defs; a def-level exception must never
+  // escape into the value-change path (rows simply keep their last state).
+  try
+  {
+    const OptionToggleRules::Result print = OptionToggleRules::printToggles(ctx);
+    printOptions_->setToggleState(print.hidden, print.disabled);
+    if (machineOptions_)
+    {
+      const OptionToggleRules::Result printer = OptionToggleRules::printerToggles(ctx);
+      machineOptions_->setToggleState(printer.hidden, printer.disabled);
+    }
+    if (filamentOptions_)
+    {
+      const OptionToggleRules::Result filament = OptionToggleRules::filamentToggles(ctx);
+      filamentOptions_->setToggleState(filament.hidden, filament.disabled);
+    }
+  }
+  catch (const std::exception &e)
+  {
+    qWarning() << "[ConfigViewModel] option toggle rules failed:" << e.what();
+  }
 }
 
 void ConfigViewModel::handleOptionValueChanged(const QString &key, const QVariant &value)
@@ -2587,9 +2641,10 @@ QList<int> ConfigViewModel::filterOptionIndices(const QString &category, const Q
 
   for (int i = 0; i < n; ++i)
   {
-    // Search + mode filter (upstream ConfigOptionMode: 0=comSimple, 1=comAdvanced, 2=comDevelop).
+    // Search + mode filter (upstream ConfigOptionMode: 0=comSimple, 1=comAdvanced, 2=comExpert, 3=comDevelop).
     // Simple mode (advancedMode=false) shows only comSimple options; advanced mode
-    // (advancedMode=true) is a SUPERSET and shows comSimple + comAdvanced + comDevelop.
+    // (advancedMode=true) is a SUPERSET and shows comSimple + comAdvanced + comExpert
+    // (comDevelop rows need developer mode, see ConfigViewModel::viewMode).
     // Never exclude a simple-mode option from advanced mode.
     if (!model->matchesFilter(i, needle, advancedMode))
       continue;
@@ -3602,4 +3657,29 @@ int ConfigViewModel::dirtyCountForGroup(const QString &tier, const QString &grou
 {
   ConfigOptionModel *model = optionModelForTier(tier);
   return model ? model->dirtyCountForGroup(groupName) : 0;
+}
+
+void ConfigViewModel::setUserMode(int mode)
+{
+  mode = qBound(0, mode, 2);
+  if (mode == userMode_)
+    return;
+  userMode_ = mode;
+  QSettings().setValue(QStringLiteral("Config/userMode"), userMode_);
+  emit viewModeChanged();
+}
+
+void ConfigViewModel::setDeveloperMode(bool on)
+{
+  if (on == developerMode_)
+    return;
+  developerMode_ = on;
+  emit viewModeChanged();
+}
+
+void ConfigViewModel::cycleUserMode()
+{
+  if (developerMode_)
+    return;
+  setUserMode((userMode_ + 1) % 3);
 }

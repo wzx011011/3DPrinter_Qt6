@@ -179,6 +179,8 @@ endif()
         src/core/services/ProjectService.h
         src/core/services/StepMeshPrompt.cpp
         src/core/services/StepMeshPrompt.h
+        src/core/services/OptionToggleRules.cpp
+        src/core/services/OptionToggleRules.h
         src/core/services/UndoRedoManager.cpp
         src/core/services/UndoRedoManager.h
         src/core/services/UndoCommands.cpp

@@ -3681,7 +3681,7 @@ void QmlUiAuditTests::leftSidebarPresetControlsAreWiredAndHonest()
   // itself (per-page C++ ConfigOptionFilterProxy) is unchanged.
   QVERIFY2(sidebar.contains(QStringLiteral("ConfigOptionFilterProxy"))
                && sidebar.contains(QStringLiteral("searchText: root.paramsSearchText"))
-               && sidebar.contains(QStringLiteral("advancedMode: root.paramsAdvancedMode")),
+               && sidebar.contains(QStringLiteral("viewMode: root.paramsViewMode")),
            "LeftSidebar pages must filter through the per-page C++ ConfigOptionFilterProxy");
   QVERIFY2(!sidebar.contains(QStringLiteral("computePageIndices"))
                && !sidebar.contains(QStringLiteral("rebuildParamsFilter")),
@@ -3827,22 +3827,12 @@ void QmlUiAuditTests::presetSystemCompletionSourceAudit()
   QVERIFY2(sidebar.contains(QStringLiteral("plainPresetName(")),
            "LeftSidebar combos must normalize decorated names via plainPresetName()");
 
-  // SETPRINT-FOOTER (upstream Tab.cpp dialog bottom button row): the
-  // SettingsDialog footer carries Save / Discard / Close. Save and Discard
-  // are dirty-gated like the preset-bar save icon; Close runs the same
-  // UnsavedChangesDialog guard as the window close.
-  QVERIFY2(settingsDialog.contains(QStringLiteral("SETPRINT-FOOTER"))
-               && settingsDialog.contains(QStringLiteral("text: qsTr(\"保存\")"))
-               && settingsDialog.contains(QStringLiteral("text: qsTr(\"放弃\")"))
-               && settingsDialog.contains(QStringLiteral("text: qsTr(\"关闭\")")),
-           "SETPRINT-FOOTER: the footer row must carry the Save/Discard/Close buttons");
-  QVERIFY2(settingsDialog.contains(
-               QStringLiteral("enabled: root.configVm && root.configVm.isPresetDirty")),
-           "SETPRINT-FOOTER: Save and Discard must be dirty-gated");
-  QVERIFY2(settingsDialog.contains(QStringLiteral("root.configVm.requestDiscardPendingChanges()"))
-               && settingsDialog.contains(QStringLiteral("onClicked: root.openUnsavedChangesGuard(true)")),
-           "SETPRINT-FOOTER: Discard must revert pending edits and Close must"
-           " run the unsaved-changes guard");
+  // The settings dialog has no footer row, like upstream ParamsDialog/Tab:
+  // the former Save/Discard/Close footer opened the unsaved-changes dialog
+  // even with nothing changed (empty change list, 2026-11-03 Orca compare).
+  QVERIFY2(!settingsDialog.contains(QStringLiteral("SETPRINT-FOOTER"))
+               && !settingsDialog.contains(QStringLiteral("text: qsTr(\"放弃\")")),
+           "SettingsDialog must not carry the non-upstream Save/Discard/Close footer");
 }
 
 void QmlUiAuditTests::savePresetDialogUsesItsOwnTierAndKeepsFailuresOpen()
@@ -4785,8 +4775,8 @@ void QmlUiAuditTests::settingsDialogRestoresPhase85ShellContract()
                && settingsDialog.contains(QStringLiteral("searchExpanded"))
                && settingsDialog.contains(QStringLiteral("root.requestSaveAndMaybeClose(false)"))
                && settingsDialog.contains(QStringLiteral("saveAsDialog.open()"))
-               && settingsDialog.contains(QStringLiteral("CxSwitch"))
-               && settingsDialog.contains(QStringLiteral("advancedMode")),
+               && settingsDialog.contains(QStringLiteral("ModeSwitch"))
+               && settingsDialog.contains(QStringLiteral("viewMode")),
            "SettingsDialog compact top-row actions must keep save, save-as, search, and advanced-mode wiring");
 }
 
@@ -8587,10 +8577,12 @@ void QmlUiAuditTests::v50UnsavedChangesAndFilterWired()
 
   // PSET-04: SettingsDialog exposes the user-facing advanced toggle bound to
   // the C++ filter.
-  QVERIFY2(settingsDialog.contains(QStringLiteral("advancedMode")),
-           "PSET-04: SettingsDialog must expose an advancedMode user toggle");
-  QVERIFY2(settingsDialog.contains(QStringLiteral("advancedMode: root.advancedMode")),
-           "PSET-04: SettingsDialog must pass advancedMode to the C++ filter proxy");
+  // The toggle is the app-wide three-level mode (ConfigViewModel.viewMode,
+  // upstream user_mode) rendered by ModeSwitch.
+  QVERIFY2(settingsDialog.contains(QStringLiteral("ModeSwitch")),
+           "PSET-04: SettingsDialog must expose the settings-mode switch");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("viewMode: root.viewMode")),
+           "PSET-04: SettingsDialog must pass the view mode to the C++ filter proxy");
 }
 
 void QmlUiAuditTests::v50CompareDiffAndRoundTripWired()
@@ -10464,7 +10456,7 @@ void QmlUiAuditTests::processSettingsConsumesSourceMappedHierarchy()
   const int processContractStart = settingsDialog.indexOf(QStringLiteral("readonly property var tabPages: {"));
   const int processTabsStart = settingsDialog.indexOf(QStringLiteral("id: processTabStrip"));
   const int processListStart = settingsDialog.indexOf(QStringLiteral("id: processOptionListComponent"));
-  const int processListEnd = settingsDialog.indexOf(QStringLiteral("// SETPRINT-FOOTER"));
+  const int processListEnd = settingsDialog.indexOf(QStringLiteral("// END-OF-OPTION-LIST"));
   QVERIFY(processContractStart >= 0);
   QVERIFY(processTabsStart > processContractStart);
   QVERIFY(processListStart > processTabsStart);

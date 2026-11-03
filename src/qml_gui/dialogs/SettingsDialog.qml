@@ -23,7 +23,10 @@ ApplicationWindow {
     required property var optionModel
 
     // Window properties
-    flags: Qt.Window | Qt.WindowCloseButtonHint
+    // Titled window with a close box, like upstream ParamsDialog ("打印机设置"
+    // + ✕). Without WindowTitleHint Windows drops the whole title bar, and
+    // the ✕ needs WS_SYSMENU (WindowSystemMenuHint).
+    flags: Qt.Window | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowCloseButtonHint
     modality: Qt.NonModal
     width: 736
     height: 593
@@ -43,7 +46,9 @@ ApplicationWindow {
     property string activeTab: ""
     property string searchText: ""
     property bool searchExpanded: false
-    property bool advancedMode: false
+    // App-wide settings visibility level (ConfigViewModel.viewMode, upstream
+    // user_mode); the proxies filter rows whose def mode is above it.
+    readonly property int viewMode: root.configVm ? root.configVm.viewMode : 0
     property bool closeAfterSaveAs: false
     property bool closeAfterUnsavedResolution: false
 
@@ -492,14 +497,10 @@ ApplicationWindow {
                         }
                     }
 
-                    CxSwitch {
-                        text: ""
-                        checked: root.advancedMode
-                        Layout.preferredWidth: 42
-                        Layout.preferredHeight: 24
-                        ToolTip.visible: hovered
-                        ToolTip.text: qsTr("高级模式")
-                        onToggled: root.advancedMode = checked
+                    // Upstream m_mode_view (Tab.cpp:438-444).
+                    ModeSwitch {
+                        configVm: root.configVm
+                        Layout.alignment: Qt.AlignVCenter
                     }
                 }
             }
@@ -632,8 +633,8 @@ ApplicationWindow {
                             // the rows the per-group proxies below accept.
                             readonly property bool hasProjectedRows:
                                 root.optionModel
-                                ? root.optionModel.processProjectedRowCount(
-                                      root.activeTab, root.searchText, root.advancedMode) > 0
+                                ? root.optionModel.processProjectedRowCountForMode(
+                                      root.activeTab, root.searchText, root.viewMode) > 0
                                 : false
                             // G3: R11 row rhythm — 30px rows touch (pitch 30, was 34+4=38).
                             spacing: 0
@@ -660,7 +661,7 @@ ApplicationWindow {
                                     page: root.activeTab
                                     group: processGroupDelegate.groupName
                                     searchText: root.searchText
-                                    advancedMode: root.advancedMode
+                                    viewMode: root.viewMode
                                     upstreamProcessOrder: true
                                 }
 
@@ -676,30 +677,45 @@ ApplicationWindow {
                                     // group separation).
                                     spacing: 0
 
-                                    Rectangle {
+                                    // Upstream OptionsGroup title (StaticLine.cpp):
+                                    // 18px group icon + bold title + rule to the
+                                    // right edge.
+                                    Item {
                                         width: parent.width
                                         height: 28
-                                        color: "transparent"
 
-                                        Text {
-                                            anchors.left: parent.left
-                                            anchors.right: parent.right
+                                        RowLayout {
+                                            anchors.fill: parent
                                             anchors.leftMargin: Theme.spacingMD
                                             anchors.rightMargin: Theme.spacingMD
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            text: root.processDisplayLabel(processGroupDelegate.groupName)
-                                            color: Theme.textSecondary
-                                            font.pixelSize: Theme.fontSizeMD
-                                            font.weight: Font.DemiBold
-                                            elide: Text.ElideRight
-                                        }
+                                            spacing: Theme.spacingXS
 
-                                        Rectangle {
-                                            anchors.left: parent.left
-                                            anchors.right: parent.right
-                                            anchors.bottom: parent.bottom
-                                            height: 1
-                                            color: Theme.borderSubtle
+                                            Image {
+                                                readonly property string iconName: root.optionModel
+                                                    ? root.optionModel.groupIconName(processGroupDelegate.groupName) : ""
+                                                visible: iconName !== ""
+                                                source: iconName !== "" ? "qrc:/qml/assets/icons/" + iconName + ".svg" : ""
+                                                Layout.preferredWidth: 18
+                                                Layout.preferredHeight: 18
+                                                sourceSize: Qt.size(18, 18)
+                                                fillMode: Image.PreserveAspectFit
+                                            }
+
+                                            Text {
+                                                text: root.processDisplayLabel(processGroupDelegate.groupName)
+                                                color: Theme.textPrimary
+                                                font.pixelSize: Theme.fontSizeMD
+                                                font.bold: true
+                                                elide: Text.ElideRight
+                                                Layout.alignment: Qt.AlignVCenter
+                                            }
+
+                                            Rectangle {
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: 1
+                                                Layout.alignment: Qt.AlignVCenter
+                                                color: Theme.borderSubtle
+                                            }
                                         }
                                     }
 
@@ -728,6 +744,8 @@ ApplicationWindow {
                                             required property double optMax
                                             required property double optStep
                                             required property bool optReadonly
+                                            required property bool optEnabled
+                                            required property bool optMultiline
                                             required property bool optDirty
                                             required property string optTooltip
                                             required property string optUnit
@@ -763,6 +781,8 @@ ApplicationWindow {
                                                 oMax: processOptionDelegate.optMax
                                                 oStep: processOptionDelegate.optStep
                                                 oRO: processOptionDelegate.optReadonly
+                                                oEnabled: processOptionDelegate.optEnabled
+                                                oMultiline: processOptionDelegate.optMultiline
                                                 oDirty: processOptionDelegate.optDirty
                                                 oTip: processOptionDelegate.optTooltip
                                                 oUnit: processOptionDelegate.optUnit
@@ -781,44 +801,10 @@ ApplicationWindow {
                 }
             }
 
-            // SETPRINT-FOOTER (upstream Tab.cpp dialog bottom button row):
-            // Save / Discard / Close. Save and Discard act on the pending
-            // preset edits (gated on the dirty flag like the preset-bar
-            // save icon); Close runs the same UnsavedChangesDialog guard
-            // as the window close (openUnsavedChangesGuard(true)).
-            // G1: the footer is the outer ColumnLayout's full-width 44px
-            // bottom bar (upstream ParamsPanel.cpp:402-495 single vertical
-            // stack); the option area above is the RowLayout's only
-            // fillWidth/fillHeight child.
-            Rectangle {
-                Layout.fillWidth: true
-                height: 44
-                color: Theme.chromeSurface
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Theme.spacingMD
-                    anchors.rightMargin: Theme.spacingMD
-                    spacing: Theme.spacingSM
-
-                    Item { Layout.fillWidth: true }
-
-                    CxButton {
-                        text: qsTr("保存")
-                        enabled: root.configVm && root.configVm.isPresetDirty
-                        onClicked: root.requestSaveAndMaybeClose(false)
-                    }
-                    CxButton {
-                        text: qsTr("放弃")
-                        enabled: root.configVm && root.configVm.isPresetDirty
-                        onClicked: if (root.configVm) root.configVm.requestDiscardPendingChanges()
-                    }
-                    CxButton {
-                        text: qsTr("关闭")
-                        onClicked: root.openUnsavedChangesGuard(true)
-                    }
-                }
-            }
+            // END-OF-OPTION-LIST. No footer row: upstream ParamsDialog / Tab
+            // has none (ParamsPanel.cpp keeps export/import commented out).
+            // Saving is the preset-row save icon; closing the window runs
+            // the dirty-gated UnsavedChangesDialog (onClosing).
         }
     }
 }

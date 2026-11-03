@@ -27,6 +27,28 @@ ConfigOptionFilterProxy::ConfigOptionFilterProxy(QObject *parent)
   connect(this, &QAbstractItemModel::rowsRemoved, this, &ConfigOptionFilterProxy::countChanged);
   connect(this, &QAbstractItemModel::layoutChanged, this, &ConfigOptionFilterProxy::countChanged);
   connect(this, &QAbstractItemModel::modelReset, this, &ConfigOptionFilterProxy::countChanged);
+
+  // toggle_line results change which rows exist; value dataChanged does not
+  // re-filter (dynamic filtering is off), so re-filter on the model's
+  // explicit visibility signal instead.
+  connect(this, &QAbstractProxyModel::sourceModelChanged, this, [this]() {
+    disconnect(m_toggleConnection);
+    if (ConfigOptionModel *model = optionModel())
+      m_toggleConnection = connect(model, &ConfigOptionModel::toggleVisibilityChanged, this, [this]() {
+        invalidate();
+        refreshSorting();
+      });
+  });
+}
+
+void ConfigOptionFilterProxy::setViewMode(int viewMode)
+{
+  if (m_viewMode == viewMode)
+    return;
+  m_viewMode = viewMode;
+  emit viewModeChanged();
+  invalidate();
+  refreshSorting();
 }
 
 void ConfigOptionFilterProxy::setPage(const QString &page)
@@ -110,7 +132,8 @@ bool ConfigOptionFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex 
   ConfigOptionModel *model = optionModel();
   if (!model)
     return true;
-  return model->matchesFilter(sourceRow, m_searchText, m_advancedMode)
+  const int mode = m_viewMode >= 0 ? m_viewMode : (m_advancedMode ? 2 : 0);
+  return model->matchesFilter(sourceRow, m_searchText, mode)
       && model->matchesPage(sourceRow, m_page)
       && model->matchesGroup(sourceRow, m_group);
 }

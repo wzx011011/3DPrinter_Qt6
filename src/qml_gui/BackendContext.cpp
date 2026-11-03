@@ -423,6 +423,11 @@ BackendContext::BackendContext(QObject *parent)
   });
   homeViewModel_ = new HomeViewModel(cloudService_, this);
   settingsViewModel_ = new SettingsViewModel(this);
+  // Developer mode lifts the settings view to comDevelop (GUI_App::get_mode).
+  configViewModel_->setDeveloperMode(settingsViewModel_->developerMode());
+  connect(settingsViewModel_, &SettingsViewModel::settingsChanged, configViewModel_, [this]() {
+    configViewModel_->setDeveloperMode(settingsViewModel_->developerMode());
+  });
   // StepMeshDialog "Save these settings as default" / "Don't show again"
   // write the same keys Preferences edits; keep the Preferences copy fresh.
   connect(projectService_->stepMeshPrompt(), &StepMeshPrompt::defaultsChanged,

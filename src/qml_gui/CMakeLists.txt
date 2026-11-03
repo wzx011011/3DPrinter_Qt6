@@ -88,6 +88,7 @@ qt_add_qml_module(owzx_qml
         components/StatsPanel.qml
         components/ToolPositionTooltip.qml
         components/NotificationCenter.qml
+        components/ModeSwitch.qml
         components/OptionRow.qml
         components/GLToolbars.qml
         components/PrepareContextMenus.qml

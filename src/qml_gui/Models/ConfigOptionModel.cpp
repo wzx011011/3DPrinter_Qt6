@@ -1,5 +1,6 @@
 #include "ConfigOptionModel.h"
 
+#include "core/util/PrintableArea.h"
 #include "qml_gui/Models/OptionLabelTable.h"
 
 #include <QByteArray>
@@ -123,6 +124,12 @@ QVariant ConfigOptionModel::data(const QModelIndex &index, int role) const
     return m_valueSourceByKey.value(o.key, QStringLiteral("default"));
   case SourceRowRole:
     return index.row();
+  case EnabledRole:
+    return !m_disabledKeys.contains(o.key);
+  case LineVisibleRole:
+    return !m_hiddenKeys.contains(o.key);
+  case MultilineRole:
+    return o.multiline;
   default:
     return {};
   }
@@ -176,6 +183,9 @@ QHash<int, QByteArray> ConfigOptionModel::roleNames() const
       {UnitRole, "optUnit"},
       {ValueSourceRole, "valueSource"},
       {SourceRowRole, "optIdx"},
+      {EnabledRole, "optEnabled"},
+      {LineVisibleRole, "optLineVisible"},
+      {MultilineRole, "optMultiline"},
   };
 }
 
@@ -536,6 +546,11 @@ static bool fuzzyMatch(const QString &pattern, const QString &text, int &outScor
 
 bool ConfigOptionModel::matchesFilter(int row, const QString &needle, bool advancedMode) const
 {
+  return matchesFilter(row, needle, advancedMode ? 2 : 0);
+}
+
+bool ConfigOptionModel::matchesFilter(int row, const QString &needle, int viewMode) const
+{
   if (row < 0 || row >= m_options.size())
     return false;
   const ConfigOption &o = m_options[row];
@@ -564,12 +579,16 @@ bool ConfigOptionModel::matchesFilter(int row, const QString &needle, bool advan
       return false;
   }
 
-  // Mode filter (upstream ConfigOptionMode: 0=comSimple, 1=comAdvanced, 2=comDevelop).
-  // Simple mode (advancedMode=false) shows only comSimple options; advanced mode
-  // (advancedMode=true) is a SUPERSET and shows comSimple + comAdvanced + comDevelop.
-  // Never exclude a simple-mode option from advanced mode.
-  if (o.mode >= 1 && !advancedMode)
-    return false; // Advanced/Develop-only options hidden in simple mode
+  // Mode filter (upstream ConfigOptionMode: 0=comSimple, 1=comAdvanced,
+  // 2=comExpert, 3=comDevelop). A line shows when its mode <= the view mode
+  // (OptionsGroup::is_visible), so each level is a superset of the one below:
+  // Simple mode (advancedMode=false) shows only comSimple options.
+  if (o.mode > viewMode)
+    return false;
+
+  // toggle_line(false): the dependency rules hid the whole line.
+  if (m_hiddenKeys.contains(o.key))
+    return false;
 
   return true;
 }
@@ -766,6 +785,185 @@ int ConfigOptionModel::findIndex(const QString &key) const
 
 namespace
 {
+  QString formatCoord(double v)
+  {
+    return QString::number(v, 'g', 10);
+  }
+
+  QString pointString(const QPointF &p)
+  {
+    return formatCoord(p.x()) + QLatin1Char('x') + formatCoord(p.y());
+  }
+} // namespace
+
+QString ConfigOptionModel::groupIconName(const QString &group) const
+{
+  // Upstream new_optgroup(title, icon) pairs across TabPrint / TabFilament /
+  // TabPrinter (Tab.cpp, pin 0a3724ed2f). Icons live in assets/icons; the
+  // "note" / "fuzzy_skin" / "advanced" glyphs map onto their param_* copies.
+  static const QHash<QString, QString> icons = {
+      {QStringLiteral("Acceleration"), QStringLiteral("param_acceleration")},
+      {QStringLiteral("Acceleration limitation"), QStringLiteral("param_acceleration")},
+      {QStringLiteral("Accessory"), QStringLiteral("param_accessory")},
+      {QStringLiteral("Adaptive bed mesh"), QStringLiteral("param_adaptive_mesh")},
+      {QStringLiteral("Advanced"), QStringLiteral("param_advanced")},
+      {QStringLiteral("Auxiliary part cooling fan"), QStringLiteral("param_cooling_aux_fan")},
+      {QStringLiteral("Basic information"), QStringLiteral("param_information")},
+      {QStringLiteral("Bed temperature"), QStringLiteral("param_bed_temp")},
+      {QStringLiteral("Before layer change G-code"), QStringLiteral("param_gcode")},
+      {QStringLiteral("Bridging"), QStringLiteral("param_bridge")},
+      {QStringLiteral("Brim"), QStringLiteral("param_adhension")},
+      {QStringLiteral("Change extrusion role G-code"), QStringLiteral("param_gcode")},
+      {QStringLiteral("Change filament G-code"), QStringLiteral("param_gcode")},
+      {QStringLiteral("Clumping Detection G-code"), QStringLiteral("param_gcode")},
+      {QStringLiteral("Compatible printers"), QStringLiteral("param_dependencies_printers")},
+      {QStringLiteral("Compatible process profiles"), QStringLiteral("param_dependencies_presets")},
+      {QStringLiteral("Cooling Fan"), QStringLiteral("param_cooling_fan")},
+      {QStringLiteral("Cooling for specific layer"), QStringLiteral("param_cooling_specific_layer")},
+      {QStringLiteral("Exhaust fan"), QStringLiteral("param_cooling_exhaust")},
+      {QStringLiteral("Extruder Clearance"), QStringLiteral("param_extruder_clearance")},
+      {QStringLiteral("Filament end G-code"), QStringLiteral("param_gcode")},
+      {QStringLiteral("Filament for Features"), QStringLiteral("param_filament_for_features")},
+      {QStringLiteral("Filament for Supports"), QStringLiteral("param_support_filament")},
+      {QStringLiteral("Filament start G-code"), QStringLiteral("param_gcode")},
+      {QStringLiteral("File header G-code"), QStringLiteral("param_gcode")},
+      {QStringLiteral("First layer speed"), QStringLiteral("param_speed_first")},
+      {QStringLiteral("Flow ratio and Pressure Advance"), QStringLiteral("param_flow_ratio_and_pressure_advance")},
+      {QStringLiteral("Flush options"), QStringLiteral("param_flush")},
+      {QStringLiteral("Fuzzy skin"), QStringLiteral("param_fuzzy_skin")},
+      {QStringLiteral("G-code output"), QStringLiteral("param_gcode")},
+      {QStringLiteral("Infill"), QStringLiteral("param_infill")},
+      {QStringLiteral("Ironing"), QStringLiteral("param_ironing")},
+      {QStringLiteral("Jerk limitation"), QStringLiteral("param_jerk")},
+      {QStringLiteral("Jerk(XY)"), QStringLiteral("param_jerk")},
+      {QStringLiteral("Junction Deviation"), QStringLiteral("param_junction_deviation")},
+      {QStringLiteral("Layer change G-code"), QStringLiteral("param_gcode")},
+      {QStringLiteral("Layer height"), QStringLiteral("param_layer_height")},
+      {QStringLiteral("Layer height limits"), QStringLiteral("param_layer_height")},
+      {QStringLiteral("Line width"), QStringLiteral("param_line_width")},
+      {QStringLiteral("Machine end G-code"), QStringLiteral("param_gcode")},
+      {QStringLiteral("Machine start G-code"), QStringLiteral("param_gcode")},
+      {QStringLiteral("Notes"), QStringLiteral("param_note")},
+      {QStringLiteral("Ooze prevention"), QStringLiteral("param_ooze_prevention")},
+      {QStringLiteral("Other layers speed"), QStringLiteral("param_speed")},
+      {QStringLiteral("Overhang speed"), QStringLiteral("param_overhang_speed")},
+      {QStringLiteral("Overhangs"), QStringLiteral("param_overhang")},
+      {QStringLiteral("Part cooling fan"), QStringLiteral("param_cooling_part_fan")},
+      {QStringLiteral("Pause G-code"), QStringLiteral("param_gcode")},
+      {QStringLiteral("Plugin Configuration"), QStringLiteral("param_gcode")},
+      {QStringLiteral("Position"), QStringLiteral("param_position")},
+      {QStringLiteral("Post-processing Scripts"), QStringLiteral("param_gcode")},
+      {QStringLiteral("Precision"), QStringLiteral("param_precision")},
+      {QStringLiteral("Prime tower"), QStringLiteral("param_tower")},
+      {QStringLiteral("Print chamber temperature"), QStringLiteral("param_chamber_temp")},
+      {QStringLiteral("Print temperature"), QStringLiteral("param_extruder_temp")},
+      {QStringLiteral("Printable space"), QStringLiteral("param_printable_space")},
+      {QStringLiteral("Printing by object G-code"), QStringLiteral("param_gcode")},
+      {QStringLiteral("Profile dependencies"), QStringLiteral("param_dependencies_presets")},
+      {QStringLiteral("Raft"), QStringLiteral("param_raft")},
+      {QStringLiteral("Resonance Compensation"), QStringLiteral("param_resonance_avoidance")},
+      {QStringLiteral("Retraction"), QStringLiteral("param_retraction")},
+      {QStringLiteral("Retraction when switching material"), QStringLiteral("param_retraction_material_change")},
+      {QStringLiteral("Seam"), QStringLiteral("param_seam")},
+      {QStringLiteral("Single extruder multi-material parameters"), QStringLiteral("param_settings")},
+      {QStringLiteral("Single extruder multi-material setup"), QStringLiteral("param_multi_material")},
+      {QStringLiteral("Skirt"), QStringLiteral("param_skirt")},
+      {QStringLiteral("Slicing Pipeline Plugin"), QStringLiteral("param_gcode")},
+      {QStringLiteral("Special mode"), QStringLiteral("param_special")},
+      {QStringLiteral("Speed limitation"), QStringLiteral("param_speed")},
+      {QStringLiteral("Support"), QStringLiteral("param_support")},
+      {QStringLiteral("Support ironing"), QStringLiteral("param_ironing")},
+      {QStringLiteral("Template Custom G-code"), QStringLiteral("param_gcode")},
+      {QStringLiteral("Timelapse G-code"), QStringLiteral("param_gcode")},
+      {QStringLiteral("Tool change parameters with multi extruder MM printers"), QStringLiteral("param_toolchange_multi_extruder")},
+      {QStringLiteral("Tool change parameters with single extruder MM printers"), QStringLiteral("param_toolchange")},
+      {QStringLiteral("Top/bottom shells"), QStringLiteral("param_shell")},
+      {QStringLiteral("Travel speed"), QStringLiteral("param_travel_speed")},
+      {QStringLiteral("Tree supports"), QStringLiteral("param_support_tree")},
+      {QStringLiteral("Volumetric speed limitation"), QStringLiteral("param_volumetric_speed")},
+      {QStringLiteral("Wall generator"), QStringLiteral("param_wall_generator")},
+      {QStringLiteral("Walls"), QStringLiteral("param_wall")},
+      {QStringLiteral("Walls and surfaces"), QStringLiteral("param_wall_surface")},
+      {QStringLiteral("Wipe tower"), QStringLiteral("param_tower")},
+      {QStringLiteral("Wipe tower parameters"), QStringLiteral("param_tower")},
+      {QStringLiteral("Z contouring"), QStringLiteral("param_z_contouring")},
+      {QStringLiteral("Z-Hop"), QStringLiteral("param_extruder_lift_enforcement")},
+  };
+  return icons.value(group);
+}
+
+QList<QPointF> ConfigOptionModel::parsePoints(const QVariant &value)
+{
+  // Shared preset-point normalization (owzx::flatPointCoords).
+  const QList<float> coords = owzx::flatPointCoords(value);
+  QList<QPointF> points;
+  for (qsizetype i = 0; i + 1 < coords.size(); i += 2)
+    points.append(QPointF(coords[i], coords[i + 1]));
+  return points;
+}
+
+QString ConfigOptionModel::pointsText(const QVariant &value) const
+{
+  QStringList out;
+  for (const QPointF &p : parsePoints(value))
+    out.append(QString::number(static_cast<int>(p.x())) + QLatin1Char('x') +
+               QString::number(static_cast<int>(p.y())));
+  return out.join(QStringLiteral(", "));
+}
+
+bool ConfigOptionModel::setPointsText(int row, const QString &text)
+{
+  if (row < 0 || row >= m_options.size())
+    return false;
+  QVariantList list;
+  for (const QString &raw : text.split(QLatin1Char(','), Qt::SkipEmptyParts))
+  {
+    const QList<QPointF> one = parsePoints(raw.trimmed());
+    if (one.size() != 1 || !raw.contains(QLatin1Char('x'), Qt::CaseInsensitive))
+      return false;
+    list.append(pointString(one.first()));
+  }
+  if (list.isEmpty())
+    return false;
+  writeValue(row, list);
+  return true;
+}
+
+double ConfigOptionModel::pointCoord(const QVariant &value, int axis) const
+{
+  const QList<QPointF> points = parsePoints(value);
+  if (points.isEmpty())
+    return 0.0;
+  return axis == 0 ? points.first().x() : points.first().y();
+}
+
+void ConfigOptionModel::setPointCoord(int row, int axis, double coord)
+{
+  if (row < 0 || row >= m_options.size())
+    return;
+  const QVariant current = m_options[row].value;
+  QList<QPointF> points = parsePoints(current);
+  if (points.isEmpty())
+    points.append(QPointF());
+  if (axis == 0)
+    points.first().setX(coord);
+  else
+    points.first().setY(coord);
+  if (current.typeId() == QMetaType::QVariantList)
+  {
+    QVariantList list;
+    for (const QPointF &p : points)
+      list.append(pointString(p));
+    writeValue(row, list);
+  }
+  else
+  {
+    writeValue(row, pointString(points.first()));
+  }
+}
+
+namespace
+{
 #ifdef HAS_LIBSLIC3R
   // Map upstream ConfigOptionType to Qt6 type string
   QString mapType(Slic3r::ConfigOptionType t)
@@ -791,6 +989,10 @@ namespace
     case Slic3r::coString:
     case Slic3r::coStrings:
       return QStringLiteral("string");
+    case Slic3r::coPoint:
+      return QStringLiteral("point");
+    case Slic3r::coPoints:
+      return QStringLiteral("points");
     default:
       return QStringLiteral("double");
     }
@@ -924,6 +1126,13 @@ namespace
                       QString::number(pt.y(), 'f', 1);
       }
       return serialized;
+    }
+    case Slic3r::coPoint:
+    {
+      // Same "XxY" text a preset JSON stores for a scalar point
+      // (e.g. best_object_pos "0.5x0.5").
+      const auto *v = def->get_default_value<Slic3r::ConfigOptionPoint>();
+      return QString::number(v->value.x()) + QLatin1Char('x') + QString::number(v->value.y());
     }
     default:
       return {};
@@ -1064,7 +1273,10 @@ namespace
     };
     return definitions;
   }
-  // Source: Tab.cpp TabPrinter::build_fff + build_kinematics_page + build_unregular_pages (pin 0a3724ed2f; Marlin/Klipper page order, single extruder page)
+  // Source: Tab.cpp TabPrinter::build_fff + build_kinematics_page + build_unregular_pages (pin 0a3724ed2f; Marlin/Klipper page order, single extruder page).
+  // build_unregular_pages inserts Motion ability at index 2, then Multimaterial at
+  // end()-2 and the extruder pages after it: Basic, G-code, Multimaterial, Extruder,
+  // Motion ability, Notes.
   static const QList<ProcessPageDefinition> &printerPageDefinitions()
   {
     static const QList<ProcessPageDefinition> definitions = {
@@ -1091,12 +1303,11 @@ namespace
             {QStringLiteral("Pause G-code"), processKeys({"machine_pause_gcode"})},
             {QStringLiteral("Template Custom G-code"), processKeys({"template_custom_gcode"})},
         }},
-        {QStringLiteral("Motion ability"), {
-            {QStringLiteral("Advanced"), processKeys({"emit_machine_limits_to_gcode"})},
-            {QStringLiteral("Resonance Compensation"), processKeys({"resonance_avoidance", "min_resonance_avoidance_speed", "max_resonance_avoidance_speed", "input_shaping_emit", "input_shaping_type", "input_shaping_freq_x", "input_shaping_freq_y", "input_shaping_damp_x", "input_shaping_damp_y"})},
-            {QStringLiteral("Speed limitation"), processKeys({"machine_max_speed_x", "machine_max_speed_y", "machine_max_speed_z", "machine_max_speed_e"})},
-            {QStringLiteral("Acceleration limitation"), processKeys({"machine_max_acceleration_x", "machine_max_acceleration_y", "machine_max_acceleration_z", "machine_max_acceleration_e", "machine_max_acceleration_extruding", "machine_max_acceleration_retracting", "machine_max_acceleration_travel"})},
-            {QStringLiteral("Jerk limitation"), processKeys({"machine_max_junction_deviation", "machine_max_jerk_x", "machine_max_jerk_y", "machine_max_jerk_z", "machine_max_jerk_e"})},
+        {QStringLiteral("Multimaterial"), {
+            {QStringLiteral("Single extruder multi-material setup"), processKeys({"single_extruder_multi_material", "manual_filament_change", "bed_temperature_formula"})},
+            {QStringLiteral("Wipe tower"), processKeys({"wipe_tower_type", "purge_in_prime_tower", "enable_filament_ramming", "tool_change_on_wipe_tower", "wait_for_temp_on_wipe_tower"})},
+            {QStringLiteral("Single extruder multi-material parameters"), processKeys({"cooling_tube_retraction", "cooling_tube_length", "parking_pos_retraction", "extra_loading_move", "high_current_on_filament_swap"})},
+            {QStringLiteral("Advanced"), processKeys({"machine_load_filament_time", "machine_unload_filament_time", "machine_tool_change_time"})},
         }},
         {QStringLiteral("Extruder"), {
             {QStringLiteral("Basic information"), processKeys({"nozzle_diameter", "nozzle_volume", "extruder_printable_height", "extruder_printable_area"})},
@@ -1106,15 +1317,16 @@ namespace
             {QStringLiteral("Z-Hop"), processKeys({"retract_lift_enforce", "z_hop_types", "z_hop", "travel_slope", "retract_lift_above", "retract_lift_below"})},
             {QStringLiteral("Retraction when switching material"), processKeys({"retract_length_toolchange", "retract_restart_extra_toolchange", "long_retractions_when_cut", "retraction_distances_when_cut"})},
         }},
-        {QStringLiteral("Multimaterial"), {
-            {QStringLiteral("Single extruder multi-material setup"), processKeys({"single_extruder_multi_material", "manual_filament_change", "bed_temperature_formula"})},
-            {QStringLiteral("Wipe tower"), processKeys({"wipe_tower_type", "purge_in_prime_tower", "enable_filament_ramming", "tool_change_on_wipe_tower", "wait_for_temp_on_wipe_tower"})},
-            {QStringLiteral("Single extruder multi-material parameters"), processKeys({"cooling_tube_retraction", "cooling_tube_length", "parking_pos_retraction", "extra_loading_move", "high_current_on_filament_swap"})},
-            {QStringLiteral("Advanced"), processKeys({"machine_load_filament_time", "machine_unload_filament_time", "machine_tool_change_time"})},
+        {QStringLiteral("Motion ability"), {
+            {QStringLiteral("Advanced"), processKeys({"emit_machine_limits_to_gcode"})},
+            {QStringLiteral("Resonance Compensation"), processKeys({"resonance_avoidance", "min_resonance_avoidance_speed", "max_resonance_avoidance_speed", "input_shaping_emit", "input_shaping_type", "input_shaping_freq_x", "input_shaping_freq_y", "input_shaping_damp_x", "input_shaping_damp_y"})},
+            {QStringLiteral("Speed limitation"), processKeys({"machine_max_speed_x", "machine_max_speed_y", "machine_max_speed_z", "machine_max_speed_e"})},
+            {QStringLiteral("Acceleration limitation"), processKeys({"machine_max_acceleration_x", "machine_max_acceleration_y", "machine_max_acceleration_z", "machine_max_acceleration_e", "machine_max_acceleration_extruding", "machine_max_acceleration_retracting", "machine_max_acceleration_travel"})},
+            {QStringLiteral("Jerk limitation"), processKeys({"machine_max_junction_deviation", "machine_max_jerk_x", "machine_max_jerk_y", "machine_max_jerk_z", "machine_max_jerk_e"})},
         }},
         {QStringLiteral("Notes"), {
             {QStringLiteral("Notes"), processKeys({"printer_notes"})},
-        }},
+        }}
     };
     return definitions;
   }
@@ -1564,6 +1776,11 @@ QList<int> ConfigOptionModel::orderedProcessIndicesForGroup(const QList<int> &ca
 
 int ConfigOptionModel::processProjectedRowCount(const QString &page, const QString &needle, bool advancedMode) const
 {
+  return processProjectedRowCountForMode(page, needle, advancedMode ? 2 : 0);
+}
+
+int ConfigOptionModel::processProjectedRowCountForMode(const QString &page, const QString &needle, int viewMode) const
+{
   // Count of rows surviving the same projection the per-group proxies apply:
   // search filter -> page filter -> the (page, group) process definition must
   // exist and contain the option key. Equivalent to aggregating the
@@ -1572,7 +1789,7 @@ int ConfigOptionModel::processProjectedRowCount(const QString &page, const QStri
   int count = 0;
   for (int i = 0; i < m_options.size(); ++i)
   {
-    if (!matchesFilter(i, needle, advancedMode))
+    if (!matchesFilter(i, needle, viewMode))
       continue;
     if (!matchesPage(i, page))
       continue;
@@ -1645,6 +1862,14 @@ void ConfigOptionModel::loadSchemaFromKeys(const char *const keys[])
     entry.key = QString::fromUtf8(opt->opt_key.c_str());
     entry.label = QString::fromUtf8(opt->label.c_str());
     entry.type = mapType(opt->type);
+    // Upstream OptionsGroup builds a PointCtrl (X/Y pair, first element for
+    // per-extruder vectors) for every coPoints option except the polygon
+    // keys, which Field.cpp edits as one "XxY, XxY, ..." text line
+    // (OptionsGroup.cpp:1174-1183); printable_area is the Set... button.
+    if (opt->type == Slic3r::coPoints
+        && opt->opt_key != "printable_area" && opt->opt_key != "bed_exclude_area"
+        && opt->opt_key != "wrapping_exclude_area")
+      entry.type = QStringLiteral("point");
     entry.category = mapCategory(opt->category);
     entry.readonly = opt->readonly;
     entry.value = extractDefault(opt);
@@ -1670,7 +1895,7 @@ void ConfigOptionModel::loadSchemaFromKeys(const char *const keys[])
     if (!opt->sidetext.empty())
       entry.sidetext = QString::fromUtf8(opt->sidetext.c_str());
 
-    // Mode from upstream (对齐上游 ConfigOptionMode: 0=Simple, 1=Advanced, 2=Develop)
+    // Mode from upstream (对齐上游 ConfigOptionMode: 0=Simple, 1=Advanced, 2=Expert, 3=Develop)
     entry.mode = static_cast<int>(opt->mode);
 
     // Nullable: accepts nil = inherit from parent preset (upstream ConfigOptionDef::nullable)
@@ -1678,6 +1903,10 @@ void ConfigOptionModel::loadSchemaFromKeys(const char *const keys[])
 
     // IsVector: multi-value per-extruder (upstream coVectorType = 0x4000 bit)
     entry.isVector = ((opt->type & Slic3r::coVectorType) != 0);
+
+    // Field.cpp TextCtrl: wxTE_MULTILINE only when the def asks for it;
+    // every other string is a single-line field.
+    entry.multiline = opt->multiline;
 
     m_options.append(entry);
     m_defaultValues.insert(entry.key, entry.value);
@@ -1744,3 +1973,23 @@ void ConfigOptionModel::loadFilamentSchema()
 }
 
 #endif // HAS_LIBSLIC3R
+
+void ConfigOptionModel::setToggleState(const QSet<QString> &hiddenKeys, const QSet<QString> &disabledKeys)
+{
+  if (hiddenKeys == m_hiddenKeys && disabledKeys == m_disabledKeys)
+    return;
+  const bool visibilityChanged = hiddenKeys != m_hiddenKeys;
+  const QSet<QString> oldHidden = m_hiddenKeys;
+  const QSet<QString> oldDisabled = m_disabledKeys;
+  m_hiddenKeys = hiddenKeys;
+  m_disabledKeys = disabledKeys;
+  for (int i = 0; i < m_options.size(); ++i)
+  {
+    const QString &key = m_options[i].key;
+    if (oldHidden.contains(key) != m_hiddenKeys.contains(key) ||
+        oldDisabled.contains(key) != m_disabledKeys.contains(key))
+      emit dataChanged(index(i), index(i), {EnabledRole, LineVisibleRole});
+  }
+  if (visibilityChanged)
+    emit toggleVisibilityChanged();
+}

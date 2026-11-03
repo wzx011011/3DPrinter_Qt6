@@ -68,10 +68,11 @@ Rectangle {
 
     property string paramsCurrentTab: "Quality"
     property string paramsSearchText: ""
-    // CP 工艺行同款：搜索框展开态 + 精简/完整模式开关（advancedMode=false 时
-    // 过滤代理剔除 optMode>=1 的进阶参数——upstream comSimple view）。
+    // 搜索框展开态；参数显示级别取自 ConfigViewModel.viewMode（上游 app 级
+    // user_mode：简单/高级/专家，开发者模式为 develop），过滤代理剔除
+    // ConfigOptionDef::mode 高于该级别的行。
     property bool paramsSearchOpen: false
-    property bool paramsAdvancedMode: AppSettings.value("paramsAdvancedMode", "1") === "1"
+    readonly property int paramsViewMode: root.configVm ? root.configVm.viewMode : 0
     readonly property var paramsOptionModel: {
         if (!root.configVm) return null
         return root.configVm.printOptions
@@ -642,7 +643,7 @@ Rectangle {
             // ORCA row tail (ParamsPanel.cpp:271-297): advanced-visibility
             // cycle icon, the mode switch, the object-settings table, and
             // preset compare. The 简/全 toggle and the molecule icon drive
-            // the same paramsAdvancedMode (upstream m_mode_view +
+            // the same app-wide user mode (upstream m_mode_view +
             // m_mode_icon both cycle settings visibility).
             extraActions: [
                 { icon: "qrc:/qml/assets/icons/orca_advanced.svg", tooltip: qsTr("切换参数显示模式") },
@@ -651,9 +652,8 @@ Rectangle {
             ]
             onExtraActionTriggered: (index) => {
                 if (index === 0) {
-                    root.paramsAdvancedMode = !root.paramsAdvancedMode
-                    AppSettings.setValue("paramsAdvancedMode",
-                                             root.paramsAdvancedMode ? "1" : "0")
+                    if (root.configVm)
+                        root.configVm.cycleUserMode()
                 } else if (index === 1) {
                     paramsListDialog.open()
                 } else if (index === 2) {
@@ -1046,7 +1046,7 @@ Rectangle {
                                             sourceModel: root.paramsOptionModel
                                             page: paramsPage.effectivePage
                                             searchText: root.paramsSearchText
-                                            advancedMode: root.paramsAdvancedMode
+                                            viewMode: root.paramsViewMode
                                         }
 
                                         Component {
@@ -1122,6 +1122,8 @@ Rectangle {
                                             required property double optMax
                                             required property double optStep
                                             required property bool optReadonly
+                                            required property bool optEnabled
+                                            required property bool optMultiline
                                             required property bool optDirty
                                             required property string optTooltip
                                             required property string optUnit
@@ -1173,6 +1175,8 @@ Rectangle {
                                                 oMax: paramsDelegate.optMax
                                                 oStep: paramsDelegate.optStep
                                                 oRO: paramsDelegate.optReadonly
+                                                oEnabled: paramsDelegate.optEnabled
+                                                oMultiline: paramsDelegate.optMultiline
                                                 oDirty: paramsDelegate.optDirty
                                                 oTip: paramsDelegate.optTooltip
                                                 oUnit: paramsDelegate.optUnit
@@ -1572,17 +1576,10 @@ Rectangle {
             // pills like the reference band.
             Item { Layout.preferredWidth: Theme.spacingMD }
 
-            CxSwitch {
-                Layout.preferredHeight: 20
-                checkedColor: Theme.sidebarAccent
-                checked: root.paramsAdvancedMode
-                onToggled: {
-                    root.paramsAdvancedMode = checked
-                    AppSettings.setValue("paramsAdvancedMode",
-                                             checked ? "1" : "0")
-                }
-                ToolTip.text: qsTr("精简/完整参数模式")
-                ToolTip.visible: hovered
+            ModeSwitch {
+                Layout.alignment: Qt.AlignVCenter
+                configVm: root.configVm
+                accentColor: Theme.sidebarAccent
             }
         }
     }

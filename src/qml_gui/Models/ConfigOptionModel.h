@@ -2,6 +2,7 @@
 
 #include <QAbstractListModel>
 #include <QHash>
+#include <QPointF>
 #include <QSet>
 #include <QStringList>
 #include <QVariant>
@@ -24,8 +25,9 @@ struct ConfigOption
   bool readonly = false;
   QString tooltip{};  // 帮助文案（对齐上游 ConfigOptionDef::tooltip）
   QString sidetext{}; // 输入框右侧单位文本（对齐上游 ConfigOptionDef::sidetext）
-  int mode = 2;       // 0=comSimple, 1=comAdvanced, 2=comDevelop (对齐上游 ConfigOptionMode)
+  int mode = 2;       // 0=comSimple, 1=comAdvanced, 2=comExpert, 3=comDevelop (对齐上游 ConfigOptionMode)
   bool nullable = false;  // accepts nil value = inherit from parent preset (upstream ConfigOptionDef::nullable)
+  bool multiline = false; // upstream ConfigOptionDef::multiline (multi-line text editor)
   bool isVector = false;  // multi-value per-extruder (upstream coFloats/coInts/coBools/coEnums/coPercents/coStrings where type has coVectorType=0x4000 bit set)
 
   // Constructor for 10-field aggregate init (key, label, type, value, min, max, step, enumLabels, category, group)
@@ -85,7 +87,13 @@ public:
     DisplayLabelRole,   // zh_CN row label: OptionLabelTable::rowLabels(), falls back to label
     UnitRole,           // optUnit(i) — sidetext-first + key-heuristic unit string
     ValueSourceRole,    // "printer" | "filament" | "print" | "default" mirror (see setValueSources)
-    SourceRowRole       // source row index — survives proxy re-mapping (optIdx write path)
+    SourceRowRole,      // source row index — survives proxy re-mapping (optIdx write path)
+    // Upstream dependent-option toggles (ConfigManipulation::toggle_field /
+    // toggle_line, Tab::toggle_options), computed in core (OptionToggleRules)
+    // and pushed through setToggleState().
+    EnabledRole,        // optEnabled: field editable (toggle_field)
+    LineVisibleRole,    // optLineVisible: line shown (toggle_line)
+    MultilineRole       // optMultiline: ConfigOptionDef::multiline string editor
   };
   Q_ENUM(Roles)
 
@@ -118,7 +126,7 @@ public:
   Q_INVOKABLE QString optUnit(int i) const;
   /// 返回选项的帮助文案
   Q_INVOKABLE QString optTooltip(int i) const;
-  /// 返回选项的显示模式 (对齐上游 ConfigOptionMode: 0=Simple, 1=Advanced, 2=Both)
+  /// 返回选项的显示模式 (对齐上游 ConfigOptionMode: 0=Simple, 1=Advanced, 2=Expert, 3=Develop)
   Q_INVOKABLE int optMode(int i) const;
   /// 返回选项是否被修改（与默认值不同）
   Q_INVOKABLE bool optIsDirty(int i) const;
@@ -140,6 +148,25 @@ public:
   Q_INVOKABLE int dirtyCount() const;
 
   Q_INVOKABLE void setValue(int row, const QVariant &value);
+
+  /// Upstream optgroup icon name for a group title ("" when none).
+  Q_INVOKABLE QString groupIconName(const QString &group) const;
+
+  // ── Point options (upstream coPoint / coPoints) ─────────────────────────
+  // Values arrive either as preset-JSON lists of "XxY" strings or as the
+  // legacy "x1,y1,x2,y2" serialization; both parse here.
+  static QList<QPointF> parsePoints(const QVariant &value);
+  /// "XxY, XxY, ..." text with integer coordinates (upstream
+  /// get_thumbnails_string, Field.cpp:83-91).
+  Q_INVOKABLE QString pointsText(const QVariant &value) const;
+  /// Parses "XxY, XxY, ..." and writes it back as a list of "XxY" strings;
+  /// returns false (no write) on malformed input, like Field.cpp:705-719.
+  Q_INVOKABLE bool setPointsText(int row, const QString &text);
+  /// First point's X (axis 0) or Y (axis 1).
+  Q_INVOKABLE double pointCoord(const QVariant &value, int axis) const;
+  /// Writes one coordinate of the first point (PointCtrl X/Y edit). Vector
+  /// options keep their other elements.
+  Q_INVOKABLE void setPointCoord(int row, int axis, double coord);
   Q_INVOKABLE int indexOfKey(const QString &key) const;
 
   // Safe count (avoids QVariantList exposure to QML V4 engine)
@@ -173,6 +200,18 @@ public:
   /// upstream-style fuzzy score (>= 60) over optLabel+optKey, shorter needles
   /// use substring. optMode >= 1 rows are rejected when advancedMode is false.
   bool matchesFilter(int row, const QString &needle, bool advancedMode) const;
+  /// Same, against an upstream view mode: a row shows when its
+  /// ConfigOptionDef::mode <= viewMode (0 Simple, 1 Advanced, 2 Expert,
+  /// 3 Develop; OptionsGroup::is_visible) and toggle_line has not hidden it.
+  /// The bool overload maps advanced to Expert and simple to Simple.
+  bool matchesFilter(int row, const QString &needle, int viewMode) const;
+
+  /// Replaces the toggle_line / toggle_field result set. Emits dataChanged
+  /// (EnabledRole / LineVisibleRole) for affected rows and
+  /// toggleVisibilityChanged when the hidden set changed.
+  void setToggleState(const QSet<QString> &hiddenKeys, const QSet<QString> &disabledKeys);
+  bool isLineHidden(const QString &key) const { return m_hiddenKeys.contains(key); }
+  bool isFieldDisabled(const QString &key) const { return m_disabledKeys.contains(key); }
   /// Page match: empty page always matches; option page falls back to
   /// pageForCategory when unset (same as filterIndicesByPage).
   bool matchesPage(int row, const QString &page) const;
@@ -183,6 +222,7 @@ public:
   /// definition containing the option key. Equivalent to the per-group
   /// orderedProcessIndicesForGroup non-empty check aggregated over groups.
   Q_INVOKABLE int processProjectedRowCount(const QString &page, const QString &needle, bool advancedMode) const;
+  Q_INVOKABLE int processProjectedRowCountForMode(const QString &page, const QString &needle, int viewMode) const;
   /// Position of the option key inside processGroupDefinition(page,group)
   /// ->optionKeys (upstream manifest order); INT_MAX when absent.
   int processOptionRank(const QString &page, const QString &group, int row) const;
@@ -217,6 +257,7 @@ signals:
   void countChanged();
   void optionValueChanged(const QString &key, const QVariant &value);
   void dataVersionChanged();
+  void toggleVisibilityChanged();
 
 private:
   int findIndex(const QString &key) const;
@@ -230,6 +271,8 @@ private:
   QHash<QString, QVariant> m_defaultValues;
   QHash<QString, QVariant> m_referenceValues;
   QSet<QString> m_dirtyKeys; ///< 被修改过的选项 key
+  QSet<QString> m_hiddenKeys;   ///< toggle_line(false) keys
+  QSet<QString> m_disabledKeys; ///< toggle_field(false) keys
   QHash<QString, QString> m_valueSourceByKey; ///< valueSource mirror (see setValueSources)
   int m_dataVersion = 0;
   int m_hierarchyTier = 0; ///< 0 Print, 1 Filament, 2 Printer (hierarchyDefinitions)

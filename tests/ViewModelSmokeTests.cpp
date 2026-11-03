@@ -48,6 +48,7 @@
 #include "core/services/CalibrationServiceMock.h"
 #include "core/services/DeviceServiceMock.h"
 #include "core/services/NetworkServiceMock.h"
+#include "core/services/OptionToggleRules.h"
 #include "core/services/PresetService.h"
 #include "core/services/ProjectService.h"
 #include "core/services/SliceService.h"
@@ -360,6 +361,10 @@ private slots:
   void testMachineOptionsLoaded();
   void testFilamentOptionsLoaded();
   void printerAndFilamentTabsFollowUpstreamHierarchy();
+  void optionToggleRulesFollowUpstream();
+  void optionModelViewModeAndToggleFilter();
+  void configViewModelAppliesToggleRules();
+  void pointOptionsParseAndFormat();
   // v5.16 Phase 236 (DLG-02): WipeTowerDialog OK persists the flush matrix
   // under the upstream flush_volumes_matrix key and calculateFlushMatrix
   // round-trips the saved values.
@@ -1466,9 +1471,11 @@ void ViewModelSmokeTests::printerAndFilamentTabsFollowUpstreamHierarchy()
   QVERIFY(printer);
   QVERIFY(filament);
 
+  // Tab.cpp build_unregular_pages: Multimaterial is inserted before the
+  // extruder pages, Motion ability after them (installed Orca shows the same).
   QCOMPARE(printer->processPageNames(),
-           (QStringList{"Basic information", "Machine G-code", "Motion ability", "Extruder",
-                        "Multimaterial", "Notes"}));
+           (QStringList{"Basic information", "Machine G-code", "Multimaterial", "Extruder",
+                        "Motion ability", "Notes"}));
   QCOMPARE(filament->processPageNames(),
            (QStringList{"Filament", "Cooling", "Setting Overrides", "Advanced", "Multimaterial",
                         "Dependencies", "Notes"}));
@@ -1507,6 +1514,173 @@ void ViewModelSmokeTests::printerAndFilamentTabsFollowUpstreamHierarchy()
     keys.append(printer->optKey(row));
   QCOMPARE(keys, (QStringList{"retract_lift_enforce", "z_hop_types", "z_hop", "travel_slope",
                               "retract_lift_above", "retract_lift_below"}));
+}
+
+// ConfigManipulation::toggle_print_fff_options / TabPrinter::toggle_options /
+// TabFilament::toggle_options ported to OptionToggleRules: the rows Orca
+// shows depend on other values (installed-Orca comparison 2026-11-03: the
+// scarf seam sub-options stay hidden while seam_slope_type is none).
+void ViewModelSmokeTests::optionToggleRulesFollowUpstream()
+{
+  QHash<QString, QVariant> print;
+  QHash<QString, QVariant> printer;
+  QHash<QString, QVariant> filament;
+  OptionToggleRules::Context ctx;
+  ctx.print = [&print](const QString &k) { return print.value(k); };
+  ctx.printer = [&printer](const QString &k) { return printer.value(k); };
+  ctx.filament = [&filament](const QString &k) { return filament.value(k); };
+
+  // Defaults (scarf seam off, no fuzzy skin) with the classic wall generator
+  // (the def default is Arachne).
+  print.insert(QStringLiteral("wall_generator"), QStringLiteral("classic"));
+  OptionToggleRules::Result r = OptionToggleRules::printToggles(ctx);
+  QVERIFY(r.hidden.contains(QStringLiteral("seam_slope_conditional")));
+  QVERIFY(r.hidden.contains(QStringLiteral("scarf_joint_speed")));
+  QVERIFY(r.hidden.contains(QStringLiteral("wall_transition_length")));
+  QVERIFY(r.hidden.contains(QStringLiteral("fuzzy_skin_thickness")));
+  QVERIFY(!r.hidden.contains(QStringLiteral("seam_slope_type")));
+
+  // Preset-JSON string enums and "1"/"0" bools resolve.
+  print.insert(QStringLiteral("seam_slope_type"), QStringLiteral("external"));
+  print.insert(QStringLiteral("wall_generator"), QStringLiteral("arachne"));
+  print.insert(QStringLiteral("role_based_wipe_speed"), QStringLiteral("1"));
+  r = OptionToggleRules::printToggles(ctx);
+  QVERIFY(!r.hidden.contains(QStringLiteral("seam_slope_conditional")));
+  QVERIFY(!r.hidden.contains(QStringLiteral("scarf_joint_speed")));
+  // conditional scarf off -> angle threshold stays hidden
+  QVERIFY(r.hidden.contains(QStringLiteral("scarf_angle_threshold")));
+  QVERIFY(!r.hidden.contains(QStringLiteral("wall_transition_length")));
+  QVERIFY(r.disabled.contains(QStringLiteral("detect_thin_wall")));
+  QVERIFY(r.disabled.contains(QStringLiteral("wipe_speed")));
+
+  // Later toggles override earlier ones: infill_direction is enabled by the
+  // solid-infill rule, then disabled by a non-empty rotate template.
+  print.insert(QStringLiteral("sparse_infill_rotate_template"), QStringLiteral("0,90"));
+  r = OptionToggleRules::printToggles(ctx);
+  QVERIFY(r.disabled.contains(QStringLiteral("infill_direction")));
+
+  // Printer: non-BBL hides the BBL-only rows; power-loss recovery needs
+  // Marlin 2 (or BBL); junction deviation only on Marlin 2.
+  printer.insert(QStringLiteral("gcode_flavor"), QStringLiteral("klipper"));
+  r = OptionToggleRules::printerToggles(ctx);
+  QVERIFY(r.hidden.contains(QStringLiteral("scan_first_layer")));
+  QVERIFY(r.hidden.contains(QStringLiteral("bbl_use_printhost")));
+  QVERIFY(r.hidden.contains(QStringLiteral("enable_power_loss_recovery")));
+  QVERIFY(r.hidden.contains(QStringLiteral("machine_max_junction_deviation")));
+  QVERIFY(!r.hidden.contains(QStringLiteral("support_multi_bed_types")));
+  printer.insert(QStringLiteral("gcode_flavor"), QStringLiteral("marlin2"));
+  r = OptionToggleRules::printerToggles(ctx);
+  QVERIFY(!r.hidden.contains(QStringLiteral("enable_power_loss_recovery")));
+  QVERIFY(!r.hidden.contains(QStringLiteral("machine_max_junction_deviation")));
+  ctx.isBblPrinter = true;
+  r = OptionToggleRules::printerToggles(ctx);
+  QVERIFY(!r.hidden.contains(QStringLiteral("scan_first_layer")));
+  QVERIFY(r.hidden.contains(QStringLiteral("support_multi_bed_types")));
+  ctx.isBblPrinter = false;
+
+  // Filament: pressure advance gates its value field (vector values).
+  filament.insert(QStringLiteral("enable_pressure_advance"), QVariantList{QStringLiteral("0")});
+  r = OptionToggleRules::filamentToggles(ctx);
+  QVERIFY(r.disabled.contains(QStringLiteral("pressure_advance")));
+  QVERIFY(r.hidden.contains(QStringLiteral("adaptive_pressure_advance_model")));
+  filament.insert(QStringLiteral("enable_pressure_advance"), QVariantList{QStringLiteral("1")});
+  r = OptionToggleRules::filamentToggles(ctx);
+  QVERIFY(!r.disabled.contains(QStringLiteral("pressure_advance")));
+}
+
+// Upstream OptionsGroup::is_visible: a line shows when def mode <= view mode
+// (Simple 0 / Advanced 1 / Expert 2 / Develop 3); toggle_line hides it.
+void ViewModelSmokeTests::optionModelViewModeAndToggleFilter()
+{
+  PresetService preset;
+  ProjectService project;
+  ConfigViewModel config(&preset, &project);
+  auto *printer = qobject_cast<ConfigOptionModel *>(config.machineOptions());
+  QVERIFY(printer);
+  const int structureRow = printer->indexOfKey(QStringLiteral("printer_structure")); // comDevelop
+  const int heightRow = printer->indexOfKey(QStringLiteral("printable_height"));
+  QVERIFY(structureRow >= 0 && heightRow >= 0);
+  QCOMPARE(printer->optMode(structureRow), 3);
+  QVERIFY(!printer->matchesFilter(structureRow, QString(), 2));
+  QVERIFY(printer->matchesFilter(structureRow, QString(), 3));
+  QVERIFY(!printer->matchesFilter(structureRow, QString(), true)); // advanced = Expert
+  QVERIFY(printer->matchesFilter(heightRow, QString(), 0));
+
+  QSignalSpy spy(printer, &ConfigOptionModel::toggleVisibilityChanged);
+  printer->setToggleState({QStringLiteral("printable_height")}, {});
+  QCOMPARE(spy.count(), 1);
+  QVERIFY(!printer->matchesFilter(heightRow, QString(), 3));
+  QCOMPARE(printer->data(printer->index(heightRow), ConfigOptionModel::LineVisibleRole).toBool(), false);
+
+  const bool savedDev = config.developerMode();
+  config.setDeveloperMode(true);
+  QCOMPARE(config.viewMode(), 3);
+  config.setDeveloperMode(false);
+  const int saved = config.userMode();
+  config.setUserMode(1);
+  QCOMPARE(config.viewMode(), 1);
+  config.cycleUserMode();
+  QCOMPARE(config.userMode(), 2);
+  config.cycleUserMode();
+  QCOMPARE(config.userMode(), 0);
+  config.setUserMode(saved);
+  config.setDeveloperMode(savedDev);
+}
+
+// ConfigViewModel re-runs the rules after every value change, so editing
+// seam_slope_type in the print model reveals the scarf sub-options.
+void ViewModelSmokeTests::configViewModelAppliesToggleRules()
+{
+  PresetService preset;
+  ProjectService project;
+  ConfigViewModel config(&preset, &project);
+  auto *print = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(print);
+  const int typeRow = print->indexOfKey(QStringLiteral("seam_slope_type"));
+  const int condRow = print->indexOfKey(QStringLiteral("seam_slope_conditional"));
+  QVERIFY(typeRow >= 0 && condRow >= 0);
+
+  print->setValue(typeRow, QStringLiteral("none"));
+  QVERIFY(print->isLineHidden(QStringLiteral("seam_slope_conditional")));
+  QVERIFY(!print->matchesFilter(condRow, QString(), 3));
+
+  print->setValue(typeRow, QStringLiteral("external"));
+  QVERIFY(!print->isLineHidden(QStringLiteral("seam_slope_conditional")));
+  QVERIFY(print->matchesFilter(condRow, QString(), 3));
+}
+
+// Point options: preset JSON lists of "XxY" and legacy "x,y,..." strings both
+// parse; bed_exclude_area edits as "XxY, XxY" text and best_object_pos as an
+// X/Y pair (upstream PointCtrl).
+void ViewModelSmokeTests::pointOptionsParseAndFormat()
+{
+  PresetService preset;
+  ProjectService project;
+  ConfigViewModel config(&preset, &project);
+  auto *printer = qobject_cast<ConfigOptionModel *>(config.machineOptions());
+  QVERIFY(printer);
+
+  const QVariantList bed{QStringLiteral("0x0"), QStringLiteral("300x0"), QStringLiteral("300x300"), QStringLiteral("0x300")};
+  QCOMPARE(printer->pointsText(bed), QStringLiteral("0x0, 300x0, 300x300, 0x300"));
+  QCOMPARE(printer->pointsText(QStringLiteral("0.0,0.0,220.0,0.0")), QStringLiteral("0x0, 220x0"));
+
+  const int areaRow = printer->indexOfKey(QStringLiteral("printable_area"));
+  const int excludeRow = printer->indexOfKey(QStringLiteral("bed_exclude_area"));
+  const int posRow = printer->indexOfKey(QStringLiteral("best_object_pos"));
+  QVERIFY(areaRow >= 0 && excludeRow >= 0 && posRow >= 0);
+  QCOMPARE(printer->optType(areaRow), QStringLiteral("points"));
+  QCOMPARE(printer->optType(excludeRow), QStringLiteral("points"));
+  QCOMPARE(printer->optType(posRow), QStringLiteral("point"));
+
+  QVERIFY(!printer->setPointsText(excludeRow, QStringLiteral("garbage")));
+  QVERIFY(printer->setPointsText(excludeRow, QStringLiteral("0x0, 18x0, 18x28")));
+  QCOMPARE(printer->optValue(excludeRow).toList(),
+           (QVariantList{QStringLiteral("0x0"), QStringLiteral("18x0"), QStringLiteral("18x28")}));
+
+  printer->setValue(posRow, QStringLiteral("0.5x0.5"));
+  QCOMPARE(printer->pointCoord(printer->optValue(posRow), 0), 0.5);
+  printer->setPointCoord(posRow, 1, 0.25);
+  QCOMPARE(printer->optValue(posRow).toString(), QStringLiteral("0.5x0.25"));
 }
 
 // Phase 199 (WIZ-01): vendor/model enumeration for the ConfigWizard.

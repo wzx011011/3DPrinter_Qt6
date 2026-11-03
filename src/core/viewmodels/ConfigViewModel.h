@@ -87,6 +87,14 @@ class ConfigViewModel final : public QObject
   // consumers read list[i] with a binding-tracked dependency instead of
   // re-evaluating Q_INVOKABLEs on every tick.
   Q_PROPERTY(QList<int> filamentSlotCompatibility READ filamentSlotCompatibility NOTIFY filamentSlotCompatibilityChanged)
+  // Settings visibility mode, app-wide like upstream app_config "user_mode"
+  // (GUI_App::get_saved_mode / save_mode, GUI_App.cpp:8110-8164): 0 Simple,
+  // 1 Advanced, 2 Expert. viewMode is the effective level a row's
+  // ConfigOptionDef::mode is compared against -- comDevelop (3) while
+  // developer mode is on (GUI_App::get_mode), where the switch is locked.
+  Q_PROPERTY(int userMode READ userMode WRITE setUserMode NOTIFY viewModeChanged)
+  Q_PROPERTY(int viewMode READ viewMode NOTIFY viewModeChanged)
+  Q_PROPERTY(bool developerMode READ developerMode WRITE setDeveloperMode NOTIFY viewModeChanged)
 
 public:
   explicit ConfigViewModel(PresetService *presetService, ProjectService *projectService, QObject *parent = nullptr);
@@ -534,7 +542,17 @@ public:
   Q_INVOKABLE bool setLayerRangeValue(int rangeIndex, const QString &key, const QVariant &value);
   Q_INVOKABLE QVariant layerRangeValue(int rangeIndex, const QString &key, const QVariant &fallback = QVariant()) const;
 
+  int userMode() const { return userMode_; }
+  void setUserMode(int mode);
+  int viewMode() const { return developerMode_ ? 3 : userMode_; }
+  bool developerMode() const { return developerMode_; }
+  void setDeveloperMode(bool on);
+  /// Upstream m_mode_icon: cycle Simple -> Advanced -> Expert (no-op in
+  /// developer mode, Tab.cpp:430-437).
+  Q_INVOKABLE void cycleUserMode();
+
 signals:
+  void viewModeChanged();
   void stateChanged();
   void sliceAffectingConfigChanged();
   void pendingUnsavedChangesRequested();
@@ -552,6 +570,8 @@ signals:
   void filamentSlotCompatibilityChanged();
 
 private:
+  int userMode_ = 0;
+  bool developerMode_ = false;
   PresetService *presetService_ = nullptr;
   ProjectService *projectService_ = nullptr;
   ConfigOptionModel *printOptions_ = nullptr;
@@ -570,6 +590,9 @@ private:
   QHash<QString, QVariant> selectedPresetValuesForTier(const QString &tier) const;
   QHash<QString, QVariant> persistedEffectiveValuesForTier(const QString &tier) const;
   ConfigOptionModel *optionModelForTier(const QString &tier) const;
+  /// Runs the upstream toggle_field / toggle_line rules (OptionToggleRules)
+  /// over the current values and pushes the result into the three models.
+  void applyToggleRules(const QHash<QString, QVariant> &scopeValues);
   QString normalizedTier(const QString &tier) const;
   void refreshOptionModelReferences();
   void updateMergedPresetValues();

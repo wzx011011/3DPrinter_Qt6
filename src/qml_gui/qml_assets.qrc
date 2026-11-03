@@ -96,6 +96,30 @@
         <file>assets/icons/param_rectilinear.svg</file>
         <file>assets/icons/param_retraction.svg</file>
         <file>assets/icons/param_seam.svg</file>
+        <file>assets/icons/param_note.svg</file>
+        <file>assets/icons/param_accessory.svg</file>
+        <file>assets/icons/param_adaptive_mesh.svg</file>
+        <file>assets/icons/param_chamber_temp.svg</file>
+        <file>assets/icons/param_cooling_aux_fan.svg</file>
+        <file>assets/icons/param_cooling_exhaust.svg</file>
+        <file>assets/icons/param_cooling_fan.svg</file>
+        <file>assets/icons/param_cooling_part_fan.svg</file>
+        <file>assets/icons/param_cooling_specific_layer.svg</file>
+        <file>assets/icons/param_dependencies_presets.svg</file>
+        <file>assets/icons/param_dependencies_printers.svg</file>
+        <file>assets/icons/param_extruder_clearance.svg</file>
+        <file>assets/icons/param_extruder_lift_enforcement.svg</file>
+        <file>assets/icons/param_extruder_temp.svg</file>
+        <file>assets/icons/param_flow_ratio_and_pressure_advance.svg</file>
+        <file>assets/icons/param_multi_material.svg</file>
+        <file>assets/icons/param_position.svg</file>
+        <file>assets/icons/param_printable_space.svg</file>
+        <file>assets/icons/param_resonance_avoidance.svg</file>
+        <file>assets/icons/param_retraction_material_change.svg</file>
+        <file>assets/icons/param_toolchange.svg</file>
+        <file>assets/icons/param_toolchange_multi_extruder.svg</file>
+        <file>assets/icons/param_volumetric_speed.svg</file>
+        <file>assets/icons/param_fuzzy_skin.svg</file>
         <file>assets/icons/param_settings.svg</file>
         <file>assets/icons/param_shell.svg</file>
         <file>assets/icons/param_skirt.svg</file>
