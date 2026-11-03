@@ -8503,8 +8503,12 @@ void QmlUiAuditTests::v50PresetIniAndCreateDialogWired()
            "PSET-02: SettingsDialog must bind onCreatePresetRequired to open the dialog");
   QVERIFY2(settingsDialog.contains(QStringLiteral("presetIndexForName")),
            "PSET2-W6: SettingsDialog must normalize decorated preset labels before selecting");
-  QVERIFY2(settingsDialog.contains(QStringLiteral("restoreAllSystemValues()")),
-           "PSET2-W6: SettingsDialog restore action must use the ConfigViewModel API");
+  // Upstream tab bar undo rolls back to the saved preset (Tab.cpp:397);
+  // undo-to-system is compiled out (DISABLE_UNDO_SYS, Tab.cpp:89).
+  QVERIFY2(settingsDialog.contains(QStringLiteral("revertToSavedPreset()")),
+           "PSET2-W6: SettingsDialog undo action must use the ConfigViewModel API");
+  QVERIFY2(!settingsDialog.contains(QStringLiteral("restoreAllSystemValues()")),
+           "SettingsDialog must not offer the upstream-disabled undo-to-system button");
   QVERIFY2(createDialog.contains(QStringLiteral("root.configVm.lastPresetError")),
            "PSET2-W6: CreatePresetsDialog must surface the real ConfigViewModel failure");
   QVERIFY2(presetSvc.contains(QStringLiteral("hasPresetChildren")),
@@ -10500,7 +10504,7 @@ void QmlUiAuditTests::processSettingsConsumesSourceMappedHierarchy()
                && !processContract.contains(QStringLiteral("key: \"Retraction\""))
                && !processContract.contains(QStringLiteral("key: \"Other\"")),
            "Process tabs must not reintroduce legacy page identities");
-  QVERIFY2(processList.contains(QStringLiteral("processGroupsForPage(root.activeTab)"))
+  QVERIFY2(processList.contains(QStringLiteral("processGroupsForPage(root.activePage)"))
                && processList.contains(QStringLiteral("ConfigOptionFilterProxy"))
                && processList.contains(QStringLiteral("group: processGroupDelegate.groupName"))
                && processList.contains(QStringLiteral("upstreamProcessOrder: true"))
@@ -10987,6 +10991,7 @@ void QmlUiAuditTests::dialogReachabilitySourceAudit()
       {QStringLiteral("FilamentGroupPopup.qml"), QStringLiteral("openForCurrentPlate()")},
       {QStringLiteral("SettingsDialog.qml"), QStringLiteral("forwardSettingsRequest(")},
       {QStringLiteral("PluginsConfigDialog.qml"), QStringLiteral("pluginsDialogLoader.item.openWith(")},
+      {QStringLiteral("DependencyChecklistDialog.qml"), QStringLiteral("dependencyDialogLoader.item.openWith(")},
       {QStringLiteral("NetworkTestDialog.qml"), QStringLiteral("networkTestDialog.open()")},
       {QStringLiteral("TroubleshootDialog.qml"), QStringLiteral("troubleshootDialog.open()")},
       {QStringLiteral("SelectMachineDialog.qml"), QStringLiteral("selectMachineDialog.open()")},

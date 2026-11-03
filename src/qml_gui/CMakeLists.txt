@@ -126,6 +126,7 @@ qt_add_qml_module(owzx_qml
         dialogs/EditGCodeDialog.qml
         dialogs/AccessCodeInputDialog.qml
         dialogs/PluginsConfigDialog.qml
+        dialogs/DependencyChecklistDialog.qml
         dialogs/AMSSettingsDialog.qml
         dialogs/FirmwareDialog.qml
         dialogs/WipeTowerDialog.qml

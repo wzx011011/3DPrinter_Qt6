@@ -1,6 +1,7 @@
 #include "core/services/OptionToggleRules.h"
 
 #include <QStringList>
+#include <algorithm>
 
 #include <cmath>
 
@@ -19,13 +20,13 @@ using namespace Slic3r;
 // accessors the upstream rules use (opt_bool / opt_int / opt_float /
 // opt_enum / opt_string). Values arrive in the mixed shapes the Qt side
 // stores: preset-JSON strings ("1", "15%", "rectilinear"), QML writes (bool,
-// enum index), and vectors as lists (variant / extruder 0 is read, like the
-// single-extruder upstream path). Missing keys fall back to the
-// ConfigOptionDef default.
+// enum index), and vectors as lists (the given extruder's entry, default 0,
+// clamped to the list). Missing keys fall back to the ConfigOptionDef
+// default.
 class Cfg
 {
 public:
-  explicit Cfg(Lookup lookup) : m_lookup(std::move(lookup)) {}
+  explicit Cfg(Lookup lookup, int index = 0) : m_lookup(std::move(lookup)), m_index(index) {}
 
   QVariant raw(const char *key) const
   {
@@ -33,7 +34,7 @@ public:
     if (v.typeId() == QMetaType::QVariantList || v.typeId() == QMetaType::QStringList)
     {
       const QVariantList list = v.toList();
-      v = list.isEmpty() ? QVariant() : list.first();
+      v = list.isEmpty() ? QVariant() : list.value(std::min<qsizetype>(m_index, list.size() - 1));
     }
     if (!v.isValid() || (v.typeId() == QMetaType::QString && v.toString().isEmpty() && !isString(key)))
       v = defaultValue(key);
@@ -165,6 +166,7 @@ private:
   }
 
   Lookup m_lookup;
+  int m_index = 0;
 };
 
 class Toggler
@@ -628,7 +630,7 @@ Result printerToggles(const Context &ctx)
 {
   Result result;
   Toggler t(result);
-  const Cfg config(ctx.printer);
+  const Cfg config(ctx.printer, std::max(0, ctx.extruderIndex));
   const bool is_BBL_printer = ctx.isBblPrinter;
 
   // Basic information
@@ -760,6 +762,13 @@ Result printerToggles(const Context &ctx)
       t.field("input_shaping_damp_x", input_shaping_emit);
       t.field("input_shaping_damp_y", input_shaping_emit && !gcf_is_reprap_firmware);
     }
+
+    // build_unregular_pages (Tab.cpp:5493-5520): the Motion ability page only
+    // exists for Marlin (legacy / 2), Klipper, RepRapFirmware and Repetier.
+    const bool is_marlin_flavor = gcf_is_marlin_legacy || gcf_is_marlin_firmware || gcf_is_klipper ||
+                                  gcf_is_reprap_firmware || gcf == gcfRepetier;
+    if (!is_marlin_flavor)
+      result.hiddenPages.insert(QStringLiteral("Motion ability"));
   }
 
   return result;

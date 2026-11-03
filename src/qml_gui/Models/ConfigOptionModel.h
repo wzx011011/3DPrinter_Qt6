@@ -29,6 +29,13 @@ struct ConfigOption
   int mode = 2;       // 0=comSimple, 1=comAdvanced, 2=comExpert, 3=comDevelop (对齐上游 ConfigOptionMode)
   bool nullable = false;  // accepts nil value = inherit from parent preset (upstream ConfigOptionDef::nullable)
   bool multiline = false; // upstream ConfigOptionDef::multiline (multi-line text editor)
+  /// Open enum (GUIType::i_enum_open / f_enum_open / select_open): type is
+  /// "enum_open", enumValues are suggestions and any value of this base
+  /// type ("int" | "float" | "floatOrPercent" | "string") is accepted.
+  QString openBase{};
+  /// gui_flags "serialized" (post_process): a string list edited as one
+  /// ";"-joined text (OptionsGroup::config_value / GUI.cpp change_opt_value).
+  bool serialized = false;
   bool isVector = false;  // multi-value per-extruder (upstream coFloats/coInts/coBools/coEnums/coPercents/coStrings where type has coVectorType=0x4000 bit set)
 
   // Constructor for 10-field aggregate init (key, label, type, value, min, max, step, enumLabels, category, group)
@@ -60,6 +67,13 @@ class ConfigOptionModel final : public QAbstractListModel
   Q_OBJECT
   Q_PROPERTY(int count READ rowCount NOTIFY countChanged)
   Q_PROPERTY(int dataVersion READ dataVersion NOTIFY dataVersionChanged)
+  /// Tab pages removed by the current config (processPageNames skips them).
+  Q_PROPERTY(QStringList hiddenPages READ hiddenPages NOTIFY hiddenPagesChanged)
+  /// Printer tier: extruder count (nozzle_diameter entries). With more than
+  /// one, the Extruder page becomes "Extruder 1".."Extruder N" (Tab.cpp:5640).
+  Q_PROPERTY(int extruderCount READ extruderCount NOTIFY extruderCountChanged)
+  /// Extruder whose values the Extruder page rows show and edit.
+  Q_PROPERTY(int activeExtruder READ activeExtruder WRITE setActiveExtruder NOTIFY activeExtruderChanged)
 
 public:
   enum Roles
@@ -192,6 +206,29 @@ public:
   /// Writes the colour ("" = undefined); vector options keep their other
   /// elements (per-extruder / per-filament colours).
   Q_INVOKABLE void setColour(int row, const QString &colour);
+  /// Open enum text (Field.cpp Choice::set_value): the label of a matching
+  /// enum value, otherwise the value itself (first element for vectors).
+  Q_INVOKABLE QString openEnumText(int row, const QVariant &value) const;
+  /// Choice::get_value: a label picks its enum value, other text is parsed
+  /// as the base type; returns false (nothing written) for invalid text.
+  Q_INVOKABLE bool setOpenEnumText(int row, const QString &text);
+
+  /// Filament Dependencies (Tab::compatible_widget_create): "All" checkbox
+  /// + "Set ..." multi-choice over the printer / process presets.
+  /// compatible_printers / compatible_prints rows have type "compatible_list".
+  Q_INVOKABLE bool dependencyAll(int row) const;
+  /// Ticking "All" clears the list; either way the matching *_condition
+  /// field follows the checkbox (on_toggle: get_field(key_condition)->toggle).
+  Q_INVOKABLE void setDependencyAll(int row, bool all);
+  Q_INVOKABLE QStringList dependencyCandidates(int row) const;
+  Q_INVOKABLE QStringList dependencySelection(int row) const;
+  /// MultiChoiceDialog OK: every candidate checked stores the empty list
+  /// ("All"), otherwise the checked names.
+  Q_INVOKABLE void setDependencySelection(int row, const QStringList &names);
+  Q_INVOKABLE QString dependencyDialogTitle(int row) const;
+  Q_INVOKABLE QString dependencyDialogLabel(int row) const;
+  /// Non-default presets of the depending type (ConfigViewModel feeds them).
+  void setDependencyCandidates(const QString &key, const QStringList &names);
 
   // ── Point options (upstream coPoint / coPoints) ─────────────────────────
   // Values arrive either as preset-JSON lists of "XxY" strings or as the
@@ -223,6 +260,15 @@ public:
   /// Page names of the active tier's upstream hierarchy (Print, Filament or
   /// Printer tab), in upstream order.
   Q_INVOKABLE QStringList processPageNames() const;
+  QStringList hiddenPages() const;
+  void setHiddenPages(const QSet<QString> &pages);
+  int extruderCount() const { return m_extruderCount; }
+  int activeExtruder() const { return m_activeExtruder; }
+  void setActiveExtruder(int extruder);
+  /// "Extruder 2" -> "Extruder"; other pages unchanged.
+  Q_INVOKABLE QString basePageName(const QString &page) const;
+  /// "Extruder N" -> N-1, "Extruder" -> 0, other pages -> -1.
+  Q_INVOKABLE int extruderOfPage(const QString &page) const;
   Q_INVOKABLE QStringList processGroupsForPage(const QString &page) const;
   Q_INVOKABLE QStringList processMappingErrors() const;
   Q_INVOKABLE QList<int> orderedProcessIndicesForGroup(const QList<int> &candidateIndices,
@@ -314,6 +360,9 @@ signals:
   void optionValueChanged(const QString &key, const QVariant &value);
   void dataVersionChanged();
   void toggleVisibilityChanged();
+  void hiddenPagesChanged();
+  void extruderCountChanged();
+  void activeExtruderChanged();
 
 private:
   int findIndex(const QString &key) const;
@@ -328,6 +377,20 @@ private:
   QHash<QString, QVariant> m_referenceValues;
   QSet<QString> m_dirtyKeys; ///< 被修改过的选项 key
   QSet<QString> m_hiddenKeys;   ///< toggle_line(false) keys
+  QSet<QString> m_hiddenPages;  ///< pages removed by the config
+  QHash<QString, QStringList> m_dependencyCandidates;
+  QHash<QString, bool> m_dependencyAll;   ///< "All" checkbox once toggled
+  /// *_condition rows are editable only while "All" is ticked.
+  bool dependencyConditionOff(const QString &conditionKey) const;
+  int m_extruderCount = 1;
+  int m_activeExtruder = 0;
+  /// Printer Extruder page vector rows edit one element (append_single_
+  /// option_line(key, extruder_idx)).
+  bool isExtruderRow(int row) const;
+  /// The row value as edited: a one-element list holding the active
+  /// extruder's entry for extruder rows, the stored value otherwise.
+  QVariant editValue(int row) const;
+  void refreshExtruderCount();
   QHash<QString, QString> m_lineHeadByKey;          ///< member key -> head key
   QHash<QString, QStringList> m_lineMembersByHead;  ///< head key -> members (head first)
   QHash<QString, QString> m_lineLabelByHead;        ///< head key -> zh line label

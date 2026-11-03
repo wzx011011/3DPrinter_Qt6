@@ -52,6 +52,14 @@ ApplicationWindow {
 
     // Internal state
     property string activeTab: ""
+    // "Extruder 2" shows the Extruder page with extruder 2's values
+    // (one page per extruder, Tab.cpp:5639-5645).
+    readonly property string activePage: optionModel ? optionModel.basePageName(activeTab) : activeTab
+    onActiveTabChanged: {
+        var extruder = optionModel ? optionModel.extruderOfPage(activeTab) : -1
+        if (extruder >= 0)
+            optionModel.activeExtruder = extruder
+    }
     property string searchText: ""
     property bool searchExpanded: false
     // App-wide settings visibility level (ConfigViewModel.viewMode, upstream
@@ -109,6 +117,10 @@ ApplicationWindow {
     // TabPrint / TabFilament / TabPrinter page -> group -> option hierarchy
     // (Tab.cpp at the pin) for whichever tier the dialog shows.
     readonly property var tabPages: {
+        // hiddenPages: the printer Motion ability page follows gcode_flavor
+        // (build_unregular_pages).
+        var hidden = optionModel ? optionModel.hiddenPages : []
+        var extruders = optionModel ? optionModel.extruderCount : 1
         var pages = optionModel ? optionModel.processPageNames() : []
         return pages.map(function(page) {
             return { key: page, label: root.processDisplayLabel(page) }
@@ -145,6 +157,11 @@ ApplicationWindow {
     // Set default tab on first load
     Component.onCompleted: {
         if (tabPages.length > 0) activeTab = tabPages[0].key
+    }
+    // A page removed while shown falls back to the first page.
+    onTabPagesChanged: {
+        if (tabPages.length > 0 && tabPages.map(function(page) { return page.key }).indexOf(activeTab) < 0)
+            activeTab = tabPages[0].key
     }
 
     function requestSaveAndMaybeClose(closeOnSuccess) {
@@ -366,6 +383,23 @@ ApplicationWindow {
                     anchors.leftMargin: Theme.spacingMD
                     anchors.rightMargin: Theme.spacingMD
                     spacing: Theme.spacingSM
+                    // Upstream m_undo_btn left of the combo (Tab.cpp:397,
+                    // :408): rolls every unsaved change back to the saved
+                    // preset. Undo-to-system is compiled out upstream
+                    // (DISABLE_UNDO_SYS, Tab.cpp:89).
+                    CxIconButton {
+                        buttonSize: 28
+                        iconSize: 15
+                        cxStyle: CxIconButton.Style.Ghost
+                        iconSource: "qrc:/qml/assets/icons/orca_undo.svg"
+                        enabled: root.configVm && root.configVm.isPresetDirty
+                        toolTipText: qsTr("点击以将所有设置还原到最后一次保存的版本。")
+                        onClicked: {
+                            if (root.configVm)
+                                root.configVm.revertToSavedPreset()
+                        }
+                    }
+
                     // Preset selector
                     CxComboBox {
                         Layout.fillWidth: true
@@ -441,24 +475,25 @@ ApplicationWindow {
                         buttonSize: 28
                         iconSize: 15
                         cxStyle: CxIconButton.Style.Ghost
-                        iconSource: "qrc:/qml/assets/icons/restore.svg"
-                        enabled: root.configVm && root.configVm.globalModifiedCount > 0
-                        toolTipText: qsTr("恢复系统值")
-                        onClicked: {
-                            if (root.configVm)
-                                root.configVm.restoreAllSystemValues()
-                        }
-                    }
-
-                    CxIconButton {
-                        buttonSize: 28
-                        iconSize: 15
-                        cxStyle: CxIconButton.Style.Ghost
                         iconSource: "qrc:/qml/assets/icons/device-floppy.svg"
                         selected: root.configVm && root.configVm.isPresetDirty
                         enabled: root.configVm && root.configVm.isPresetDirty
                         toolTipText: qsTr("保存")
                         onClicked: root.requestSaveAndMaybeClose(false)
+                    }
+
+                    // Upstream m_btn_delete_preset (Tab.cpp:280, :589): shown
+                    // for user presets only (update_preset_choice:
+                    // preset.can_overwrite()), asks before deleting.
+                    CxIconButton {
+                        buttonSize: 28
+                        iconSize: 15
+                        cxStyle: CxIconButton.Style.Ghost
+                        iconSource: "qrc:/qml/assets/icons/orca_preset_delete.svg"
+                        visible: root.configVm && root.currentPreset !== ""
+                                 && root.configVm.canDeletePreset(root.currentPreset)
+                        toolTipText: qsTr("删除此预设")
+                        onClicked: deletePresetConfirm.open()
                     }
 
                     // G7: Save-As and Compare move into the overflow menu
@@ -505,8 +540,20 @@ ApplicationWindow {
                         }
                     }
 
-                    // Upstream m_mode_view (Tab.cpp:438-444).
+                    // Upstream m_mode_icon + m_mode_view (Tab.cpp:429-449),
+                    // not on the process tab (the sidebar switch serves it).
+                    CxIconButton {
+                        visible: root.presetTier !== "print"
+                        buttonSize: 28
+                        iconSize: 15
+                        cxStyle: CxIconButton.Style.Ghost
+                        iconSource: "qrc:/qml/assets/icons/orca_advanced.svg"
+                        enabled: root.configVm && !root.configVm.developerMode
+                        toolTipText: qsTr("循环切换设置可见性")
+                        onClicked: root.configVm.cycleUserMode()
+                    }
                     ModeSwitch {
+                        visible: root.presetTier !== "print"
                         configVm: root.configVm
                         Layout.alignment: Qt.AlignVCenter
                     }
@@ -635,14 +682,14 @@ ApplicationWindow {
                             anchors.fill: parent
                             clip: true
                             model: root.optionModel && root.activeTab !== ""
-                                   ? root.optionModel.processGroupsForPage(root.activeTab) : []
+                                   ? root.optionModel.processGroupsForPage(root.activePage) : []
                             // C++-side projection count: search + page filter plus
                             // (page, group) process-manifest membership — exactly
                             // the rows the per-group proxies below accept.
                             readonly property bool hasProjectedRows:
                                 root.optionModel
                                 ? root.optionModel.processProjectedRowCountForMode(
-                                      root.activeTab, root.searchText, root.viewMode) > 0
+                                      root.activePage, root.searchText, root.viewMode) > 0
                                 : false
                             // G3: R11 row rhythm — 30px rows touch (pitch 30, was 34+4=38).
                             spacing: 0
@@ -666,7 +713,7 @@ ApplicationWindow {
                                 // empty groups and drives the inner Repeater.
                                 readonly property ConfigOptionFilterProxy groupRows: ConfigOptionFilterProxy {
                                     sourceModel: root.optionModel
-                                    page: root.activeTab
+                                    page: root.activePage
                                     group: processGroupDelegate.groupName
                                     searchText: root.searchText
                                     viewMode: root.viewMode
@@ -839,5 +886,20 @@ ApplicationWindow {
         destructive: false
         onAccepted: if (root.configVm) root.configVm.resolveFirmwareRetractionConflict(true)
         onRejected: if (root.configVm) root.configVm.resolveFirmwareRetractionConflict(false)
+    }
+
+    // Tab::delete_preset confirmation ("%1% Preset" / "Are you sure you
+    // want to delete the selected preset?").
+    ConfirmDialog {
+        id: deletePresetConfirm
+        dialogTitle: qsTr("删除预设")
+        message: qsTr("确定要删除所选预设吗？")
+        confirmText: qsTr("删除")
+        onAccepted: {
+            if (!root.configVm)
+                return
+            var category = root.presetTier === "printer" ? 2 : root.presetTier === "filament" ? 1 : 0
+            root.configVm.deletePreset(category, root.currentPreset)
+        }
     }
 }

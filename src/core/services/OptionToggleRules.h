@@ -35,6 +35,9 @@ struct Context
   Lookup project;   ///< project-level values (curr_bed_type); may be empty
   bool isBblPrinter = false;  ///< PresetBundle::is_bbl_vendor()
   bool isGlobalConfig = true; ///< false for object / volume / plate scope
+  /// Printer vectors read this extruder's entry (the Extruder N page shown;
+  /// upstream TabPrinter::toggle_options runs per extruder page).
+  int extruderIndex = 0;
 };
 
 /// Filament "Setting Overrides" row (TabFilament::add_filament_overrides_page
@@ -57,6 +60,8 @@ struct Result
   bool firmwareRetractionConflict = false;
   /// Filament tier only: override rows keyed by filament_* option key.
   QHash<QString, OverrideState> overrides;
+  /// Tab pages the config removes (TabPrinter::build_unregular_pages).
+  QSet<QString> hiddenPages;
 };
 
 Result printToggles(const Context &ctx);

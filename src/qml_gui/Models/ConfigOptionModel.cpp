@@ -5,6 +5,7 @@
 #include "qml_gui/Models/OptionLabelTable.h"
 
 #include <QByteArray>
+#include <algorithm>
 #include <QColor>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -98,7 +99,16 @@ QVariant ConfigOptionModel::data(const QModelIndex &index, int role) const
   case TypeRole:
     return o.type;
   case ValueRole:
-    return o.value;
+    if (o.serialized)
+    {
+      QString text;
+      const QVariantList values = o.value.toList();
+      if (!values.isEmpty() && !values.first().toString().isEmpty())
+        for (const QVariant &value : values)
+          text += value.toString() + QLatin1Char(';');
+      return text;
+    }
+    return editValue(index.row());
   case MinRole:
     return o.min;
   case MaxRole:
@@ -138,7 +148,7 @@ QVariant ConfigOptionModel::data(const QModelIndex &index, int role) const
   case SourceRowRole:
     return index.row();
   case EnabledRole:
-    return !m_disabledKeys.contains(o.key);
+    return !m_disabledKeys.contains(o.key) && !dependencyConditionOff(o.key);
   case LineVisibleRole:
     return !m_hiddenKeys.contains(o.key);
   case MultilineRole:
@@ -181,6 +191,19 @@ bool ConfigOptionModel::setData(const QModelIndex &index, const QVariant &value,
     emit dataChanged(index, index, {GroupRole});
     return true;
   case ValueRole:
+    if (m_options[index.row()].serialized && value.typeId() == QMetaType::QString)
+    {
+      // Split on ";" (one trailing ";" dropped); an empty text is no scripts.
+      QString text = value.toString();
+      if (text.endsWith(QLatin1Char(';')))
+        text.chop(1);
+      QVariantList values;
+      if (!text.isEmpty())
+        for (const QString &part : text.split(QLatin1Char(';')))
+          values.append(part);
+      writeValue(index.row(), values);
+      return true;
+    }
     writeValue(index.row(), value);
     return true;
   default:
@@ -381,12 +404,31 @@ void ConfigOptionModel::writeValue(int row, const QVariant &value)
   if (row < 0 || row >= m_options.size())
     return;
   const auto &key = m_options[row].key;
-  m_options[row].value = value;
+  if (isExtruderRow(row))
+  {
+    // Only the active extruder's entry changes; the others stay.
+    QVariant element = value;
+    if (value.typeId() == QMetaType::QVariantList || value.typeId() == QMetaType::QStringList)
+    {
+      const QVariantList edited = value.toList();
+      element = edited.isEmpty() ? QVariant() : edited.first();
+    }
+    QVariantList list = m_options[row].value.toList();
+    while (list.size() <= m_activeExtruder)
+      list.append(list.isEmpty() ? element : list.last());
+    list[m_activeExtruder] = element;
+    m_options[row].value = list;
+  }
+  else
+  {
+    m_options[row].value = value;
+  }
+  const QVariant &storedValue = m_options[row].value;
   // 更新脏状态：与默认值比较
   const QVariant referenceValue = m_referenceValues.contains(key)
       ? m_referenceValues.value(key)
       : m_defaultValues.value(key);
-  const bool nowDirty = (referenceValue != value);
+  const bool nowDirty = (referenceValue != storedValue);
   if (nowDirty)
     m_dirtyKeys.insert(key);
   else
@@ -395,7 +437,7 @@ void ConfigOptionModel::writeValue(int row, const QVariant &value)
   // 保证经代理转发的 delegate 两种角色都会重估。
   const QModelIndex idx = index(row);
   emit dataChanged(idx, idx, {ValueRole, DirtyRole});
-  emit optionValueChanged(key, value);
+  emit optionValueChanged(key, storedValue);
   ++m_dataVersion;
   emit dataVersionChanged();
 }
@@ -744,6 +786,26 @@ void ConfigOptionModel::resetToDefaults()
   }
 }
 
+namespace
+{
+QStringList stringEntries(const QVariant &value)
+{
+  QStringList names;
+  const QVariantList list = value.typeId() == QMetaType::QVariantList || value.typeId() == QMetaType::QStringList
+                                ? value.toList()
+                                : (value.toString().isEmpty() ? QVariantList{} : QVariantList{value});
+  for (const QVariant &entry : list)
+    if (!entry.toString().isEmpty())
+      names.append(entry.toString());
+  return names;
+}
+
+QString dependencyConditionKey(const QString &listKey)
+{
+  return listKey + QStringLiteral("_condition");
+}
+} // namespace
+
 void ConfigOptionModel::applyValues(const QHash<QString, QVariant> &values)
 {
   if (m_options.isEmpty())
@@ -752,19 +814,24 @@ void ConfigOptionModel::applyValues(const QHash<QString, QVariant> &values)
   bool changed = false;
   for (int i = 0; i < m_options.size(); ++i)
   {
-    const auto it = values.constFind(m_options[i].key);
-    if (it == values.cend() || m_options[i].value == it.value())
+    const QString &key = m_options[i].key;
+    const QVariant referenceValue = m_referenceValues.contains(key)
+        ? m_referenceValues.value(key)
+        : m_defaultValues.value(key);
+    // The applied values are the whole state: a key they leave out is not
+    // set, so it shows its reference / default value instead of keeping a
+    // stale edit (a reverted or switched preset without that key).
+    const auto it = values.constFind(key);
+    const QVariant value = it != values.cend() ? it.value() : referenceValue;
+    if (m_options[i].value == value)
       continue;
-    m_options[i].value = it.value();
+    m_options[i].value = value;
     // 更新脏状态
-    const QVariant referenceValue = m_referenceValues.contains(m_options[i].key)
-        ? m_referenceValues.value(m_options[i].key)
-        : m_defaultValues.value(m_options[i].key);
-    const bool nowDirty = (referenceValue != it.value());
+    const bool nowDirty = (referenceValue != value);
     if (nowDirty)
-      m_dirtyKeys.insert(m_options[i].key);
+      m_dirtyKeys.insert(key);
     else
-      m_dirtyKeys.remove(m_options[i].key);
+      m_dirtyKeys.remove(key);
     changed = true;
   }
 
@@ -773,6 +840,20 @@ void ConfigOptionModel::applyValues(const QHash<QString, QVariant> &values)
     emit dataChanged(index(0), index(m_options.size() - 1), {ValueRole, DirtyRole});
     ++m_dataVersion;
     emit dataVersionChanged();
+  }
+  refreshExtruderCount();
+  // A stored list means "All" is off; the toggled state only matters while
+  // the list is empty (Tab::reload_compatible_prints_widget).
+  for (auto it = m_dependencyAll.begin(); it != m_dependencyAll.end();)
+  {
+    const int row = findIndex(it.key());
+    it = row >= 0 && !stringEntries(m_options[row].value).isEmpty() ? m_dependencyAll.erase(it) : std::next(it);
+  }
+  for (const char *conditionKey : {"compatible_printers_condition", "compatible_prints_condition"})
+  {
+    const int row = findIndex(QString::fromLatin1(conditionKey));
+    if (row >= 0)
+      emit dataChanged(index(row), index(row), {EnabledRole});
   }
 }
 
@@ -1035,7 +1116,7 @@ void ConfigOptionModel::setColour(int row, const QString &colour)
 {
   if (row < 0 || row >= m_options.size())
     return;
-  const QVariant current = m_options[row].value;
+  const QVariant current = editValue(row);
   if (current.typeId() == QMetaType::QVariantList || current.typeId() == QMetaType::QStringList)
   {
     QVariantList list = current.toList();
@@ -1047,6 +1128,154 @@ void ConfigOptionModel::setColour(int row, const QString &colour)
     return;
   }
   writeValue(row, colour);
+}
+
+bool ConfigOptionModel::dependencyAll(int row) const
+{
+  if (row < 0 || row >= m_options.size())
+    return true;
+  const ConfigOption &o = m_options[row];
+  const auto it = m_dependencyAll.constFind(o.key);
+  return it != m_dependencyAll.cend() ? it.value() : stringEntries(o.value).isEmpty();
+}
+
+void ConfigOptionModel::setDependencyAll(int row, bool all)
+{
+  if (row < 0 || row >= m_options.size())
+    return;
+  const QString key = m_options[row].key;
+  m_dependencyAll.insert(key, all);
+  const QString conditionKey = dependencyConditionKey(key);
+  const int conditionRow = findIndex(conditionKey);
+  if (conditionRow >= 0)
+    emit dataChanged(index(conditionRow), index(conditionRow), {EnabledRole});
+  if (all && !stringEntries(m_options[row].value).isEmpty())
+    writeValue(row, QVariantList{});
+  else
+    emit dataChanged(index(row), index(row), {ValueRole});
+  ++m_dataVersion;
+  emit dataVersionChanged();
+}
+
+bool ConfigOptionModel::dependencyConditionOff(const QString &conditionKey) const
+{
+  if (!conditionKey.endsWith(QStringLiteral("_condition")))
+    return false;
+  const int listRow = findIndex(conditionKey.chopped(int(QStringLiteral("_condition").size())));
+  return listRow >= 0 && m_options[listRow].type == QStringLiteral("compatible_list") && !dependencyAll(listRow);
+}
+
+QStringList ConfigOptionModel::dependencyCandidates(int row) const
+{
+  if (row < 0 || row >= m_options.size())
+    return {};
+  return m_dependencyCandidates.value(m_options[row].key);
+}
+
+QStringList ConfigOptionModel::dependencySelection(int row) const
+{
+  if (row < 0 || row >= m_options.size())
+    return {};
+  return stringEntries(m_options[row].value);
+}
+
+void ConfigOptionModel::setDependencySelection(int row, const QStringList &names)
+{
+  if (row < 0 || row >= m_options.size())
+    return;
+  const QStringList candidates = dependencyCandidates(row);
+  QVariantList value;
+  // Leave the list empty when every entry is checked (= "All").
+  if (names.size() != candidates.size())
+    for (const QString &candidate : candidates)
+      if (names.contains(candidate))
+        value.append(candidate);
+  if (value.isEmpty())
+    setDependencyAll(row, true);
+  if (stringEntries(m_options[row].value) != stringEntries(value))
+    writeValue(row, value);
+}
+
+QString ConfigOptionModel::dependencyDialogTitle(int row) const
+{
+  const bool printers = row >= 0 && row < m_options.size() && m_options[row].key == QStringLiteral("compatible_printers");
+  return printers ? QObject::tr("兼容打印机") : QObject::tr("兼容的切片配置");
+}
+
+QString ConfigOptionModel::dependencyDialogLabel(int row) const
+{
+  const bool printers = row >= 0 && row < m_options.size() && m_options[row].key == QStringLiteral("compatible_printers");
+  return printers ? QObject::tr("选择打印机") : QObject::tr("选择配置文件");
+}
+
+void ConfigOptionModel::setDependencyCandidates(const QString &key, const QStringList &names)
+{
+  m_dependencyCandidates.insert(key, names);
+}
+
+QString ConfigOptionModel::openEnumText(int row, const QVariant &value) const
+{
+  if (row < 0 || row >= m_options.size())
+    return {};
+  QVariant v = value;
+  if (v.typeId() == QMetaType::QVariantList || v.typeId() == QMetaType::QStringList)
+  {
+    const QVariantList list = v.toList();
+    v = list.isEmpty() ? QVariant() : list.first();
+  }
+  if (!v.isValid())
+    return {};
+  const ConfigOption &o = m_options[row];
+  QString text = v.toString();
+  if (v.typeId() == QMetaType::Double)
+    text = QString::number(v.toDouble(), 'g', 12);
+  const int index = o.enumValues.indexOf(text);
+  return index >= 0 && index < o.enumLabels.size() ? o.enumLabels.at(index) : text;
+}
+
+bool ConfigOptionModel::setOpenEnumText(int row, const QString &rawText)
+{
+  if (row < 0 || row >= m_options.size())
+    return false;
+  const ConfigOption &o = m_options[row];
+  const QString text = rawText.trimmed();
+  QString valueText = text;
+  const int labelIndex = o.enumLabels.indexOf(text);
+  if (labelIndex >= 0 && labelIndex < o.enumValues.size())
+    valueText = o.enumValues.at(labelIndex);
+
+  QVariant parsed;
+  bool ok = true;
+  if (o.openBase == QStringLiteral("int"))
+    parsed = valueText.toInt(&ok);
+  else if (o.openBase == QStringLiteral("float"))
+    parsed = valueText.toDouble(&ok);
+  else if (o.openBase == QStringLiteral("floatOrPercent"))
+  {
+    // ConfigOptionFloatOrPercent::deserialize: "N" or "N%".
+    const bool percent = valueText.endsWith(QLatin1Char('%'));
+    valueText.chop(percent ? 1 : 0);
+    const double number = valueText.trimmed().toDouble(&ok);
+    parsed = percent ? QVariant(QString::number(number, 'g', 12) + QLatin1Char('%')) : QVariant(number);
+  }
+  else
+    parsed = valueText;
+  if (!ok || (o.openBase == QStringLiteral("string") && valueText.isEmpty()))
+    return false;
+
+  const QVariant current = editValue(row);
+  if (o.isVector || current.typeId() == QMetaType::QVariantList || current.typeId() == QMetaType::QStringList)
+  {
+    QVariantList list = current.toList();
+    if (list.isEmpty())
+      list.append(parsed);
+    else
+      list[0] = parsed;
+    writeValue(row, list);
+    return true;
+  }
+  writeValue(row, parsed);
+  return true;
 }
 
 int ConfigOptionModel::enumIndexOf(int row, const QVariant &value) const
@@ -1141,7 +1370,7 @@ void ConfigOptionModel::setPointCoord(int row, int axis, double coord)
 {
   if (row < 0 || row >= m_options.size())
     return;
-  const QVariant current = m_options[row].value;
+  const QVariant current = editValue(row);
   QList<QPointF> points = parsePoints(current);
   if (points.isEmpty())
     points.append(QPointF());
@@ -1513,6 +1742,7 @@ namespace
             {QStringLiteral("Fuzzy skin"), processKeys({"fuzzy_skin", "fuzzy_skin_mode", "fuzzy_skin_noise_type", "fuzzy_skin_point_distance", "fuzzy_skin_thickness", "fuzzy_skin_scale", "fuzzy_skin_octaves", "fuzzy_skin_persistence", "fuzzy_skin_ripples_per_layer", "fuzzy_skin_ripple_offset", "fuzzy_skin_layers_between_ripple_offset", "fuzzy_skin_first_layer"})},
             {QStringLiteral("G-code output"), processKeys({"reduce_infill_retraction", "gcode_add_line_number", "gcode_comments", "gcode_label_objects", "exclude_object", "filename_format"})},
             {QStringLiteral("Change extrusion role G-code"), processKeys({"process_change_extrusion_role_gcode"})},
+            {QStringLiteral("Post-processing Scripts"), processKeys({"post_process"})},
             // Upstream 0a3724ed2f: shared "plugin_config_overrides" was removed in
             // favor of per-tab keys (PrintConfig.cpp:1093-1095 migration note);
             // TabPrint::build hosts print_plugin_config_overrides (Tab.cpp:3126).
@@ -1559,8 +1789,8 @@ namespace
             {QStringLiteral("Tool change parameters with multi extruder MM printers"), processKeys({"filament_multitool_ramming", "filament_multitool_ramming_volume", "filament_multitool_ramming_flow"})},
         }},
         {QStringLiteral("Dependencies"), {
-            {QStringLiteral("Compatible printers"), processKeys({"compatible_printers_condition"})},
-            {QStringLiteral("Compatible process profiles"), processKeys({"compatible_prints_condition"})},
+            {QStringLiteral("Compatible printers"), processKeys({"compatible_printers", "compatible_printers_condition"})},
+            {QStringLiteral("Compatible process profiles"), processKeys({"compatible_prints", "compatible_prints_condition"})},
         }},
         {QStringLiteral("Notes"), {
             {QStringLiteral("Notes"), processKeys({"filament_notes"})},
@@ -1626,8 +1856,6 @@ namespace
     return definitions;
   }
   // Hierarchy per settings tier: 0 = Print (process), 1 = Filament, 2 = Printer.
-  // compatible_printers / compatible_prints (upstream checklist widgets) are
-  // not listed: OptionRow has no checklist editor yet.
   static const QList<ProcessPageDefinition> &hierarchyDefinitions(int tier)
   {
     if (tier == 1)
@@ -1705,12 +1933,11 @@ namespace
         // overhang_speed_classic was removed from print_options() upstream.
         QStringLiteral("wiping_volumes_extruders"),
         // print_options() entries with no Qt editor row. At pin 0a3724ed2f
-        // upstream TabPrint::build does show post_process (multi-line script
-        // list) and slicing_pipeline_plugin (plugin picker); OptionRow has no
-        // list / plugin-picker editor yet, so they stay off the page (tracked
-        // gap). filename_format, notes and process_change_extrusion_role_gcode
-        // are on the Others page.
-        QStringLiteral("post_process"),
+        // upstream TabPrint::build does show slicing_pipeline_plugin (plugin
+        // picker over installed plugins); OWzx has no plugin runtime yet, so
+        // it stays off the page (tracked gap). filename_format, notes,
+        // post_process and process_change_extrusion_role_gcode are on the
+        // Others page.
         QStringLiteral("prime_tower_flat_ironing"),
         QStringLiteral("print_extruder_id"),
         QStringLiteral("print_extruder_variant"),
@@ -1945,6 +2172,41 @@ static QString zhGroupLabel(const QString &group)
   static const QHash<QString, QString> map = {
       // Upstream tab hierarchy pages/groups (zh_CN strings from
       // OrcaSlicer localization/i18n/zh_CN/OrcaSlicer_zh_CN.po).
+      // Print tab pages/groups (also the unsaved-changes list headers).
+      {QStringLiteral("Quality"), QStringLiteral("质量")},
+      {QStringLiteral("Strength"), QStringLiteral("强度")},
+      {QStringLiteral("Speed"), QStringLiteral("速度")},
+      {QStringLiteral("Support"), QStringLiteral("支撑")},
+      {QStringLiteral("Others"), QStringLiteral("其他")},
+      {QStringLiteral("Layer height"), QStringLiteral("层高")},
+      {QStringLiteral("Line width"), QStringLiteral("线宽")},
+      {QStringLiteral("Seam"), QStringLiteral("接缝")},
+      {QStringLiteral("Precision"), QStringLiteral("精度")},
+      {QStringLiteral("Wall generator"), QStringLiteral("墙生成器")},
+      {QStringLiteral("Walls and surfaces"), QStringLiteral("墙壁和表面")},
+      {QStringLiteral("Bridging"), QStringLiteral("搭桥")},
+      {QStringLiteral("Overhangs"), QStringLiteral("悬垂")},
+      {QStringLiteral("Walls"), QStringLiteral("墙")},
+      {QStringLiteral("Top/bottom shells"), QStringLiteral("顶部/底部外壳")},
+      {QStringLiteral("Infill"), QStringLiteral("填充")},
+      {QStringLiteral("Initial layer speed"), QStringLiteral("首层速度")},
+      {QStringLiteral("Other layers speed"), QStringLiteral("其他层速度")},
+      {QStringLiteral("Overhang speed"), QStringLiteral("悬垂速度")},
+      {QStringLiteral("Travel speed"), QStringLiteral("空驶速度")},
+      {QStringLiteral("Acceleration"), QStringLiteral("加速度")},
+      {QStringLiteral("Jerk(XY)"), QStringLiteral("抖动（XY轴）")},
+      {QStringLiteral("Raft"), QStringLiteral("筏层")},
+      {QStringLiteral("Support filament"), QStringLiteral("支撑耗材")},
+      {QStringLiteral("Tree supports"), QStringLiteral("树状支撑")},
+      {QStringLiteral("Prime tower"), QStringLiteral("擦拭塔")},
+      {QStringLiteral("Filament for Features"), QStringLiteral("特征用耗材")},
+      {QStringLiteral("Ooze prevention"), QStringLiteral("Ooze 预防")},
+      {QStringLiteral("Flush options"), QStringLiteral("换料冲刷选项")},
+      {QStringLiteral("Skirt"), QStringLiteral("裙边")},
+      {QStringLiteral("Brim"), QStringLiteral("Brim")},
+      {QStringLiteral("Special mode"), QStringLiteral("特殊模式")},
+      {QStringLiteral("G-code output"), QStringLiteral("G-code 输出")},
+      {QStringLiteral("Post-processing Scripts"), QStringLiteral("后处理脚本")},
       {QStringLiteral("Accessory"), QStringLiteral("配件")},
       {QStringLiteral("Adaptive bed mesh"), QStringLiteral("自适应网床")},
       {QStringLiteral("Clumping Detection G-code"), QStringLiteral("结块检测 G-code")},
@@ -2014,6 +2276,9 @@ static QString zhGroupLabel(const QString &group)
 
 QString ConfigOptionModel::hierarchyLabel(const QString &name) const
 {
+  const int extruder = extruderOfPage(name);
+  if (extruder >= 0 && name != QStringLiteral("Extruder"))
+    return zhGroupLabel(QStringLiteral("Extruder")) + QStringLiteral(" %1").arg(extruder + 1);
   return zhGroupLabel(name);
 }
 
@@ -2023,8 +2288,104 @@ QStringList ConfigOptionModel::processPageNames() const
   const QList<ProcessPageDefinition> &definitions = hierarchyDefinitions(m_hierarchyTier);
   result.reserve(definitions.size());
   for (const ProcessPageDefinition &definition : definitions)
+  {
+    if (m_hiddenPages.contains(definition.name))
+      continue;
+    // One Extruder page per extruder (Tab.cpp:5639-5645).
+    if (m_hierarchyTier == 2 && definition.name == QStringLiteral("Extruder") && m_extruderCount > 1)
+    {
+      for (int extruder = 1; extruder <= m_extruderCount; ++extruder)
+        result.append(QStringLiteral("Extruder %1").arg(extruder));
+      continue;
+    }
     result.append(definition.name);
+  }
   return result;
+}
+
+QString ConfigOptionModel::basePageName(const QString &page) const
+{
+  return extruderOfPage(page) >= 0 ? QStringLiteral("Extruder") : page;
+}
+
+int ConfigOptionModel::extruderOfPage(const QString &page) const
+{
+  if (page == QStringLiteral("Extruder"))
+    return 0;
+  static const QString prefix = QStringLiteral("Extruder ");
+  if (!page.startsWith(prefix))
+    return -1;
+  bool ok = false;
+  const int number = page.mid(prefix.size()).toInt(&ok);
+  return ok && number >= 1 ? number - 1 : -1;
+}
+
+void ConfigOptionModel::setActiveExtruder(int extruder)
+{
+  extruder = std::clamp(extruder, 0, std::max(0, m_extruderCount - 1));
+  if (extruder == m_activeExtruder)
+    return;
+  m_activeExtruder = extruder;
+  emit activeExtruderChanged();
+  if (!m_options.isEmpty())
+    emit dataChanged(index(0), index(m_options.size() - 1), {ValueRole});
+  ++m_dataVersion;
+  emit dataVersionChanged();
+}
+
+bool ConfigOptionModel::isExtruderRow(int row) const
+{
+  return m_hierarchyTier == 2 && row >= 0 && row < m_options.size() && m_options[row].isVector &&
+         m_options[row].page == QStringLiteral("Extruder");
+}
+
+QVariant ConfigOptionModel::editValue(int row) const
+{
+  if (row < 0 || row >= m_options.size())
+    return {};
+  const QVariant &value = m_options[row].value;
+  if (!isExtruderRow(row) || (value.typeId() != QMetaType::QVariantList && value.typeId() != QMetaType::QStringList))
+    return value;
+  const QVariantList list = value.toList();
+  if (list.isEmpty())
+    return value;
+  return QVariantList{list.value(std::min<qsizetype>(m_activeExtruder, list.size() - 1))};
+}
+
+void ConfigOptionModel::refreshExtruderCount()
+{
+  int count = 1;
+  if (m_hierarchyTier == 2)
+  {
+    const int row = findIndex(QStringLiteral("nozzle_diameter"));
+    if (row >= 0)
+    {
+      const QVariant &value = m_options[row].value;
+      if (value.typeId() == QMetaType::QVariantList || value.typeId() == QMetaType::QStringList)
+        count = std::max<int>(1, int(value.toList().size()));
+    }
+  }
+  if (count == m_extruderCount)
+    return;
+  m_extruderCount = count;
+  emit extruderCountChanged();
+  if (m_activeExtruder >= m_extruderCount)
+    setActiveExtruder(m_extruderCount - 1);
+}
+
+QStringList ConfigOptionModel::hiddenPages() const
+{
+  QStringList pages(m_hiddenPages.cbegin(), m_hiddenPages.cend());
+  pages.sort();
+  return pages;
+}
+
+void ConfigOptionModel::setHiddenPages(const QSet<QString> &pages)
+{
+  if (pages == m_hiddenPages)
+    return;
+  m_hiddenPages = pages;
+  emit hiddenPagesChanged();
 }
 
 QStringList ConfigOptionModel::processGroupsForPage(const QString &page) const
@@ -2204,6 +2565,24 @@ void ConfigOptionModel::loadSchemaFromKeys(const char *const keys[])
     // Upstream GUIType::color: ColourPicker button.
     if (opt->gui_type == Slic3r::ConfigOptionDef::GUIType::color)
       entry.type = QStringLiteral("color");
+    if (opt->opt_key == "compatible_printers" || opt->opt_key == "compatible_prints")
+      entry.type = QStringLiteral("compatible_list");
+    entry.serialized = opt->gui_flags == "serialized" && opt->type == Slic3r::coStrings;
+    // Upstream open enums: an editable Choice whose list only suggests
+    // values (Field.cpp Choice, wxCB_DROPDOWN). Options whose list is filled
+    // at runtime (filament ids, print host ports) have no enum_values in the
+    // def and keep their plain editor.
+    using GUIType = Slic3r::ConfigOptionDef::GUIType;
+    if ((opt->gui_type == GUIType::i_enum_open || opt->gui_type == GUIType::f_enum_open ||
+         opt->gui_type == GUIType::select_open) && !opt->enum_values.empty())
+    {
+      const Slic3r::ConfigOptionType base = Slic3r::ConfigOptionType(opt->type & ~Slic3r::coVectorType);
+      entry.openBase = base == Slic3r::coInt ? QStringLiteral("int")
+                       : base == Slic3r::coFloatOrPercent ? QStringLiteral("floatOrPercent")
+                       : base == Slic3r::coFloat || base == Slic3r::coPercent ? QStringLiteral("float")
+                                                                             : QStringLiteral("string");
+      entry.type = QStringLiteral("enum_open");
+    }
     if (opt->type == Slic3r::coPoints
         && opt->opt_key != "printable_area" && opt->opt_key != "bed_exclude_area"
         && opt->opt_key != "wrapping_exclude_area")
@@ -2227,6 +2606,13 @@ void ConfigOptionModel::loadSchemaFromKeys(const char *const keys[])
       entry.enumLabels.append(zhEnumLabel(QString::fromUtf8(opt->enum_labels[i].c_str())));
       entry.enumValues.append(QString::fromUtf8(opt->enum_values[i].c_str()));
     }
+    // Open enums may list values only (filament_type): the value is the label.
+    if (!entry.openBase.isEmpty() && opt->enum_labels.empty())
+      for (const std::string &value : opt->enum_values)
+      {
+        entry.enumLabels.append(QString::fromUtf8(value.c_str()));
+        entry.enumValues.append(QString::fromUtf8(value.c_str()));
+      }
 
     // Tooltip from upstream (对齐上游 ConfigOptionDef::tooltip)
     if (!opt->tooltip.empty())

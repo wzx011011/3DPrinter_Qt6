@@ -6,6 +6,7 @@
 // canonical verify script does this) or delete
 //   build/ViewModelSmokeTests_autogen/timestamp
 // before rebuilding, otherwise the new slot silently does not execute.
+#include <QRegularExpression>
 #include <QSignalSpy>
 #include <QDir>
 #include <QFile>
@@ -366,6 +367,14 @@ private slots:
   void optionToggleRulesForceDependentValues();
   void filamentSettingOverridesFollowUpstream();
   void objectListPlateLabelsOutsideAndSearch();
+  void printerMotionPageFollowsFlavor();
+  void unsavedChangesListUsesTranslatedNames();
+  void openEnumOptionsAcceptListAndFreeText();
+  void printerExtruderPagesEditTheirOwnEntry();
+  void filamentDependenciesChecklist();
+  void postProcessScriptsEditAsSerializedText();
+  void presetUndoRevertsToSavedPreset();
+  void optionModelApplyValuesResetsMissingKeys();
   void optionModelViewModeAndToggleFilter();
   void configViewModelAppliesToggleRules();
   void pointOptionsParseAndFormat();
@@ -1752,6 +1761,278 @@ void ViewModelSmokeTests::objectListPlateLabelsOutsideAndSearch()
   QVERIFY(foundObject);
   QVERIFY(tree->searchNodes(QStringLiteral("zzz-no-match")).isEmpty());
 }
+
+// TabPrinter::build_unregular_pages: the Motion ability page exists only for
+// Marlin (legacy / 2), Klipper, RepRapFirmware and Repetier.
+void ViewModelSmokeTests::printerMotionPageFollowsFlavor()
+{
+  QHash<QString, QVariant> printer;
+  OptionToggleRules::Context ctx;
+  ctx.printer = [&printer](const QString &k) { return printer.value(k); };
+
+  for (const char *flavor : {"marlin", "marlin2", "klipper", "reprapfirmware", "repetier"})
+  {
+    printer.insert(QStringLiteral("gcode_flavor"), QString::fromLatin1(flavor));
+    QVERIFY2(!OptionToggleRules::printerToggles(ctx).hiddenPages.contains(QStringLiteral("Motion ability")), flavor);
+  }
+  for (const char *flavor : {"smoothie", "teacup", "makerware", "sailfish", "mach3", "machinekit", "no-extrusion"})
+  {
+    printer.insert(QStringLiteral("gcode_flavor"), QString::fromLatin1(flavor));
+    QVERIFY2(OptionToggleRules::printerToggles(ctx).hiddenPages.contains(QStringLiteral("Motion ability")), flavor);
+  }
+
+  PresetService presetService;
+  ProjectService project;
+  ConfigViewModel config(&presetService, &project);
+  auto *model = qobject_cast<ConfigOptionModel *>(config.machineOptions());
+  QVERIFY(model);
+  QVERIFY(model->processPageNames().contains(QStringLiteral("Motion ability")));
+  QSignalSpy spy(model, &ConfigOptionModel::hiddenPagesChanged);
+  model->setHiddenPages({QStringLiteral("Motion ability")});
+  QCOMPARE(spy.count(), 1);
+  QVERIFY(!model->processPageNames().contains(QStringLiteral("Motion ability")));
+  QVERIFY(model->processPageNames().contains(QStringLiteral("Basic information")));
+}
+
+// UnsavedChangesDialog::update_list lists Tab page -> optgroup -> option,
+// all translated: the dialog rows reuse the settings page zh labels.
+void ViewModelSmokeTests::unsavedChangesListUsesTranslatedNames()
+{
+  PresetService presetService;
+  ProjectService project;
+  ConfigViewModel config(&presetService, &project);
+  QCOMPARE(config.activePresetTier(), QStringLiteral("print"));
+  const QRegularExpression latin(QStringLiteral("[A-Za-z]"));
+  for (const QString &key : {QStringLiteral("layer_height"), QStringLiteral("wall_loops"),
+                             QStringLiteral("sparse_infill_density")})
+  {
+    const QString page = config.globalModifiedCategory(key);
+    const QString group = config.globalModifiedGroup(key);
+    const QString label = config.globalModifiedLabel(key);
+    QVERIFY2(!page.isEmpty() && !page.contains(latin), qPrintable(key + QLatin1Char(' ') + page));
+    QVERIFY2(!group.isEmpty() && !group.contains(latin), qPrintable(key + QLatin1Char(' ') + group));
+    QVERIFY2(!label.isEmpty() && !label.contains(latin), qPrintable(key + QLatin1Char(' ') + label));
+  }
+}
+
+// Open enums (GUIType::f_enum_open / i_enum_open, Field.cpp Choice with
+// wxCB_DROPDOWN): suggestions plus free text of the option's own type.
+void ViewModelSmokeTests::openEnumOptionsAcceptListAndFreeText()
+{
+  PresetService presetService;
+  ProjectService project;
+  ConfigViewModel config(&presetService, &project);
+
+  auto *filament = qobject_cast<ConfigOptionModel *>(config.filamentOptions());
+  QVERIFY(filament);
+  const int typeRow = filament->indexOfKey(QStringLiteral("filament_type"));
+  QVERIFY(typeRow >= 0);
+  QCOMPARE(filament->optType(typeRow), QStringLiteral("enum_open"));
+  QVERIFY(filament->optEnumLabelsList(typeRow).contains(QStringLiteral("PETG")));
+  QVERIFY(filament->setOpenEnumText(typeRow, QStringLiteral("PETG")));
+  QCOMPARE(filament->optValue(typeRow).toList().value(0).toString(), QStringLiteral("PETG"));
+  QCOMPARE(filament->openEnumText(typeRow, filament->optValue(typeRow)), QStringLiteral("PETG"));
+  QVERIFY(filament->setOpenEnumText(typeRow, QStringLiteral("MyBlend")));
+  QCOMPARE(filament->optValue(typeRow).toList().value(0).toString(), QStringLiteral("MyBlend"));
+
+  auto *print = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(print);
+  const int anchorRow = print->indexOfKey(QStringLiteral("infill_anchor"));
+  QVERIFY(anchorRow >= 0);
+  QCOMPARE(print->optType(anchorRow), QStringLiteral("enum_open"));
+  const QStringList labels = print->optEnumLabelsList(anchorRow);
+  QVERIFY(labels.size() >= 6);
+  // A label picks its enum value; the value reads back as the label.
+  QVERIFY(print->setOpenEnumText(anchorRow, labels.at(2)));
+  QCOMPARE(print->optValue(anchorRow).toDouble(), 2.0);
+  QCOMPARE(print->openEnumText(anchorRow, print->optValue(anchorRow)), labels.at(2));
+  // Free values of the base type (float or percent).
+  QVERIFY(print->setOpenEnumText(anchorRow, QStringLiteral("7.5")));
+  QCOMPARE(print->optValue(anchorRow).toDouble(), 7.5);
+  QCOMPARE(print->openEnumText(anchorRow, print->optValue(anchorRow)), QStringLiteral("7.5"));
+  QVERIFY(print->setOpenEnumText(anchorRow, QStringLiteral("50%")));
+  QCOMPARE(print->optValue(anchorRow).toString(), QStringLiteral("50%"));
+  QVERIFY(!print->setOpenEnumText(anchorRow, QStringLiteral("abc")));
+  QCOMPARE(print->optValue(anchorRow).toString(), QStringLiteral("50%"));
+
+  // Runtime-filled lists (filament ids) keep their plain editor.
+  const int idRow = print->indexOfKey(QStringLiteral("sparse_infill_filament_id"));
+  if (idRow >= 0)
+    QVERIFY(print->optType(idRow) != QStringLiteral("enum_open"));
+}
+
+// TabPrinter::build_unregular_pages: one "Extruder N" page per extruder
+// (just "Extruder" with one); each page edits that extruder's entry of the
+// per-extruder vectors and the rules read the same entry.
+void ViewModelSmokeTests::printerExtruderPagesEditTheirOwnEntry()
+{
+  PresetService presetService;
+  ProjectService project;
+  ConfigViewModel config(&presetService, &project);
+  auto *model = qobject_cast<ConfigOptionModel *>(config.machineOptions());
+  QVERIFY(model);
+  const int nozzleRow = model->indexOfKey(QStringLiteral("nozzle_diameter"));
+  QVERIFY(nozzleRow >= 0);
+
+  QHash<QString, QVariant> values = model->valuesByKey();
+  values.insert(QStringLiteral("nozzle_diameter"), QVariantList{0.4});
+  model->applyValues(values);
+  QCOMPARE(model->extruderCount(), 1);
+  QVERIFY(model->processPageNames().contains(QStringLiteral("Extruder")));
+
+  values.insert(QStringLiteral("nozzle_diameter"), QVariantList{0.4, 0.6});
+  values.insert(QStringLiteral("wipe"), QVariantList{true, false});
+  model->applyValues(values);
+  QCOMPARE(model->extruderCount(), 2);
+  const QStringList pages = model->processPageNames();
+  QVERIFY(!pages.contains(QStringLiteral("Extruder")));
+  QVERIFY(pages.contains(QStringLiteral("Extruder 1")));
+  QVERIFY(pages.contains(QStringLiteral("Extruder 2")));
+  QCOMPARE(model->basePageName(QStringLiteral("Extruder 2")), QStringLiteral("Extruder"));
+  QCOMPARE(model->extruderOfPage(QStringLiteral("Extruder 2")), 1);
+  QCOMPARE(model->extruderOfPage(QStringLiteral("Basic information")), -1);
+  QCOMPARE(model->hierarchyLabel(QStringLiteral("Extruder 2")), QStringLiteral("挤出机 2"));
+
+  model->setActiveExtruder(1);
+  QCOMPARE(model->data(model->index(nozzleRow), ConfigOptionModel::ValueRole).toList(), QVariantList{0.6});
+  model->setValue(nozzleRow, 0.8);
+  QCOMPARE(model->optValue(nozzleRow).toList(), (QVariantList{0.4, 0.8}));
+  model->setActiveExtruder(0);
+  QCOMPARE(model->data(model->index(nozzleRow), ConfigOptionModel::ValueRole).toList(), QVariantList{0.4});
+  // Rows outside the Extruder page keep their whole value.
+  const int areaRow = model->indexOfKey(QStringLiteral("printable_area"));
+  QVERIFY(areaRow >= 0);
+  QCOMPARE(model->data(model->index(areaRow), ConfigOptionModel::ValueRole), model->optValue(areaRow));
+
+  // Rules read the shown extruder's entry: wipe off on extruder 2 greys
+  // its wipe distance.
+  QHash<QString, QVariant> printer;
+  printer.insert(QStringLiteral("wipe"), QVariantList{true, false});
+  printer.insert(QStringLiteral("retraction_length"), QVariantList{0.8, 0.8});
+  OptionToggleRules::Context ctx;
+  ctx.printer = [&printer](const QString &k) { return printer.value(k); };
+  QVERIFY(!OptionToggleRules::printerToggles(ctx).disabled.contains(QStringLiteral("wipe_distance")));
+  ctx.extruderIndex = 1;
+  QVERIFY(OptionToggleRules::printerToggles(ctx).disabled.contains(QStringLiteral("wipe_distance")));
+}
+
+// Filament Dependencies (Tab::compatible_widget_create): "All" = empty list;
+// the checklist stores the picked presets, every preset picked is "All";
+// the *_condition field follows the checkbox.
+void ViewModelSmokeTests::filamentDependenciesChecklist()
+{
+  PresetService presetService;
+  ProjectService project;
+  ConfigViewModel config(&presetService, &project);
+  auto *model = qobject_cast<ConfigOptionModel *>(config.filamentOptions());
+  QVERIFY(model);
+  const int printersRow = model->indexOfKey(QStringLiteral("compatible_printers"));
+  const int conditionRow = model->indexOfKey(QStringLiteral("compatible_printers_condition"));
+  QVERIFY(printersRow >= 0);
+  QVERIFY(conditionRow >= 0);
+  QVERIFY(model->indexOfKey(QStringLiteral("compatible_prints")) >= 0);
+  QCOMPARE(model->optType(printersRow), QStringLiteral("compatible_list"));
+  QCOMPARE(model->optPage(printersRow), QStringLiteral("Dependencies"));
+
+  const QStringList candidates = {QStringLiteral("Printer A"), QStringLiteral("Printer B"), QStringLiteral("Printer C")};
+  model->setDependencyCandidates(QStringLiteral("compatible_printers"), candidates);
+  QCOMPARE(model->dependencyCandidates(printersRow), candidates);
+
+  QVERIFY(model->dependencyAll(printersRow));
+  QVERIFY(model->data(model->index(conditionRow), ConfigOptionModel::EnabledRole).toBool());
+
+  // Unticking "All" greys the condition until a list is set.
+  model->setDependencyAll(printersRow, false);
+  QVERIFY(!model->dependencyAll(printersRow));
+  QVERIFY(!model->data(model->index(conditionRow), ConfigOptionModel::EnabledRole).toBool());
+
+  model->setDependencySelection(printersRow, {QStringLiteral("Printer B")});
+  QCOMPARE(model->dependencySelection(printersRow), QStringList{QStringLiteral("Printer B")});
+  QVERIFY(!model->dependencyAll(printersRow));
+
+  // Every preset checked stores the empty list ("All").
+  model->setDependencySelection(printersRow, candidates);
+  QVERIFY(model->dependencySelection(printersRow).isEmpty());
+  QVERIFY(model->dependencyAll(printersRow));
+  QVERIFY(model->data(model->index(conditionRow), ConfigOptionModel::EnabledRole).toBool());
+
+  // Ticking "All" clears a stored list.
+  model->setDependencySelection(printersRow, {QStringLiteral("Printer A")});
+  model->setDependencyAll(printersRow, true);
+  QVERIFY(model->dependencySelection(printersRow).isEmpty());
+}
+
+// post_process (gui_flags "serialized"): the script list is edited as one
+// text, entries joined / split on ";" (OptionsGroup::config_value,
+// GUI.cpp change_opt_value).
+void ViewModelSmokeTests::postProcessScriptsEditAsSerializedText()
+{
+  PresetService presetService;
+  ProjectService project;
+  ConfigViewModel config(&presetService, &project);
+  auto *model = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(model);
+  const int row = model->indexOfKey(QStringLiteral("post_process"));
+  QVERIFY(row >= 0);
+  QCOMPARE(model->optPage(row), QStringLiteral("Others"));
+  QCOMPARE(model->optGroup(row), QStringLiteral("Post-processing Scripts"));
+  QVERIFY(model->data(model->index(row), ConfigOptionModel::MultilineRole).toBool());
+
+  model->setValue(row, QStringLiteral("C:/a.py;C:/b.py;"));
+  QCOMPARE(model->optValue(row).toList(), (QVariantList{QStringLiteral("C:/a.py"), QStringLiteral("C:/b.py")}));
+  QCOMPARE(model->data(model->index(row), ConfigOptionModel::ValueRole).toString(), QStringLiteral("C:/a.py;C:/b.py;"));
+  model->setValue(row, QString());
+  QVERIFY(model->optValue(row).toList().isEmpty());
+  QCOMPARE(model->data(model->index(row), ConfigOptionModel::ValueRole).toString(), QString());
+}
+
+// Tab bar undo (Tab::on_roll_back_value(false)): every unsaved change of
+// the active tier goes back to the saved preset.
+void ViewModelSmokeTests::presetUndoRevertsToSavedPreset()
+{
+  PresetService presetService;
+  ProjectService project;
+  ConfigViewModel config(&presetService, &project);
+  QVERIFY(!config.revertToSavedPreset()); // nothing to undo
+  auto *model = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(model);
+  const int row = model->indexOfKey(QStringLiteral("wall_loops"));
+  QVERIFY(row >= 0);
+  const QVariant saved = model->optValue(row);
+  model->setValue(row, saved.toInt() + 3);
+  QVERIFY(config.isPresetDirty());
+  QVERIFY(config.revertToSavedPreset());
+  QVERIFY(!config.isPresetDirty());
+  QCOMPARE(model->optValue(row).toInt(), saved.toInt());
+}
+
+// applyValues is the whole state: a key it leaves out drops a stale edit
+// back to the reference value (undo / preset switch to a preset without it).
+void ViewModelSmokeTests::optionModelApplyValuesResetsMissingKeys()
+{
+  PresetService presetService;
+  ProjectService project;
+  ConfigViewModel config(&presetService, &project);
+  auto *model = qobject_cast<ConfigOptionModel *>(config.filamentOptions());
+  QVERIFY(model);
+  const int row = model->indexOfKey(QStringLiteral("compatible_printers"));
+  QVERIFY(row >= 0);
+  QHash<QString, QVariant> values = model->valuesByKey();
+  values.remove(QStringLiteral("compatible_printers"));
+  model->setValue(row, QVariantList{QStringLiteral("Printer A")});
+  QVERIFY(model->optIsDirty(row));
+  model->applyValues(values);
+  QVERIFY(model->dependencySelection(row).isEmpty());
+  QVERIFY(!model->optIsDirty(row));
+}
+
+
+
+
+
+
+
+
 
 // Upstream OptionsGroup::is_visible: a line shows when def mode <= view mode
 // (Simple 0 / Advanced 1 / Expert 2 / Develop 3); toggle_line hides it.
@@ -9973,8 +10254,8 @@ void ViewModelSmokeTests::sourceMappedProcessHierarchyMatchesTabPrint()
   // :3057, Plugin Configuration print_plugin_config_overrides :3126 -- the
   // shared "plugin_config_overrides" was removed, PrintConfig.cpp:1093-1095;
   // Overhang speed order :2862-2875, G-code output filename_format :3094,
-  // Change extrusion role G-code :3099, Notes :3128; post_process and
-  // slicing_pipeline_plugin have no Qt editor yet),
+  // Change extrusion role G-code :3099, Post-processing Scripts :3109,
+  // Notes :3128; slicing_pipeline_plugin needs a plugin runtime),
   // mirrored by ConfigOptionModel::processPageDefinitions().
   const QList<ExpectedGroup> expected = {
       {QStringLiteral("Quality"), QStringLiteral("Layer height"), keys({"layer_height", "initial_layer_print_height", "enable_mixed_color_sublayer"})},
@@ -10016,6 +10297,7 @@ void ViewModelSmokeTests::sourceMappedProcessHierarchyMatchesTabPrint()
       {QStringLiteral("Others"), QStringLiteral("Fuzzy skin"), keys({"fuzzy_skin", "fuzzy_skin_mode", "fuzzy_skin_noise_type", "fuzzy_skin_point_distance", "fuzzy_skin_thickness", "fuzzy_skin_scale", "fuzzy_skin_octaves", "fuzzy_skin_persistence", "fuzzy_skin_ripples_per_layer", "fuzzy_skin_ripple_offset", "fuzzy_skin_layers_between_ripple_offset", "fuzzy_skin_first_layer"})},
       {QStringLiteral("Others"), QStringLiteral("G-code output"), keys({"reduce_infill_retraction", "gcode_add_line_number", "gcode_comments", "gcode_label_objects", "exclude_object", "filename_format"})},
       {QStringLiteral("Others"), QStringLiteral("Change extrusion role G-code"), keys({"process_change_extrusion_role_gcode"})},
+      {QStringLiteral("Others"), QStringLiteral("Post-processing Scripts"), keys({"post_process"})},
       {QStringLiteral("Others"), QStringLiteral("Plugin Configuration"), keys({"print_plugin_config_overrides"})},
       {QStringLiteral("Others"), QStringLiteral("Notes"), keys({"notes"})},
   };

@@ -532,6 +532,9 @@ public:
   /// Restore the active tier to its resolved system/parent values without
   /// writing the selected preset (upstream Tab::on_roll_back_value(true)).
   Q_INVOKABLE bool restoreAllSystemValues();
+  /// Tab::on_roll_back_value(false) (the tab bar undo button): drop every
+  /// unsaved change of the active tier, back to the saved preset.
+  Q_INVOKABLE bool revertToSavedPreset();
   Q_INVOKABLE QString materialPresetName(int localIndex) const;
 
   Q_INVOKABLE int layerRangeCount() const;

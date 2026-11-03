@@ -619,6 +619,67 @@ Item {
                     }
                 }
 
+                // Upstream open enums (GUIType::i_enum_open / f_enum_open /
+                // select_open, Field.cpp Choice with wxCB_DROPDOWN): free text
+                // plus a list of suggested values. The model maps labels to
+                // values and parses the text (invalid text is reverted).
+                Loader {
+                    asynchronous: true
+                    active: root.oType === "enum_open" && !root.isLine
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: parent.left
+                    width: Math.min(parent.width, root.compact ? root.compactEnumWidth : 160)
+                    height: root.fieldHeight
+                    sourceComponent: Component {
+                        Item {
+                            id: openEnumField
+                            readonly property string valueText: root.optionModel
+                                ? root.optionModel.openEnumText(root.optIdx, root.oVal) : ""
+                            function commit(text) {
+                                if (!root.optionModel || !root.optionModel.setOpenEnumText(root.optIdx, text))
+                                    openEnumInput.text = openEnumField.valueText
+                            }
+
+                            CxTextField {
+                                id: openEnumInput
+                                anchors.fill: parent
+                                rightPadding: openEnumDrop.width + 4
+                                enabled: !root.oRO && root.oEnabled
+                                text: openEnumField.valueText
+                                onEditingFinished: if (text !== openEnumField.valueText) openEnumField.commit(text)
+                            }
+                            Text {
+                                id: openEnumDrop
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 20
+                                horizontalAlignment: Text.AlignHCenter
+                                text: "▾"
+                                color: openEnumInput.enabled ? Theme.textMuted : Theme.textDisabled
+                                font.pixelSize: Theme.fontSizeXS
+                                MouseArea {
+                                    anchors.fill: parent
+                                    enabled: openEnumInput.enabled
+                                    onClicked: openEnumMenu.popup(openEnumField, 0, openEnumField.height)
+                                }
+                            }
+                            CxMenu {
+                                id: openEnumMenu
+                                Instantiator {
+                                    model: root.oEnumLabels
+                                    delegate: CxMenuItem {
+                                        required property string modelData
+                                        text: modelData
+                                        onTriggered: openEnumField.commit(modelData)
+                                    }
+                                    onObjectAdded: (index, object) => openEnumMenu.insertItem(index, object)
+                                    onObjectRemoved: (index, object) => openEnumMenu.removeItem(object)
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Upstream ColourPicker (Field.cpp, GUIType::color): a
                 // button filled with the colour -- click opens the colour
                 // dialog, right click resets to undefined (transparent with
@@ -829,6 +890,56 @@ Item {
                                 pluginsDialogLoader.item.openWith(
                                     typeof root.oVal === "string" ? root.oVal : "")
                             }
+                        }
+                    }
+                }
+
+                // Upstream compatible_widget_create (filament Dependencies):
+                // "所有" checkbox + "设置 ..." opening the preset checklist.
+                Loader {
+                    asynchronous: true
+                    active: root.oType === "compatible_list" && !root.isLine
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: parent.left
+                    height: root.fieldHeight
+                    sourceComponent: Component {
+                        Row {
+                            spacing: Theme.spacingMD
+                            // oVal re-reads the state after every write.
+                            readonly property bool allChecked: root.optionModel
+                                ? (root.oVal, root.optionModel.dataVersion, root.optionModel.dependencyAll(root.optIdx)) : true
+                            CxCheckBox {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: qsTr("所有")
+                                checked: parent.allChecked
+                                enabled: !root.oRO
+                                onToggled: root.optionModel.setDependencyAll(root.optIdx, checked)
+                            }
+                            CxButton {
+                                anchors.verticalCenter: parent.verticalCenter
+                                compact: true
+                                cxStyle: CxButton.Style.Secondary
+                                text: qsTr("设置") + " ..."
+                                enabled: !root.oRO && !parent.allChecked
+                                onClicked: {
+                                    dependencyDialogLoader.active = true
+                                    dependencyDialogLoader.item.openWith(
+                                        root.optionModel.dependencyDialogTitle(root.optIdx),
+                                        root.optionModel.dependencyDialogLabel(root.optIdx),
+                                        root.optionModel.dependencyCandidates(root.optIdx),
+                                        root.optionModel.dependencySelection(root.optIdx))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Loader {
+                    id: dependencyDialogLoader
+                    active: false
+                    sourceComponent: Component {
+                        DependencyChecklistDialog {
+                            onSelectionAccepted: (names) => root.optionModel.setDependencySelection(root.optIdx, names)
                         }
                     }
                 }

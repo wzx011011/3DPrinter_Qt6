@@ -130,6 +130,9 @@ ConfigViewModel::ConfigViewModel(PresetService *presetService, ProjectService *p
   connect(printOptions_, &ConfigOptionModel::optionValueChanged, this, &ConfigViewModel::handleOptionValueChanged);
   connect(machineOptions_, &ConfigOptionModel::optionValueChanged, this, &ConfigViewModel::handleOptionValueChanged);
   connect(filamentOptions_, &ConfigOptionModel::optionValueChanged, this, &ConfigViewModel::handleOptionValueChanged);
+  // The printer Extruder N page re-runs the rules on that extruder's values.
+  connect(machineOptions_, &ConfigOptionModel::activeExtruderChanged, this,
+          [this]() { applyToggleRules(buildScopeValues()); });
   // Self-connect BEFORE loadDefault(): loadDefault() emits stateChanged on
   // both of its branches, which recomputes filamentSlotCompatibility_ so the
   // property is non-empty from construction on. The explicit call at the end
@@ -2461,6 +2464,11 @@ void ConfigViewModel::applyScopeValues()
     filamentOptions_->applyValues(filamentOptions_->valuesByKey().isEmpty() ? values : effectivePresetValuesForTier(QStringLiteral("filament")));
   }
   printOptions_->setReadonlyKeys(readonlyKeysForCurrentScope());
+  if (filamentOptions_) {
+    // Dependencies "Set ..." lists the printer / process presets.
+    filamentOptions_->setDependencyCandidates(QStringLiteral("compatible_printers"), printerPresetNames());
+    filamentOptions_->setDependencyCandidates(QStringLiteral("compatible_prints"), printPresetNames());
+  }
   applyToggleRules(values);
   applyingScopeValues_ = false;
 }
@@ -2479,6 +2487,7 @@ void ConfigViewModel::applyToggleRules(const QHash<QString, QVariant> &scopeValu
   ctx.isBblPrinter = presetService_ && presetService_->isBblVendorPreset(currentPrinterPreset_);
   ctx.isGlobalConfig = settingsScope_ == QStringLiteral("global") ||
                        (settingsScope_ != QStringLiteral("plate") && settingsTargetObjectIndex_ < 0);
+  ctx.extruderIndex = machineOptions_ ? machineOptions_->activeExtruder() : 0;
 
   // The rules read libslic3r option defs; a def-level exception must never
   // escape into the value-change path (rows simply keep their last state).
@@ -2488,7 +2497,10 @@ void ConfigViewModel::applyToggleRules(const QHash<QString, QVariant> &scopeValu
     printOptions_->setToggleState(print.hidden, print.disabled);
     const OptionToggleRules::Result printer = OptionToggleRules::printerToggles(ctx);
     if (machineOptions_)
+    {
       machineOptions_->setToggleState(printer.hidden, printer.disabled);
+      machineOptions_->setHiddenPages(printer.hiddenPages);
+    }
     const OptionToggleRules::Result filament = OptionToggleRules::filamentToggles(ctx);
     if (filamentOptions_)
     {
@@ -3536,8 +3548,10 @@ QString ConfigViewModel::globalModifiedCategory(const QString &key) const
   ConfigOptionModel *model = optionModelForTier(normalizedTier(activePresetTier_));
   if (!model)
     return {};
+  // UnsavedChangesDialog::update_list: top level is the Tab page title,
+  // then the optgroup title, both translated.
   const int idx = model->indexOfKey(key);
-  return idx < 0 ? QString() : model->optCategory(idx);
+  return idx < 0 ? QString() : model->hierarchyLabel(model->optPage(idx));
 }
 
 QString ConfigViewModel::globalModifiedGroup(const QString &key) const
@@ -3546,7 +3560,7 @@ QString ConfigViewModel::globalModifiedGroup(const QString &key) const
   if (!model)
     return {};
   const int idx = model->indexOfKey(key);
-  return idx < 0 ? QString() : model->optGroup(idx);
+  return idx < 0 ? QString() : model->hierarchyLabel(model->optGroup(idx));
 }
 
 QString ConfigViewModel::globalModifiedLabel(const QString &key) const
@@ -3555,7 +3569,7 @@ QString ConfigViewModel::globalModifiedLabel(const QString &key) const
   if (!model)
     return key;
   const int idx = model->indexOfKey(key);
-  return idx < 0 ? key : model->optLabel(idx);
+  return idx < 0 ? key : model->data(model->index(idx), ConfigOptionModel::DisplayLabelRole).toString();
 }
 
 bool ConfigViewModel::resetGlobalOption(const QString &key)
@@ -3597,6 +3611,24 @@ void ConfigViewModel::resetAllGlobalOptions()
   emit stateChanged();
   if (before != effectivePresetValuesForTier(tier))
     emit sliceAffectingConfigChanged();
+}
+
+bool ConfigViewModel::revertToSavedPreset()
+{
+  if (!presetService_ || !isPresetDirty())
+    return false;
+  const QString tier = normalizedTier(activePresetTier_);
+  if (tier == QStringLiteral("printer"))
+    printerPresetValues_ = selectedPresetValuesForTier(tier);
+  else if (tier == QStringLiteral("filament"))
+    filamentPresetValues_ = selectedPresetValuesForTier(tier);
+  else
+    printPresetValues_ = selectedPresetValuesForTier(tier);
+  updateMergedPresetValues();
+  applyScopeValues();
+  emit stateChanged();
+  emit sliceAffectingConfigChanged();
+  return true;
 }
 
 bool ConfigViewModel::restoreAllSystemValues()
