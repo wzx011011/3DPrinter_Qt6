@@ -39,6 +39,8 @@ Item {
     signal requestConfirmClearPlate()
     signal requestConfirmDeletePlate()
     signal requestActivateGizmo(int mode)
+    // "添加标准模型 > SVG" on the bed / plate menus: pick a file, new object.
+    signal requestAddSvgObject()
     signal requestObjectLayers()
     signal requestRenamePlate()
     // X6: the shared object menu's Rename item (upstream
@@ -341,17 +343,15 @@ Item {
             CxMenuItem { text: qsTr("Disc"); onTriggered: root.editorVm.addPrimitiveToContextPlate(6) }
             CxMenuItem { text: qsTr("Torus"); onTriggered: root.editorVm.addPrimitiveToContextPlate(5) }
             MenuSeparator { }
+            // INVALID-typed Text / SVG (GUI_Factories.cpp:689-697): with no
+            // object to attach to they create a new text / SVG object.
             CxMenuItem {
-                visible: !!root.editorVm
-                         && (root.editorVm.availableGizmoMask & (1 << 16)) !== 0
                 text: qsTr("Text")
-                onTriggered: root.requestActivateGizmo(16)
+                onTriggered: root.editorVm.addTextObjectToContextPlate()
             }
             CxMenuItem {
-                visible: !!root.editorVm
-                         && (root.editorVm.availableGizmoMask & (1 << 17)) !== 0
                 text: qsTr("SVG")
-                onTriggered: root.requestActivateGizmo(17)
+                onTriggered: root.requestAddSvgObject()
             }
         }
         CxMenu {
@@ -1104,17 +1104,15 @@ Item {
             CxMenuItem { text: qsTr("Disc"); onTriggered: root.editorVm.addPrimitiveToContextPlate(6) }
             CxMenuItem { text: qsTr("Torus"); onTriggered: root.editorVm.addPrimitiveToContextPlate(5) }
             MenuSeparator { }
+            // INVALID-typed Text / SVG (GUI_Factories.cpp:689-697): with no
+            // object to attach to they create a new text / SVG object.
             CxMenuItem {
-                visible: !!root.editorVm
-                         && (root.editorVm.availableGizmoMask & (1 << 16)) !== 0
                 text: qsTr("Text")
-                onTriggered: root.requestActivateGizmo(16)
+                onTriggered: root.editorVm.addTextObjectToContextPlate()
             }
             CxMenuItem {
-                visible: !!root.editorVm
-                         && (root.editorVm.availableGizmoMask & (1 << 17)) !== 0
                 text: qsTr("SVG")
-                onTriggered: root.requestActivateGizmo(17)
+                onTriggered: root.requestAddSvgObject()
             }
         }
         CxMenu {

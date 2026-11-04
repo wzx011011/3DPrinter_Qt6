@@ -4085,6 +4085,23 @@ indexed_triangle_set embossTextMesh(const Slic3r::ExPolygons &shape,
 }
 } // namespace
 #endif
+namespace
+{
+// Default emboss font when the user picked none. Upstream's default style
+// is the system GUI font (wxSYS_DEFAULT_GUI_FONT), Microsoft YaHei on
+// Chinese Windows, so CJK text renders; Arial has no CJK glyphs.
+std::string defaultEmbossFontPath()
+{
+#ifdef _WIN32
+  if (QFileInfo::exists(QStringLiteral("C:/Windows/Fonts/msyh.ttc")))
+    return "C:/Windows/Fonts/msyh.ttc";
+  return "C:/Windows/Fonts/arial.ttf";
+#else
+  return "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
+#endif
+}
+} // namespace
+
 bool ProjectService::addTextVolume(int objectIndex, const QString &text)
 {
   // Phase 145 (EMB-03): thin wrapper around performEmbossVolumeAdd so the
@@ -4189,13 +4206,7 @@ bool ProjectService::performEmbossVolumeAdd(int objectIndex, const QString &text
       // upstream Emboss::create_font_file wraps stb_truetype (no external
       // freetype dependency), so this stays self-contained.
       const std::string fontPath = m_embossFontPath.empty()
-          ? (
-#ifdef _WIN32
-              "C:/Windows/Fonts/arial.ttf"
-#else
-              "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-#endif
-          )
+          ? defaultEmbossFontPath()
           : m_embossFontPath;
       auto font_file = Slic3r::Emboss::create_font_file(fontPath.c_str());
       if (!font_file)
@@ -4218,7 +4229,7 @@ bool ProjectService::performEmbossVolumeAdd(int objectIndex, const QString &text
         font_prop.skew = 0.4;  // upstream skew is an x:y ratio; 0.4 ≈ visible italic
 
       // 3. 文字 → 2D 多边形
-      auto shapes = Slic3r::Emboss::text2shapes(font_cache, text.toLocal8Bit().constData(), font_prop);
+      auto shapes = Slic3r::Emboss::text2shapes(font_cache, text.toUtf8().constData(), font_prop);
       if (shapes.expolygons.empty())
       {
         errMsg = tr("添加文字失败：字体渲染返回空结果");
@@ -4327,13 +4338,7 @@ void ProjectService::addTextVolumeAsync(int objectIndex, const QString &text)
         try
         {
           const std::string &fp = fontPath.empty()
-              ? (
-#ifdef _WIN32
-                  "C:/Windows/Fonts/arial.ttf"
-#else
-                  "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-#endif
-              )
+              ? defaultEmbossFontPath()
               : fontPath;
           auto font_file = Slic3r::Emboss::create_font_file(fp.c_str());
           if (!font_file)
@@ -4357,7 +4362,7 @@ void ProjectService::addTextVolumeAsync(int objectIndex, const QString &text)
             }
             else
             {
-              auto shapes = Slic3r::Emboss::text2shapes(font_cache, text.toLocal8Bit().constData(), font_prop);
+              auto shapes = Slic3r::Emboss::text2shapes(font_cache, text.toUtf8().constData(), font_prop);
               if (shapes.expolygons.empty())
               {
                 errMsg = QStringLiteral("text2shapes returned empty");
@@ -4719,13 +4724,7 @@ bool ProjectService::updateTextVolume(int objectIndex, int volumeIndex,
   try
   {
     const std::string fontPath = m_embossFontPath.empty()
-        ? (
-#ifdef _WIN32
-            "C:/Windows/Fonts/arial.ttf"
-#else
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-#endif
-        )
+        ? defaultEmbossFontPath()
         : m_embossFontPath;
     auto font_file = Slic3r::Emboss::create_font_file(fontPath.c_str());
     if (!font_file)
@@ -4742,7 +4741,7 @@ bool ProjectService::updateTextVolume(int objectIndex, int volumeIndex,
       font_prop.skew = 0.4;
 
     auto shapes = Slic3r::Emboss::text2shapes(font_cache,
-                                              text.toLocal8Bit().constData(),
+                                              text.toUtf8().constData(),
                                               font_prop);
     if (shapes.expolygons.empty())
     {
@@ -10008,6 +10007,105 @@ bool ProjectService::replaceAllOnPlateWithFiles(int plateIndex, const QStringLis
 #endif
 }
 
+void ProjectService::centerInstanceOnCurrentPlate(void *object, void *instance)
+{
+#ifdef HAS_LIBSLIC3R
+  auto *obj = static_cast<Slic3r::ModelObject *>(object);
+  auto *inst = static_cast<Slic3r::ModelInstance *>(instance);
+  if (!obj || !inst)
+    return;
+  const int plateTotal = m_plateList ? std::max(1, m_plateList->plateCount()) : 1;
+  const int plateIdx = m_plateList ? std::clamp(m_plateList->currentPlateIndex(), 0, plateTotal - 1) : 0;
+  const double plateW = (m_plateList && m_plateList->plateWidth() > 0)
+                            ? double(m_plateList->plateWidth()) : double(m_bedWidthMm);
+  const double plateD = (m_plateList && m_plateList->plateDepth() > 0)
+                            ? double(m_plateList->plateDepth()) : double(m_bedDepthMm);
+  double plateOffX = 0.0, plateOffY = 0.0;
+  OWzx::PartPlateGridLayout::gridOffset(plateIdx, plateTotal, plateW, plateD,
+                                        &plateOffX, &plateOffY);
+  const Slic3r::Vec3d c = obj->instance_bounding_box(0, false).center();
+  inst->set_offset(inst->get_offset()
+      + Slic3r::Vec3d(plateOffX + plateW * 0.5 - c.x(),
+                      plateOffY + plateD * 0.5 - c.y(), 0.0));
+#else
+  Q_UNUSED(object);
+  Q_UNUSED(instance);
+#endif
+}
+
+int ProjectService::addTextObjectToPlate(const QString &text)
+{
+#ifdef HAS_LIBSLIC3R
+  if (text.trimmed().isEmpty())
+  {
+    lastError_ = tr("添加文字失败：文字内容为空");
+    return -1;
+  }
+  try
+  {
+    if (!model_)
+    {
+      model_ = new Slic3r::Model();
+      model_->add_default_instances();
+    }
+    // EmbossJob CreateObjectJob::finalize: object named after the text,
+    // one instance, the text volume, placed on the plate and on the bed.
+    auto *obj = model_->add_object();
+    const QString name = text.length() > 12 ? text.left(12) + QStringLiteral("...") : text;
+    obj->name = name.toStdString();
+    const int newIdx = int(model_->objects.size()) - 1;
+    objectNames_.push_back(name);
+    objectModuleNames_.push_back("default");
+    objectPrintableStates_.push_back(true);
+    objectVisibleStates_.push_back(true);
+    objectPositions_.push_back(QVector3D(0, 0, 0));
+    objectRotations_.push_back(QVector3D(0, 0, 0));
+    objectScales_.push_back(QVector3D(1, 1, 1));
+    modelCount_ = objectNames_.size();
+    m_mockVolumes[newIdx] = {};
+
+    QString errMsg;
+    if (!performEmbossVolumeAdd(newIdx, text, errMsg))
+    {
+      model_->delete_object(size_t(newIdx));
+      objectNames_.pop_back();
+      objectModuleNames_.pop_back();
+      objectPrintableStates_.pop_back();
+      objectVisibleStates_.pop_back();
+      objectPositions_.pop_back();
+      objectRotations_.pop_back();
+      objectScales_.pop_back();
+      modelCount_ = objectNames_.size();
+      m_mockVolumes.remove(newIdx);
+      lastError_ = errMsg;
+      return -1;
+    }
+
+    Slic3r::ModelInstance *instance = obj->add_instance();
+    obj->ensure_on_bed();
+    centerInstanceOnCurrentPlate(obj, instance);
+    if (m_plateList)
+    {
+      OWzx::PartPlate *cur = m_plateList->currentPlate();
+      if (cur)
+        cur->addInstance(newIdx, 0);
+    }
+    lastError_.clear();
+    emit projectChanged();
+    return newIdx;
+  }
+  catch (const std::exception &ex)
+  {
+    lastError_ = tr("添加文字失败：%1").arg(QString::fromUtf8(ex.what()));
+    return -1;
+  }
+#else
+  Q_UNUSED(text);
+  lastError_ = tr("添加文字需要 libslic3r 支持");
+  return -1;
+#endif
+}
+
 int ProjectService::addPrimitiveToPlate(int type)
 {
   static const char *primNames[] = {
@@ -10057,22 +10155,7 @@ int ProjectService::addPrimitiveToPlate(int type)
     // placed on the CURRENT plate's centre like every other creation path
     // (upstream adds new objects at the plate centre). It used to stay at the
     // world origin and rely on the render-side union re-centring.
-    if (primInstance)
-    {
-      const int plateTotal = m_plateList ? std::max(1, m_plateList->plateCount()) : 1;
-      const int plateIdx = m_plateList ? std::clamp(m_plateList->currentPlateIndex(), 0, plateTotal - 1) : 0;
-      const double plateW = (m_plateList && m_plateList->plateWidth() > 0)
-                                ? double(m_plateList->plateWidth()) : double(m_bedWidthMm);
-      const double plateD = (m_plateList && m_plateList->plateDepth() > 0)
-                                ? double(m_plateList->plateDepth()) : double(m_bedDepthMm);
-      double plateOffX = 0.0, plateOffY = 0.0;
-      OWzx::PartPlateGridLayout::gridOffset(plateIdx, plateTotal, plateW, plateD,
-                                            &plateOffX, &plateOffY);
-      const Slic3r::Vec3d c = obj->instance_bounding_box(0, false).center();
-      primInstance->set_offset(primInstance->get_offset()
-          + Slic3r::Vec3d(plateOffX + plateW * 0.5 - c.x(),
-                          plateOffY + plateD * 0.5 - c.y(), 0.0));
-    }
+    centerInstanceOnCurrentPlate(obj, primInstance);
     int newIdx = int(model_->objects.size()) - 1;
     objectNames_.push_back(QString::fromUtf8(primNames[type]));
     objectModuleNames_.push_back("default");

@@ -789,6 +789,13 @@ public:
   float textSize() const;
   void setTextSize(float s);
   Q_INVOKABLE bool addTextObject();
+  /// "添加标准模型 > 文字" with nothing selected (append_menu_itemm_add_,
+  /// ModelVolumeType::INVALID): a new text object ("浮雕文字", upstream
+  /// _u8L("Embossed text")) on the context plate, selected, undoable.
+  Q_INVOKABLE bool addTextObjectToContextPlate();
+  /// "添加标准模型 > SVG" with nothing selected: the chosen SVG becomes a
+  /// new object on the context plate (GLGizmoSVG::create_volume(INVALID)).
+  Q_INVOKABLE bool addSvgObjectToContextPlate(const QString &filePath);
 
   /// ── SVG gizmo properties (对齐上游 GLGizmoSVG) ──
   QString svgFilePath() const;

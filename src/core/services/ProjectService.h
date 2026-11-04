@@ -497,6 +497,9 @@ public:
   /// the body of addTextVolume; the synchronous Q_INVOKABLE now forwards to it,
   /// and addTextVolumeAsync spawns it via QtConcurrent::run.
   bool performEmbossVolumeAdd(int objectIndex, const QString &text, QString &errMsg);
+  /// Offsets a new object's first instance to the current plate's centre
+  /// (Slic3r::ModelObject* / ModelInstance*; plate-grid coordinates).
+  void centerInstanceOnCurrentPlate(void *object, void *instance);
   /// Phase 144 (EMB-01): font path + height/depth setters. Used by addTextVolume
   /// to parameterize the Emboss pipeline (was hardcoded arial.ttf / 10mm / 2mm).
   /// The viewmodel forwards the user-selected font + embossHeight/embossDepth
@@ -879,6 +882,11 @@ public:
   /// 创建原始几何体到当前平板（对齐上游 create_mesh + add_volume）
   /// type: 0=Cube, 1=Sphere, 2=Cylinder, 3=Cone, 4=TruncatedCone, 5=Torus, 6=Disc
   Q_INVOKABLE int addPrimitiveToPlate(int type);
+  /// Upstream emboss create with nothing selected (GLGizmoEmboss::
+  /// create_volume(INVALID) -> start_create_object_job): a new object named
+  /// after the text, holding one text volume, on the current plate's
+  /// centre. Returns the new object index or -1 (lastError).
+  int addTextObjectToPlate(const QString &text);
   /// 重命名对象（对齐上游 Plater::rename_object）
   Q_INVOKABLE bool renameObject(int index, const QString &newName);
   /// 移动对象位置（对齐上游 GUI_ObjectList 拖拽重排序）

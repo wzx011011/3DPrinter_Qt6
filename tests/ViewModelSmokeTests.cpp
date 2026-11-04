@@ -367,6 +367,7 @@ private slots:
   void optionToggleRulesForceDependentValues();
   void filamentSettingOverridesFollowUpstream();
   void objectListPlateLabelsOutsideAndSearch();
+  void emptyBedTextCreatesTextObject();
   void printerMotionPageFollowsFlavor();
   void unsavedChangesListUsesTranslatedNames();
   void openEnumOptionsAcceptListAndFreeText();
@@ -1761,6 +1762,30 @@ void ViewModelSmokeTests::objectListPlateLabelsOutsideAndSearch()
   QVERIFY(foundObject);
   QVERIFY(tree->searchNodes(QStringLiteral("zzz-no-match")).isEmpty());
 }
+
+// "添加标准模型 > 文字" with nothing selected (ModelVolumeType::INVALID,
+// GLGizmoEmboss::create_volume -> CreateObjectJob): a new object holding one
+// text volume ("浮雕文字") on the context plate, selected.
+void ViewModelSmokeTests::emptyBedTextCreatesTextObject()
+{
+  ProjectService project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  editor.rebuildAndNotify();
+  const int before = project.modelCount();
+
+  QVERIFY2(editor.addTextObjectToContextPlate(), qPrintable(project.lastError()));
+  QCOMPARE(project.modelCount(), before + 1);
+  const int newIdx = project.modelCount() - 1;
+  QCOMPARE(project.objectVolumeCount(newIdx), 1);
+  QCOMPARE(project.objectVolumeName(newIdx, 0), QStringLiteral("浮雕文字"));
+  QCOMPARE(project.plateIndexForObject(newIdx), 0);
+  QCOMPARE(editor.selectedSourceObjectIndex(), newIdx);
+  // The first object is untouched (the old fallback attached the text to it).
+  QCOMPARE(project.objectVolumeCount(0), 1);
+}
+
 
 // TabPrinter::build_unregular_pages: the Motion ability page exists only for
 // Marlin (legacy / 2), Klipper, RepRapFirmware and Repetier.

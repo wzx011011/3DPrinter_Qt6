@@ -3559,6 +3559,61 @@ bool EditorViewModel::addTextObject()
   return ok;
 }
 
+bool EditorViewModel::addTextObjectToContextPlate()
+{
+  if (!projectService_)
+    return false;
+  const int plate = m_contextPlateIndex >= 0 ? m_contextPlateIndex : currentPlateIndex();
+  if (plate < 0 || !projectService_->setCurrentPlateIndex(plate))
+    return false;
+  // GLGizmoEmboss::init_create: the new text starts as "Embossed text".
+  const QString text = tr("浮雕文字");
+  m_textContent = text;
+  projectService_->setEmbossFont(m_embossFontPath);
+  projectService_->setEmbossHeight(m_embossHeight);
+  projectService_->setEmbossDepth(m_embossDepth);
+  projectService_->setEmbossBoldness(m_embossBoldness);
+  projectService_->setEmbossItalic(m_embossItalic);
+  projectService_->setEmbossUseSurface(m_embossUseSurface);
+  projectService_->setEmbossCurveProjection(m_embossCurveProjection);
+  // Upstream snapshot "Add Emboss text object" (EmbossJob.cpp:352).
+  auto *cmd = m_undoManager ? new SceneSnapshotCommand(tr("添加浮雕文字对象"), projectService_) : nullptr;
+  const int newIdx = projectService_->addTextObjectToPlate(text);
+  if (newIdx < 0)
+  {
+    delete cmd;
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return false;
+  }
+  if (cmd)
+  {
+    cmd->setAfterState();
+    m_undoManager->push(cmd);
+  }
+  rebuildObjectEntriesFromService();
+  refreshMeshCacheAndFitHint();
+  invalidateSliceResultsForPlate(plate);
+  selectSourceObject(newIdx);
+  emit stateChanged();
+  return true;
+}
+
+bool EditorViewModel::addSvgObjectToContextPlate(const QString &filePath)
+{
+  if (!projectService_ || filePath.isEmpty())
+    return false;
+  if (m_contextPlateIndex < 0)
+    m_contextPlateIndex = currentPlateIndex();
+  setSvgFilePath(filePath);
+  const int before = projectService_->modelCount();
+  if (!addFilesToContextPlate(QStringList{filePath}))
+    return false;
+  if (projectService_->modelCount() > before)
+    selectSourceObject(projectService_->modelCount() - 1);
+  return true;
+}
+
 // ── SVG gizmo (对齐上游 GLGizmoSVG) ──
 
 QString EditorViewModel::svgFilePath() const { return m_svgFilePath; }

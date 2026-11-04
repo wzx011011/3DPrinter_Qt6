@@ -112,6 +112,7 @@ Item {
         // submenu (upstream preset_bundle->filament_presets lookup).
         configVm: root.configVm
         onRequestAddModels: addModelsToContextPlateDlg.open()
+        onRequestAddSvgObject: addSvgObjectDlg.open()
         onRequestReplacePart: replaceWithStlDlg.open()
         onRequestReplaceAll: replaceAllOnPlateDlg.open()
         onRequestConfirmDelete: root.confirmDeleteSelection()
@@ -1435,6 +1436,19 @@ Item {
                     paths.push(selectedFiles[i].toString())
                 root.editorVm.addFilesToContextPlate(paths)
             }
+        }
+    }
+
+    // GLGizmoSVG::create_volume -> choose_svg_file: the SVG becomes a new
+    // object on the context plate.
+    FileDialog {
+        id: addSvgObjectDlg
+        title: qsTr("选择 SVG 文件")
+        fileMode: FileDialog.OpenFile
+        nameFilters: [qsTr("SVG 文件 (*.svg)")]
+        onAccepted: {
+            if (root.editorVm)
+                root.editorVm.addSvgObjectToContextPlate(selectedFile.toString())
         }
     }
 
