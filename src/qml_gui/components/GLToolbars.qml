@@ -66,13 +66,12 @@ Item {
             root.viewport3d.gizmoMode = mode
     }
 
-    // vp-3 (TOOLICONS): one dedicated icon per tool, using the upstream
-    // gizmo assets VERBATIM from third_party/OrcaSlicer/resources/images
-    // (2026-10-27 user ruling: "直接拿orca的来用" — the hand-drawn outline
-    // family was rejected). base/ = upstream X.svg (light), dark/ = upstream
-    // X_dark.svg, accent/ = X_dark recolored monochrome brand-green (active
-    // gizmo state per the TBLC ruling). MmuSegmentation/FuzzySkin map to
-    // their dedicated upstream art (mmu_segmentation/fuzzy_skin_paint).
+    // vp-3 (TOOLICONS): one dedicated icon per tool, OrcaSlicer's own assets
+    // VERBATIM from third_party/OrcaSlicer/resources/images (2026-11-04 user
+    // ruling: the whole strip uses Orca's art). base/ = upstream X.svg
+    // (light), dark/ = upstream X_dark.svg, accent/ = X_dark drawn entirely
+    // in Orca's teal #009688 (active gizmo state). MmuSegmentation/FuzzySkin
+    // map to their dedicated upstream art (mmu_segmentation/fuzzy_skin_paint).
     function iconForTool(toolId, accentVariant) {
         const base = accentVariant
                 ? "qrc:/qml/assets/icons/accent/"
@@ -345,7 +344,7 @@ Item {
         // background is shared and NO button capsule is drawn). The former
         // solid-accent CxIconButton capsule drowned the light-gray glyph
         // and read as an empty green block; the active tool now shows the
-        // monochrome brand-green icon on the same transparent Ghost button.
+        // monochrome Orca-teal icon on the same transparent Ghost button.
         readonly property bool toolActive: root.viewport3d
                                            && root.viewport3d.gizmoMode === toolId
         cxStyle: CxIconButton.Style.Ghost
