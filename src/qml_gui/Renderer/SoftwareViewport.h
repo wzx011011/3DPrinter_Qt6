@@ -20,6 +20,11 @@ class SoftwareViewport : public QQuickPaintedItem
   Q_OBJECT
   Q_PROPERTY(int canvasType READ canvasType WRITE setCanvasType NOTIFY canvasTypeChanged)
   Q_PROPERTY(QByteArray meshData READ meshData WRITE setMeshData)
+  // FIX5M: mirror of RhiViewport.meshDataRevision -- the QML pages bind it
+  // unconditionally, so the software fallback must accept the property or
+  // the page aborts at startup on software-rendering machines. No gating
+  // semantics here; the byte compare in setMeshData stays authoritative.
+  Q_PROPERTY(int meshDataRevision READ meshDataRevision WRITE setMeshDataRevision)
   Q_PROPERTY(QByteArray previewData READ previewData WRITE setPreviewData)
   Q_PROPERTY(int layerMin READ layerMin WRITE setLayerMin)
   Q_PROPERTY(int layerMax READ layerMax WRITE setLayerMax)
@@ -177,6 +182,8 @@ public:
 
   QByteArray meshData() const { return m_meshData; }
   void setMeshData(const QByteArray &data);
+  int meshDataRevision() const { return m_meshDataRevision; }
+  void setMeshDataRevision(int revision) { m_meshDataRevision = revision; }
 
   QByteArray previewData() const { return m_previewData; }
   void setPreviewData(const QByteArray &data);
@@ -544,6 +551,7 @@ private:
   int m_cutAxis = 2;
   float m_cutPosition = 0.f;
   QByteArray m_meshData;
+  int m_meshDataRevision = -1;
   QByteArray m_previewData;
   // Phase 121 (PAINT-02/OV-06): paint overlay payload (mirror RhiViewport).
   QByteArray m_paintOverlayData;
