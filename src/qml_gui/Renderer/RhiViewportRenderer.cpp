@@ -243,6 +243,21 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   auto *viewport = qobject_cast<RhiViewport *>(item);
   if (viewport == nullptr)
     return;
+  // FIX5M: skip everything for hidden canvases. Prepare/Preview/Assemble
+  // are persistent siblings toggled by `visible` (Plater.qml ARCH-07);
+  // without this gate each of the three RhiViewports parsed the same
+  // blob and built its own ~1GB of soup + GPU buffers -- 3x memory, and
+  // the tripled 400MB staging burst crashed the AMD D3D driver.
+  // isVisible() is the LOCAL flag, so walk the parent chain for the
+  // effective visibility a StackLayout actually controls.
+  {
+    bool effectivelyVisible = true;
+    for (const QQuickItem *it = viewport; it; it = it->parentItem()) {
+      if (!it->isVisible()) { effectivelyVisible = false; break; }
+    }
+    if (!effectivelyVisible || viewport->window() == nullptr)
+      return;
+  }
 
   m_canvasType = viewport->m_canvasType;
   m_showSelectedOutline = viewport->m_showSelectedOutline;
@@ -416,7 +431,17 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
       m_modelGeneration = -1;
     }
   }
-  if (m_modelGeneration != viewport->m_modelGeneration) {
+  // FIX5M: content-hash parse gate. The QML table/activeIndices setters
+  // bump m_modelGeneration without touching meshData, and the delivered
+  // revision flaps with binding evaluation order; the FNV-1a blob hash
+  // computed at setMeshData-accept identifies identical content across
+  // both, so the same 90MB blob parses (and expands) exactly once.
+  if (m_parsedMeshHash == viewport->m_meshDataHash
+      && m_parsedPlateContext == viewport->m_currentPlateIndex) {
+    m_modelGeneration = viewport->m_modelGeneration;
+  } else if (m_modelGeneration != viewport->m_modelGeneration) {
+    m_parsedMeshHash = viewport->m_meshDataHash;
+    m_parsedPlateContext = viewport->m_currentPlateIndex;
     m_modelGeneration = viewport->m_modelGeneration;
     m_prepareScene.setPlateContext(viewport->m_currentPlateIndex,
                                    viewport->m_plateCount,
@@ -453,7 +478,8 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
                                     batchExtruderIds,
                                     batchPrintableFlags,
                                     extruderColors,
-                                    batchWorldTransforms);
+                                    batchWorldTransforms,
+                                    /*expandIndexedToSoup=*/true);
   }
   // S3: transform-only revisions (no mesh-generation bump) flow through the
   // scene's per-batch diff recompose; the S2 registry arms DirtyMesh|DirtyGpu
@@ -1382,10 +1408,18 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // Bed3D::Axes::render runs inside the bed render with depth test).
     renderAxes(cb);
     if (m_modelVertexBuffer && m_modelVertexCount > 0) {
-      // v5.15 (MODELLIT): lit draw path (two-light gouraud) with the parallel
-      // per-face normal buffer. Falls back to the flat vertex-color pipeline
-      // when the lit pipeline or normal buffer is unavailable.
-      if (m_modelLitEnabled && ensureModelLitPipeline() && m_modelNormalBuffer) {
+      // FIX5M (P3 derivative lighting): normals come from screen-space
+      // derivatives in model_p3.frag, so the model pass needs no normal
+      // buffer at all (-171MB GPU on a 5M-face scene, and the per-upload
+      // normal recompute is gone). Falls back to model_lit (parallel
+      // normal buffer) and then the flat fill pipeline.
+      if (m_modelLitEnabled && ensureModelP3Pipeline()) {
+        setPipeline(cb, m_modelP3Pipeline);
+        const QRhiCommandBuffer::VertexInput modelBinding(
+            m_modelVertexBuffer.get(), 0);
+        cb->setVertexInput(0, 1, &modelBinding);
+      } else if (m_modelLitEnabled && ensureModelLitPipeline()
+                 && m_modelNormalBuffer) {
         setPipeline(cb, m_modelLitPipeline.get());
         const QRhiCommandBuffer::VertexInput modelBindings[2] = {
             QRhiCommandBuffer::VertexInput(m_modelVertexBuffer.get(), 0),
@@ -3306,6 +3340,99 @@ void RhiViewportRenderer::renderBedTypeParts(QRhiCommandBuffer *cb)
   setSrb(cb, m_srb.get());
 }
 
+// FIX5M (P3 derivative lighting): single-binding model pipeline. The
+// fragment stage derives the flat per-face normal from screen-space
+// derivatives, so no parallel normal buffer exists on this path. The
+// blended twin serves the depth-sorted translucent pass.
+bool RhiViewportRenderer::ensureModelP3Pipeline()
+{
+  if (m_modelP3Pipeline)
+    return true;
+  if (m_pipelineFailed || rhi() == nullptr || renderTarget() == nullptr || m_srb == nullptr)
+    return false;
+
+  const QShader vertexShader = loadShader(
+      QStringLiteral(":/rhi_viewport/shaders/model_p3.vert.qsb"));
+  const QShader fragmentShader = loadShader(
+      QStringLiteral(":/rhi_viewport/shaders/model_p3.frag.qsb"));
+  if (!vertexShader.isValid() || !fragmentShader.isValid())
+    return false;
+
+  QRhiVertexInputLayout inputLayout;
+  inputLayout.setBindings({
+      QRhiVertexInputBinding(sizeof(Vertex)),          // pos3 + color4
+  });
+  inputLayout.setAttributes({
+      QRhiVertexInputAttribute(0, 0, QRhiVertexInputAttribute::Float3, offsetof(Vertex, x)),
+      QRhiVertexInputAttribute(0, 1, QRhiVertexInputAttribute::Float4, offsetof(Vertex, r)),
+  });
+
+  m_renderPassDescriptor = renderTarget()->renderPassDescriptor();
+  m_modelP3Pipeline = rhi()->newGraphicsPipeline();
+  m_modelP3Pipeline->setTopology(QRhiGraphicsPipeline::Triangles);
+  m_modelP3Pipeline->setShaderStages({
+      QRhiShaderStage(QRhiShaderStage::Vertex, vertexShader),
+      QRhiShaderStage(QRhiShaderStage::Fragment, fragmentShader),
+  });
+  m_modelP3Pipeline->setShaderResourceBindings(m_srb.get());
+  m_modelP3Pipeline->setVertexInputLayout(inputLayout);
+  m_modelP3Pipeline->setRenderPassDescriptor(m_renderPassDescriptor);
+  m_modelP3Pipeline->setDepthTest(true);
+  m_modelP3Pipeline->setDepthWrite(true);
+  m_modelP3Pipeline->setTargetBlends({});
+  if (!m_modelP3Pipeline->create()) {
+    delete m_modelP3Pipeline;
+    m_modelP3Pipeline = nullptr;
+    return false;
+  }
+  return true;
+}
+
+bool RhiViewportRenderer::ensureModelP3BlendPipeline()
+{
+  if (m_modelP3BlendPipeline)
+    return true;
+  if (!ensureModelP3Pipeline())
+    return false;
+
+  const QShader vertexShader = loadShader(
+      QStringLiteral(":/rhi_viewport/shaders/model_p3.vert.qsb"));
+  const QShader fragmentShader = loadShader(
+      QStringLiteral(":/rhi_viewport/shaders/model_p3.frag.qsb"));
+  if (!vertexShader.isValid() || !fragmentShader.isValid())
+    return false;
+
+  QRhiVertexInputLayout inputLayout;
+  inputLayout.setBindings({
+      QRhiVertexInputBinding(sizeof(Vertex)),
+  });
+  inputLayout.setAttributes({
+      QRhiVertexInputAttribute(0, 0, QRhiVertexInputAttribute::Float3, offsetof(Vertex, x)),
+      QRhiVertexInputAttribute(0, 1, QRhiVertexInputAttribute::Float4, offsetof(Vertex, r)),
+  });
+
+  m_renderPassDescriptor = renderTarget()->renderPassDescriptor();
+  m_modelP3BlendPipeline = rhi()->newGraphicsPipeline();
+  m_modelP3BlendPipeline->setTopology(QRhiGraphicsPipeline::Triangles);
+  m_modelP3BlendPipeline->setShaderStages({
+      QRhiShaderStage(QRhiShaderStage::Vertex, vertexShader),
+      QRhiShaderStage(QRhiShaderStage::Fragment, fragmentShader),
+  });
+  m_modelP3BlendPipeline->setShaderResourceBindings(m_srb.get());
+  m_modelP3BlendPipeline->setVertexInputLayout(inputLayout);
+  m_modelP3BlendPipeline->setRenderPassDescriptor(m_renderPassDescriptor);
+  m_modelP3BlendPipeline->setDepthTest(true);
+  m_modelP3BlendPipeline->setDepthWrite(false);
+  QRhiGraphicsPipeline::TargetBlend blend; // alpha blend, same as lit blend
+  m_modelP3BlendPipeline->setTargetBlends({blend});
+  if (!m_modelP3BlendPipeline->create()) {
+    delete m_modelP3BlendPipeline;
+    m_modelP3BlendPipeline = nullptr;
+    return false;
+  }
+  return true;
+}
+
 bool RhiViewportRenderer::ensureModelLitPipeline()
 {
   if (m_modelLitPipeline)
@@ -3433,6 +3560,20 @@ void RhiViewportRenderer::renderModelTranslucentPass(QRhiCommandBuffer *cb)
                const QPair<float, const TranslucentBatchRange *> &b) {
               return a.first < b.first; // far (small z) first
             });
+  // FIX5M (P3): derivative-lit blended path needs no normal buffer. The
+  // normal-buffer variants (blend/fill) remain as fallbacks.
+  if (ensureModelP3BlendPipeline()) {
+    setPipeline(cb, m_modelP3BlendPipeline);
+    const QRhiCommandBuffer::VertexInput p3Binding(
+        m_modelTranslucentBuffer.get(), 0);
+    cb->setVertexInput(0, 1, &p3Binding);
+    setSrb(cb, m_srb.get());
+    for (const auto &entry : drawOrder) {
+      if (entry.second->vertexCount > 0)
+        cb->draw(entry.second->vertexCount, 1, entry.second->firstVertex, 0);
+    }
+    return;
+  }
   setPipeline(cb, m_modelLitBlendPipeline.get());
   const QRhiCommandBuffer::VertexInput bindings[2] = {
       QRhiCommandBuffer::VertexInput(m_modelTranslucentBuffer.get(), 0),
@@ -3700,11 +3841,17 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
   if (updates == nullptr || rhi() == nullptr)
     return false;
 
-  const bool uploadModel = !m_modelVertexBufferUploaded
-      || (dirtyFlags & (PrepareSceneData::DirtyMesh
-                        | PrepareSceneData::DirtyPlate
-                        | PrepareSceneData::DirtyVisibility
-                        | PrepareSceneData::DirtyGpu)) != 0;
+  // FIX5M: content-revision gate. The dirty word carries bits re-armed by
+  // every channel during binding storms and bits that never settle in
+  // the routing; either made this ~1.4GB rebuild run per frame. The
+  // model buffer content only changes when the parsed blob hash / plate
+  // context changes (topology) or when setInstanceTransforms recomposed
+  // vertex data in place (drag; generation bump).
+  const qint64 recomposeGeneration = m_prepareScene.instanceTransformGeneration();
+  const bool contentChanged = m_uploadedMeshHash != m_parsedMeshHash
+      || m_uploadedPlateContext != m_parsedPlateContext
+      || m_uploadedRecomposeGeneration != recomposeGeneration;
+  const bool uploadModel = !m_modelVertexBufferUploaded || contentChanged;
   if (!uploadModel)
     return true;
 
@@ -3719,6 +3866,29 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
   const QVector<Vertex> allVertices = buildModelVertices(sceneVertices);
   QVector<Vertex> modelVertices;
   QVector<Vertex> translucentVertices;
+  // FIX5M: exact preallocation. Appending 15M corners through QVector
+  // growth-by-doubling reallocated ~700MB of copies per upload; with
+  // upload reruns that was the multi-GB heap retention behind the
+  // 5M-sphere memory blowup.
+  qsizetype reservableCorners = 0;
+  for (const PrepareSceneData::ModelBatch &batch : sceneBatches) {
+    if (batch.firstVertex < 0
+        || qsizetype(batch.firstVertex) + batch.vertexCount > allVertices.size())
+      continue;
+    reservableCorners += batch.vertexCount;
+  }
+  modelVertices.reserve(reservableCorners);
+  translucentVertices.reserve(reservableCorners);
+  // G-04: picking variant vertex buffer -- same soup positions, but
+  // every vertex's color is overwritten with its batch's flat palette
+  // color (keyed by sourceObjectIndex, deterministic hash like upstream
+  // id encoding). FIX5M: built ON DEMAND -- only while a picking
+  // thumbnail is scheduled -- because it is a full 400MB duplicate of
+  // the model on a 5M-face scene.
+  const bool pickBufferNeeded = m_pickBufferRequested || m_pickVertexCount > 0;
+  QVector<Vertex> pickVertices;
+  if (pickBufferNeeded)
+    pickVertices.reserve(reservableCorners);
   m_modelTranslucentBatches.clear();
   m_modelTranslucentVertexCount = 0;
   for (const PrepareSceneData::ModelBatch &batch : sceneBatches) {
@@ -3726,6 +3896,17 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
         || qsizetype(batch.firstVertex) + batch.vertexCount > allVertices.size())
       continue;
     if (!batch.translucent) {
+      if (pickBufferNeeded) {
+        const quint32 h = quint32(batch.sourceObjectIndex) * 2654435761u;
+        const float pr = float((h >> 16) & 0xFF) / 255.0f;
+        const float pg = float((h >> 8) & 0xFF) / 255.0f;
+        const float pb = float(h & 0xFF) / 255.0f;
+        for (int i = 0; i < batch.vertexCount; ++i) {
+          Vertex pv = allVertices.at(batch.firstVertex + i);
+          pv.r = pr; pv.g = pg; pv.b = pb; pv.a = 1.0f;
+          pickVertices.append(pv);
+        }
+      }
       for (int i = 0; i < batch.vertexCount; ++i)
         modelVertices.append(allVertices.at(batch.firstVertex + i));
       continue;
@@ -3742,10 +3923,28 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
     m_modelTranslucentBatches.append(range);
   }
   m_modelTranslucentVertexCount = quint32(translucentVertices.size());
+  // FIX5M: when no translucent batch exists the split is a byte-identical
+  // copy of allVertices -- share it instead of duplicating 400MB per
+  // upload (the copy was pure transient churn).
+  if (translucentVertices.isEmpty())
+    modelVertices = allVertices;
 
   const quint32 modelBytes = quint32(modelVertices.size() * int(sizeof(Vertex)));
-  if (!ensureBuffer(m_modelVertexBuffer, modelBytes, m_modelVertexBufferBytes, QRhiBuffer::VertexBuffer))
-    return false;
+  if (!ensureBuffer(m_modelVertexBuffer, modelBytes, m_modelVertexBufferBytes, QRhiBuffer::VertexBuffer)) {
+    // FIX5M: back off instead of retrying per frame. A failed 400MB
+    // creation under VRAM pressure used to return false without
+    // recording the content revisions, so every following frame rebuilt
+    // the whole ~1GB staging (the retry spiral that fragmented the heap
+    // to multiple GB and crashed the AMD driver). Record the revisions
+    // and retry once on the next genuine content event instead.
+    qWarning("[FIX5M] model VB create failed (%u MB) -- backing off",
+             modelBytes / 1048576u);
+    m_uploadedMeshHash = m_parsedMeshHash;
+    m_uploadedPlateContext = m_parsedPlateContext;
+    m_uploadedRecomposeGeneration = recomposeGeneration;
+    m_modelVertexBufferUploaded = true;
+    return true;
+  }
 
   m_modelVertexCount = quint32(modelVertices.size());
   if (m_modelVertexBuffer && modelBytes > 0) {
@@ -3755,36 +3954,21 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
                                 modelVertices.constData());
   }
 
-  // G-04: picking variant vertex buffer -- same soup positions, but every
-  // vertex's color is overwritten with its batch's flat palette color
-  // (keyed by sourceObjectIndex, deterministic hash like upstream id
-  // encoding). Built alongside the main buffer so a picking capture needs
-  // no GPU-side state changes.
-  QVector<Vertex> pickVertices;
-  pickVertices.reserve(modelVertices.size());
-  for (const PrepareSceneData::ModelBatch &batch : sceneBatches) {
-    if (batch.translucent
-        || batch.firstVertex < 0
-        || qsizetype(batch.firstVertex) + batch.vertexCount > allVertices.size())
-      continue;
-    const quint32 h = quint32(batch.sourceObjectIndex) * 2654435761u;
-    const float pr = float((h >> 16) & 0xFF) / 255.0f;
-    const float pg = float((h >> 8) & 0xFF) / 255.0f;
-    const float pb = float(h & 0xFF) / 255.0f;
-    for (int i = 0; i < batch.vertexCount; ++i) {
-      Vertex v = allVertices.at(batch.firstVertex + i);
-      v.r = pr; v.g = pg; v.b = pb; v.a = 1.0f;
-      pickVertices.append(v);
-    }
-  }
   m_pickVertexCount = quint32(pickVertices.size());
   const quint32 pickBytes = quint32(pickVertices.size() * int(sizeof(Vertex)));
-  if (!ensureBuffer(m_pickVertexBuffer, pickBytes, m_pickVertexBufferBytes,
-                    QRhiBuffer::VertexBuffer))
-    return false;
-  if (m_pickVertexBuffer && pickBytes > 0)
-    updates->uploadStaticBuffer(m_pickVertexBuffer.get(), 0, pickBytes,
-                                pickVertices.constData());
+  if (pickBytes > 0) {
+    if (ensureBuffer(m_pickVertexBuffer, pickBytes, m_pickVertexBufferBytes,
+                     QRhiBuffer::VertexBuffer)
+        && m_pickVertexBuffer) {
+      updates->uploadStaticBuffer(m_pickVertexBuffer.get(), 0, pickBytes,
+                                  pickVertices.constData());
+      m_pickBufferRequested = false;
+    }
+    // FIX5M: on ensure failure keep the request pending but DO NOT fail
+    // the whole model upload -- the retry death spiral (400MB create
+    // attempt per frame) is what crashed the AMD driver under VRAM
+    // pressure.
+  }
 
   const quint32 translucentBytes = quint32(translucentVertices.size() * int(sizeof(Vertex)));
   if (!ensureBuffer(m_modelTranslucentBuffer, translucentBytes,
@@ -3831,8 +4015,14 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
   // v5.15 (MODELLIT): parallel per-face normal array for the lit pipeline.
   // Computed here so the normal buffer always matches the position buffer
   // even when the mesh stream rebuilds.
+  // FIX5M: skipped entirely while the P3 derivative pipeline is active --
+  // it derives normals per fragment and never binds this buffer (171MB
+  // CPU+GPU saved per upload on a 5M-face scene). Built only for the
+  // model_lit fallback path.
   {
-    const QVector<float> normals = buildNormals(modelVertices);
+    const bool normalsNeeded = !ensureModelP3Pipeline();
+    const QVector<float> normals = normalsNeeded ? buildNormals(modelVertices)
+                                                : QVector<float>();
     const quint32 normalBytes = quint32(normals.size() * int(sizeof(float)));
     if (ensureBuffer(m_modelNormalBuffer, normalBytes, m_modelNormalBufferBytes, QRhiBuffer::VertexBuffer)
         && m_modelNormalBuffer && normalBytes > 0) {
@@ -3852,6 +4042,9 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
     }
   }
 
+  m_uploadedMeshHash = m_parsedMeshHash;
+  m_uploadedPlateContext = m_parsedPlateContext;
+  m_uploadedRecomposeGeneration = recomposeGeneration;
   m_modelVertexBufferUploaded = true;
   return true;
 }

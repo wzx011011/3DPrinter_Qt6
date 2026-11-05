@@ -174,7 +174,7 @@ PickingRaycaster *PrepareSceneData::pickingRaycaster()
 {
   if (!m_pickingRaycaster) {
     m_pickingRaycaster = std::make_shared<PickingRaycaster>();
-    m_pickingRaycaster->build(m_modelVertices, m_modelBatches);
+    m_pickingRaycaster->build(m_modelVertices, m_modelIndices, m_modelBatches);
   }
   return m_pickingRaycaster.get();
 }
@@ -374,11 +374,13 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
                                         const QList<int> &batchExtruderIds,
                                         const QList<int> &batchPrintableFlags,
                                         const QList<QVector4D> &extruderColors,
-                                        const QList<QMatrix4x4> &batchWorldTransforms)
+                                        const QList<QMatrix4x4> &batchWorldTransforms,
+                                        bool expandIndexedToSoup)
 {
   // Blob v2 magic ('MDS2'): decomposed volume-local geometry. A v1 blob's
   // first int32 is the batch count (>= 0), so a leading 0x3244534D can only
   // be the S3 magic (that count would exceed kMaxPackedObjects anyway).
+  constexpr qint32 kMeshBlobMagicV3 = 0x3353444D; // 'MDS3' — FIX-5M indexed
   constexpr qint32 kMeshBlobMagicV2 = 0x3244534D;
 
   clearModelGeometry();
@@ -388,34 +390,56 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
   qint32 leading = 0;
   bool valid = readValue(meshData, offset, leading)
       && leading >= 0;
-  const bool decomposed = (leading == kMeshBlobMagicV2);
+  bool indexedV3 = (leading == kMeshBlobMagicV3);
+  bool decomposed = (leading == kMeshBlobMagicV2);
   objectCount = leading;
-  if (decomposed)
+  if (indexedV3) {
+    // FIX-5M: indexed payload. batchCount follows the magic; the whole
+    // channel-validation + parse contract lives in parseIndexedMeshV3 (same
+    // fail-loud semantics: a malformed stream returns false and the caller
+    // has already cleared the scene). The tail below treats v3 exactly like
+    // v2 (transform-channel semantics).
     valid = readValue(meshData, offset, objectCount)
         && objectCount >= 0;
+    if (valid)
+      valid = parseIndexedMeshV3(meshData, offset, objectCount,
+                                 batchSourceObjectIndices,
+                                 batchVolumeIndices,
+                                 batchInstanceIndices,
+                                 activeSourceObjectIndices,
+                                 batchVolumeTypes,
+                                 batchExtruderIds,
+                                 batchPrintableFlags,
+                                 extruderColors,
+                                 batchWorldTransforms);
+    decomposed = true;
+  } else {
+    if (decomposed)
+      valid = readValue(meshData, offset, objectCount)
+          && objectCount >= 0;
+    // P15.1 (COLOR): the render-channel arrays are optional (the picking scene
+    // passes none); when present they must cover every batch.
+    valid = valid
+        && objectCount <= kMaxPackedObjects
+        && batchSourceObjectIndices.size() == objectCount
+        && batchVolumeIndices.size() == objectCount
+        && batchInstanceIndices.size() == objectCount
+        // Review P2-5: each optional channel must be empty or cover every
+        // batch -- a partially supplied array would send .at(objectIndex) out
+        // of bounds below (QList::at is unchecked in release).
+        && (batchVolumeTypes.isEmpty()
+            || batchVolumeTypes.size() == objectCount)
+        && (batchExtruderIds.isEmpty()
+            || batchExtruderIds.size() == objectCount)
+        && (batchPrintableFlags.isEmpty()
+            || batchPrintableFlags.size() == objectCount)
+        // S3: a decomposed blob without a covering transform list would parse
+        // into an identity-composed scene at the wrong place -- fail loud
+        // instead (clearModelGeometry above already dropped the old scene).
+        && (!decomposed || batchWorldTransforms.size() == objectCount);
+  }
 
-  // P15.1 (COLOR): the render-channel arrays are optional (the picking scene
-  // passes none); when present they must cover every batch.
-  valid = valid
-      && objectCount <= kMaxPackedObjects
-      && batchSourceObjectIndices.size() == objectCount
-      && batchVolumeIndices.size() == objectCount
-      && batchInstanceIndices.size() == objectCount
-      // Review P2-5: each optional channel must be empty or cover every
-      // batch -- a partially supplied array would send .at(objectIndex) out
-      // of bounds below (QList::at is unchecked in release).
-      && (batchVolumeTypes.isEmpty()
-          || batchVolumeTypes.size() == objectCount)
-      && (batchExtruderIds.isEmpty()
-          || batchExtruderIds.size() == objectCount)
-      && (batchPrintableFlags.isEmpty()
-          || batchPrintableFlags.size() == objectCount)
-      // S3: a decomposed blob without a covering transform list would parse
-      // into an identity-composed scene at the wrong place -- fail loud
-      // instead (clearModelGeometry above already dropped the old scene).
-      && (!decomposed || batchWorldTransforms.size() == objectCount);
-
-  if (valid) {
+  if (valid && !indexedV3) {
     // PERF (scene_expand): exact-capacity pre-pass. Walk only the per-batch
     // headers to total the vertices the loop below can actually append
     // (well-indexed batches of active source objects), so multi-million-vertex
@@ -447,7 +471,7 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
       m_modelVertices.reserve(reservableVertices);
   }
 
-  for (qint32 objectIndex = 0; valid && objectIndex < objectCount; ++objectIndex) {
+  for (qint32 objectIndex = 0; valid && !indexedV3 && objectIndex < objectCount; ++objectIndex) {
     qint32 renderObjectId = 0;
     qint32 triangleCount = 0;
     valid = readValue(meshData, offset, renderObjectId)
@@ -648,6 +672,12 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
     m_meshDecomposedFormat = decomposed;
     m_batchWorldTransforms = decomposed ? batchWorldTransforms
                                         : QList<QMatrix4x4>();
+    // FIX-5M GPU transport bridge: the render-side scene opts into the
+    // corner-soup expansion so every soup consumer downstream stays
+    // unchanged; the derived world-space state below then runs on soup as
+    // it always has. The picking scene skips this and stays indexed.
+    if (expandIndexedToSoup && !m_modelIndices.isEmpty())
+      expandIndexedToSoupImpl();
     // P15.5 (SINK): contour bands for sinking batches (bbox dips under the
     // bed plane without being fully below it — upstream is_sinking,
     // 3DScene.cpp:614-620 with SINKING_Z_THRESHOLD = -0.001,
@@ -674,6 +704,292 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
   // the active plate. QRhi keeps transport-specific buffers separate from
   // this source-object-aware scene contract.
   markDirty(DirtyMesh | DirtyGpu);
+}
+
+const QList<quint32> &PrepareSceneData::modelIndices() const
+{
+  return m_modelIndices;
+}
+
+// FIX-5M: indexed blob v3 parse. Per batch
+//   [int32 renderObjectId][int32 vertexCount][int32 indexCount]
+//   [float xyz * vertexCount][uint32 * indexCount]
+// Vertices compose through the batch world transform once per SOURCE vertex
+// (not per soup corner) and indices rebase to the batch's global vertex base.
+// A mirrored (det<0) batch world flips triangle winding at compose time by
+// swapping each emitted triple — the same compose-time contract the v2 soup
+// walk implements with its permuted vertex order.
+bool PrepareSceneData::parseIndexedMeshV3(const QByteArray &meshData,
+                                          qsizetype offset,
+                                          qint32 batchCount,
+                                          const QList<int> &batchSourceObjectIndices,
+                                          const QList<int> &batchVolumeIndices,
+                                          const QList<int> &batchInstanceIndices,
+                                          const QList<int> &activeSourceObjectIndices,
+                                          const QList<int> &batchVolumeTypes,
+                                          const QList<int> &batchExtruderIds,
+                                          const QList<int> &batchPrintableFlags,
+                                          const QList<QVector4D> &extruderColors,
+                                          const QList<QMatrix4x4> &batchWorldTransforms)
+{
+  // Channel contract mirrors the v2 path: required channels exact, optional
+  // (P15.1 COLOR) channels empty or exact (Review P2-5 — QList::at is
+  // unchecked in release, a short channel would read out of bounds).
+  if (batchCount < 0 || batchCount > kMaxPackedObjects
+      || batchSourceObjectIndices.size() != batchCount
+      || batchVolumeIndices.size() != batchCount
+      || batchInstanceIndices.size() != batchCount
+      || batchWorldTransforms.size() != batchCount
+      || (!batchVolumeTypes.isEmpty() && batchVolumeTypes.size() != batchCount)
+      || (!batchExtruderIds.isEmpty() && batchExtruderIds.size() != batchCount)
+      || (!batchPrintableFlags.isEmpty() && batchPrintableFlags.size() != batchCount))
+    return false;
+
+  // Exact-capacity pre-pass over the batch headers so the vertex/index lists
+  // grow once (same PERF scene_expand posture as the v2 walk).
+  qsizetype headerCursor = offset;
+  qsizetype reservableVertices = 0;
+  qsizetype reservableIndices = 0;
+  bool headersReadable = true;
+  for (qint32 headerIndex = 0; headerIndex < batchCount; ++headerIndex) {
+    qint32 headerObjectId = 0;
+    qint32 headerVertices = 0;
+    qint32 headerIndices = 0;
+    if (!readValue(meshData, headerCursor, headerObjectId)
+        || !readValue(meshData, headerCursor, headerVertices)
+        || !readValue(meshData, headerCursor, headerIndices)
+        || headerVertices < 0
+        || headerVertices > kMaxPackedTrianglesPerBatch
+        || headerIndices < 0
+        || headerIndices > kMaxPackedTrianglesPerBatch * 3
+        || (headerIndices % 3) != 0) {
+      headersReadable = false;
+      break;
+    }
+    const int headerSource = batchSourceObjectIndices.at(headerIndex);
+    if (headerSource < 0 || batchVolumeIndices.at(headerIndex) < 0
+        || batchInstanceIndices.at(headerIndex) < 0
+        || !activeSourceContains(activeSourceObjectIndices, headerSource))
+      continue;
+    reservableVertices += qsizetype(headerVertices);
+    reservableIndices += qsizetype(headerIndices);
+  }
+  if (headersReadable) {
+    m_modelVertices.reserve(reservableVertices);
+    m_modelIndices.reserve(reservableIndices);
+  }
+
+  const char *const meshDataBase = meshData.constData();
+  for (qint32 objectIndex = 0; objectIndex < batchCount; ++objectIndex) {
+    qint32 renderObjectId = 0;
+    qint32 vertexCount = 0;
+    qint32 indexCount = 0;
+    if (!readValue(meshData, offset, renderObjectId)
+        || !readValue(meshData, offset, vertexCount)
+        || !readValue(meshData, offset, indexCount)
+        || vertexCount < 0
+        || vertexCount > kMaxPackedTrianglesPerBatch
+        || indexCount < 0
+        || indexCount > kMaxPackedTrianglesPerBatch * 3
+        || (indexCount % 3) != 0)
+      return false;
+
+    const qsizetype vertexBytes = qsizetype(vertexCount) * kPackedVertexBytes;
+    const qsizetype indexBytes = qsizetype(indexCount) * qsizetype(sizeof(quint32));
+    if (meshData.size() - offset < vertexBytes + indexBytes)
+      return false;
+
+    const int sourceObjectIndex = batchSourceObjectIndices.at(objectIndex);
+    const int volumeIndex = batchVolumeIndices.at(objectIndex);
+    const int instanceIndex = batchInstanceIndices.at(objectIndex);
+    if (sourceObjectIndex < 0 || volumeIndex < 0 || instanceIndex < 0)
+      return false;
+    const bool active = activeSourceContains(activeSourceObjectIndices, sourceObjectIndex);
+
+    // P15.1 (COLOR): identical per-batch color resolution to the v2 walk.
+    float r = 0.8f;
+    float g = 0.8f;
+    float b = 0.8f;
+    float a = 1.0f;
+    if (!batchVolumeTypes.isEmpty()) {
+      const int volumeType = batchVolumeTypes.at(objectIndex);
+      const int extruderId = batchExtruderIds.size() == batchCount
+                                 ? batchExtruderIds.at(objectIndex) : 0;
+      const bool printable = batchPrintableFlags.size() == batchCount
+                                 ? batchPrintableFlags.at(objectIndex) != 0 : true;
+      switch (volumeType) {
+      case 1: r = 0.3f; g = 0.3f; b = 0.3f; a = 0.4f; break; // MODEL_NEGTIVE_COL
+      case 2: r = 1.0f; g = 1.0f; b = 0.0f; a = 0.6f; break; // MODEL_MIDIFIER_COL
+      case 3: r = 1.0f; g = 0.3f; b = 0.3f; a = 0.4f; break; // SUPPORT_BLOCKER_COL
+      case 4: r = 0.3f; g = 0.3f; b = 1.0f; a = 0.4f; break; // SUPPORT_ENFORCER_COL
+      default: {
+        if (!extruderColors.isEmpty()) {
+          int colorIndex = extruderId - 1;
+          if (colorIndex < 0 || colorIndex >= extruderColors.size())
+            colorIndex = 0;
+          const QVector4D color = extruderColors.at(colorIndex);
+          r = color.x();
+          g = color.y();
+          b = color.z();
+          a = color.w() > 0.0f ? color.w() : 1.0f;
+        }
+        if (!printable) { // UNPRINTABLE_COLOR (3DScene.cpp:170)
+          r = 0.0f; g = 0.0f; b = 0.0f; a = 0.5f;
+        }
+        break;
+      }
+      }
+      // adjust_color_for_rendering (3DScene.cpp:93-103).
+      if (a < 0.1f) {
+        r = 1.0f; g = 1.0f; b = 1.0f; a = 0.3f;
+      } else if (r < 0.2f && g < 0.2f && b < 0.2f) {
+        r = 0.2f; g = 0.2f; b = 0.2f;
+      }
+    }
+
+    ModelBatch batch;
+    batch.renderObjectId = renderObjectId;
+    batch.sourceObjectIndex = sourceObjectIndex;
+    batch.volumeIndex = volumeIndex;
+    batch.instanceIndex = instanceIndex;
+    batch.translucent = a < 0.999f;
+    batch.volumeType = batchVolumeTypes.isEmpty() ? 0
+                                                  : batchVolumeTypes.at(objectIndex);
+    batch.extruderId =
+        batchExtruderIds.size() == batchCount ? batchExtruderIds.at(objectIndex) : 0;
+
+    // Compose mode dispatch — same three modes as the v2 walk, but per SOURCE
+    // vertex instead of per soup corner (a 6x walk reduction on a sphere).
+    const QMatrix4x4 batchWorld = batchWorldTransforms.at(objectIndex);
+    const bool swapWinding = batchWorld.determinant() < 0.0f;
+    const bool translateOnly = isTranslateOnlyMatrix(batchWorld);
+    const float tx = batchWorld.constData()[12];
+    const float ty = batchWorld.constData()[13];
+    const float tz = batchWorld.constData()[14];
+
+    batch.firstVertex = m_modelVertices.size();
+    const char *vertexCursor = meshDataBase + offset;
+    bool boundsStarted = false;
+    for (qint32 vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex) {
+      float x = 0.0f;
+      float y = 0.0f;
+      float z = 0.0f;
+      std::memcpy(&x, vertexCursor, sizeof(float));
+      std::memcpy(&y, vertexCursor + sizeof(float), sizeof(float));
+      std::memcpy(&z, vertexCursor + 2 * sizeof(float), sizeof(float));
+      vertexCursor += kPackedVertexBytes;
+      if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))
+        return false;
+
+      if (!active)
+        continue;
+
+      if (translateOnly) {
+        x += tx;
+        y += ty;
+        z += tz;
+      } else {
+        const QVector3D worldPoint = batchWorld.map(QVector3D(x, y, z));
+        x = worldPoint.x();
+        y = worldPoint.y();
+        z = worldPoint.z();
+      }
+
+      const ModelVertex vertex{x, y, z, r, g, b, a};
+      m_modelVertices.append(vertex);
+      if (!boundsStarted) {
+        batch.bounds = ModelBounds{x, y, z, x, y, z};
+        boundsStarted = true;
+      } else {
+        batch.bounds.minX = std::min(batch.bounds.minX, x);
+        batch.bounds.minY = std::min(batch.bounds.minY, y);
+        batch.bounds.minZ = std::min(batch.bounds.minZ, z);
+        batch.bounds.maxX = std::max(batch.bounds.maxX, x);
+        batch.bounds.maxY = std::max(batch.bounds.maxY, y);
+        batch.bounds.maxZ = std::max(batch.bounds.maxZ, z);
+      }
+      updateModelBounds(vertex);
+    }
+    batch.vertexCount = m_modelVertices.size() - batch.firstVertex;
+
+    offset += vertexBytes;
+
+    // Indices: rebase to the batch's global vertex base; a mirrored batch
+    // world flips each triple. Index validity against the batch's vertex
+    // range is checked per corner (fail-loud — the encoder filters invalid
+    // faces, so any out-of-range corner means a corrupt stream).
+    if (active && indexCount > 0) {
+      batch.firstIndex = m_modelIndices.size();
+      const quint32 base = quint32(batch.firstVertex);
+      const char *indexCursor = meshDataBase + offset;
+      for (qint32 t = 0; t < indexCount; t += 3) {
+        quint32 i0 = 0;
+        quint32 i1 = 0;
+        quint32 i2 = 0;
+        std::memcpy(&i0, indexCursor, sizeof(quint32));
+        std::memcpy(&i1, indexCursor + sizeof(quint32), sizeof(quint32));
+        std::memcpy(&i2, indexCursor + 2 * sizeof(quint32), sizeof(quint32));
+        indexCursor += 3 * sizeof(quint32);
+        if (i0 >= quint32(vertexCount) || i1 >= quint32(vertexCount)
+            || i2 >= quint32(vertexCount))
+          return false;
+        if (swapWinding)
+          m_modelIndices.append({base + i0, base + i2, base + i1});
+        else
+          m_modelIndices.append({base + i0, base + i1, base + i2});
+      }
+      batch.indexCount = indexCount;
+    }
+    offset += indexBytes;
+
+    if (active && (batch.vertexCount > 0 || batch.indexCount > 0))
+      m_modelBatches.append(batch);
+  }
+  return true;
+}
+
+// FIX-5M GPU transport bridge. One transient corner-array build per topology
+// revision: the expanded stream costs cornerCount * 28B transiently but the
+// retained layout is the legacy soup every pipeline already consumes, so no
+// shader/pipeline/pick-path changes ride on this phase. The GUI-side picking
+// scene never calls this — it keeps unique vertices + shared indices and the
+// BVH dereferences corners through the index stream.
+void PrepareSceneData::expandIndexedToSoupImpl()
+{
+  QList<ModelVertex> expanded;
+  expanded.reserve(m_modelIndices.size());
+  const quint32 *idx = m_modelIndices.constData();
+  const int indexTotal = int(m_modelIndices.size());
+  const ModelVertex *verts = m_modelVertices.constData();
+  const int vertexTotal = int(m_modelVertices.size());
+  for (int i = 0; i < indexTotal; ++i) {
+    const quint32 corner = idx[i];
+    if (int(corner) >= vertexTotal) {
+      // parseIndexedMeshV3 already validates corners; this guard keeps the
+      // expansion total against any future producer regression.
+      clearModelGeometry();
+      return;
+    }
+    expanded.append(verts[int(corner)]);
+  }
+  fprintf(stderr, "[MEM] expandIndexedToSoupImpl: expanded=%lld verts (int64 MB: %lld)\n",
+          (long long)expanded.size(), (long long)(expanded.size() * sizeof(ModelVertex) / 1048576));
+  fflush(stderr);
+  m_modelVertices = std::move(expanded);
+
+  // Remap batches to corner ranges: batch k's corners occupy
+  // [indexPrefix[k], indexPrefix[k] + indexCount[k]) in the expanded stream.
+  // sorted m_modelBatches are in append order == batch order, so a running
+  // corner base works.
+  int cornerBase = 0;
+  for (ModelBatch &batch : m_modelBatches) {
+    batch.firstVertex = cornerBase;
+    batch.vertexCount = batch.indexCount;
+    batch.firstIndex = 0;
+    batch.indexCount = 0; // pure soup semantics from here on
+    cornerBase += batch.vertexCount;
+  }
+  m_modelIndices.clear();
 }
 
 void PrepareSceneData::setSelectedSourceObjectIndex(int sourceObjectIndex)
@@ -1370,6 +1686,7 @@ void PrepareSceneData::clearModelGeometry()
   // when a volume's mesh changes).
   m_pickingRaycaster.reset();
   m_modelVertices.clear();
+  m_modelIndices.clear();
   m_modelBatches.clear();
   m_modelBounds = ModelBounds{};
   m_hasModelBounds = false;
@@ -1497,6 +1814,9 @@ void PrepareSceneData::setInstanceTransforms(
     m_batchWorldTransforms = batchWorldTransforms;
     anyChanged = true;
   }
+  fprintf(stderr, "[CH] setInstanceTransforms recompose=%d batches=%d\n",
+          int(anyChanged), batchCount);
+  fflush(stderr);
   if (!anyChanged)
     return;
 
@@ -1959,18 +2279,18 @@ void PrepareSceneData::recomputeOutsideState()
 // clipper path would not.
 void PrepareSceneData::appendSinkingContours(const ModelBatch &batch)
 {
-  const int end = static_cast<int>(std::min<qsizetype>(
-      batch.firstVertex + batch.vertexCount, m_modelVertices.size()));
   SinkingContourRange range;
   range.sourceObjectIndex = batch.sourceObjectIndex;
   range.firstVertex = m_sinkingContourVertices.size();
-  for (int i = std::max(0, batch.firstVertex); i + 2 < end; i += 3) {
-    const ModelVertex &a = m_modelVertices.at(i);
-    const ModelVertex &b = m_modelVertices.at(i + 1);
-    const ModelVertex &c = m_modelVertices.at(i + 2);
-    const float py[3] = {a.y, b.y, c.y};
-    const float px[3] = {a.x, b.x, c.x};
-    const float pz[3] = {a.z, b.z, c.z};
+  // FIX-5M: triangle source follows the resident format (indexed v3 walks the
+  // shared corner stream, legacy soup walks consecutive vertex runs).
+  forEachBatchTriangle(batch,
+                       [&](float ax, float ay, float az,
+                           float bx, float by, float bz,
+                           float cx, float cy, float cz) {
+    const float py[3] = {ay, by, cy};
+    const float px[3] = {ax, bx, cx};
+    const float pz[3] = {az, bz, cz};
     // Edge crossings with the y = 0 bed plane (2 for a real intersection).
     float sx[2];
     float sz[2];
@@ -1987,28 +2307,28 @@ void PrepareSceneData::appendSinkingContours(const ModelBatch &batch)
       ++crossings;
     }
     if (crossings < 2)
-      continue;
+      return;
     float dx = sx[1] - sx[0];
     float dz = sz[1] - sz[0];
     const float len = std::sqrt(dx * dx + dz * dz);
     if (len <= 1e-6f)
-      continue;
+      return;
     dx /= len;
     dz /= len;
     const float nx = -dz * kSinkingHalfWidth;
     const float nz = dx * kSinkingHalfWidth;
     const float y = kSinkingZLift;
-    const float ax = sx[0] + nx, az = sz[0] + nz;
-    const float bx = sx[1] + nx, bz = sz[1] + nz;
+    const float ax2 = sx[0] + nx, az2 = sz[0] + nz;
+    const float bx2 = sx[1] + nx, bz2 = sz[1] + nz;
     const float cx2 = sx[1] - nx, cz2 = sz[1] - nz;
     const float dx2 = sx[0] - nx, dz2 = sz[0] - nz;
-    m_sinkingContourVertices.append(ModelVertex{ax, y, az, 1.0f, 1.0f, 1.0f, 1.0f});
-    m_sinkingContourVertices.append(ModelVertex{bx, y, bz, 1.0f, 1.0f, 1.0f, 1.0f});
+    m_sinkingContourVertices.append(ModelVertex{ax2, y, az2, 1.0f, 1.0f, 1.0f, 1.0f});
+    m_sinkingContourVertices.append(ModelVertex{bx2, y, bz2, 1.0f, 1.0f, 1.0f, 1.0f});
     m_sinkingContourVertices.append(ModelVertex{cx2, y, cz2, 1.0f, 1.0f, 1.0f, 1.0f});
-    m_sinkingContourVertices.append(ModelVertex{ax, y, az, 1.0f, 1.0f, 1.0f, 1.0f});
+    m_sinkingContourVertices.append(ModelVertex{ax2, y, az2, 1.0f, 1.0f, 1.0f, 1.0f});
     m_sinkingContourVertices.append(ModelVertex{cx2, y, cz2, 1.0f, 1.0f, 1.0f, 1.0f});
     m_sinkingContourVertices.append(ModelVertex{dx2, y, dz2, 1.0f, 1.0f, 1.0f, 1.0f});
-  }
+  });
   range.vertexCount = m_sinkingContourVertices.size() - range.firstVertex;
   if (range.vertexCount > 0)
     m_sinkingContourRanges.append(range);

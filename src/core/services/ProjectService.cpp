@@ -13705,12 +13705,21 @@ bool ProjectService::loadProject(const QString &filePath)
 // scene (upstream objects stay where placed).
 QByteArray ProjectService::meshData() const
 {
-  // Blob v2 layout:
-  // [int32 magic 0x3244534D ('MDS2')][int32 batchCount]
-  // per batch: [int32 renderObjectId][int32 triangleCount][float * tri*9]
-  //            (volume-LOCAL GL vertices, axes-rot mapped, volMat applied)
+  // Blob v3 layout (indexed — the FIX-5M memory rewrite):
+  // [int32 magic 0x3353444D ('MDS3')][int32 batchCount]
+  // per batch: [int32 renderObjectId][int32 vertexCount][int32 indexCount]
+  //            [float xyz * vertexCount]  (volume-LOCAL GL vertices,
+  //                                        axes-rot mapped, volMat applied)
+  //            [uint32 * indexCount]      (triangle corners into the batch's
+  //                                        vertex range, indexCount % 3 == 0)
   // trailer:   [float * 6] world bbox at production (GL frame)
-  constexpr qint32 kMeshBlobMagicV2 = 0x3244534D; // 'MDS2' little-endian
+  //
+  // v2 expanded every triangle into 3 soup vertices (36B/face). v3 keeps the
+  // source's shared vertices: a 5M-face sphere costs ~90MB instead of 180MB
+  // at the blob, and the downstream scene/pick vertex tables shrink ~6x
+  // (2.5M unique vertices vs 15M corners). Consumers branch on the magic;
+  // the v2 parser path stays for legacy synthetic test blobs.
+  constexpr qint32 kMeshBlobMagicV3 = 0x3353444D; // 'MDS3' little-endian
 
   if (!model_ || model_->objects.empty())
     return {};
@@ -13857,15 +13866,18 @@ QByteArray ProjectService::meshData() const
     qsizetype totalBytes = static_cast<qsizetype>(2 * sizeof(int32_t)); // magic + batchCount
     for (const auto &job : jobs)
     {
-      const qsizetype dataBytes = static_cast<qsizetype>(job.faceCount) * 9
-          * static_cast<qsizetype>(sizeof(float));
-      const qsizetype perObjBytes = static_cast<qsizetype>(2 * sizeof(int32_t));
-      if (dataBytes < 0 || perObjBytes > (std::numeric_limits<qsizetype>::max)() - totalBytes - dataBytes)
+      const qsizetype vertexBytes = static_cast<qsizetype>(job.its->vertices.size())
+          * 3 * static_cast<qsizetype>(sizeof(float));
+      const qsizetype indexBytes = static_cast<qsizetype>(job.faceCount) * 3
+          * static_cast<qsizetype>(sizeof(uint32_t));
+      const qsizetype perObjBytes = static_cast<qsizetype>(3 * sizeof(int32_t));
+      if (vertexBytes < 0 || indexBytes < 0
+          || perObjBytes > (std::numeric_limits<qsizetype>::max)() - totalBytes - vertexBytes - indexBytes)
       {
         qWarning("[ProjectService] meshData aborted: size overflow while packing batch header");
         return {};
       }
-      totalBytes += perObjBytes + dataBytes;
+      totalBytes += perObjBytes + vertexBytes + indexBytes;
     }
     const qsizetype trailerBytes = static_cast<qsizetype>(6 * sizeof(float));
     if (trailerBytes > (std::numeric_limits<qsizetype>::max)() - totalBytes)
@@ -13885,99 +13897,74 @@ QByteArray ProjectService::meshData() const
     buf.resize(static_cast<int>(totalBytes));
     char *p = buf.data();
 
-    memcpy(p, &kMeshBlobMagicV2, sizeof(int32_t));
+    memcpy(p, &kMeshBlobMagicV3, sizeof(int32_t));
     p += sizeof(int32_t);
     memcpy(p, &batchCount, sizeof(int32_t));
     p += sizeof(int32_t);
 
-    struct VertexRegion
-    {
-      float *first;
-      int32_t faceCount;
-    };
-    std::vector<VertexRegion> regions;
-    regions.reserve(jobs.size());
-    for (const auto &job : jobs)
-    {
-      const int32_t triCount = job.faceCount;
-      memcpy(p, &job.objectId, sizeof(int32_t));
-      p += sizeof(int32_t);
-      memcpy(p, &triCount, sizeof(int32_t));
-      p += sizeof(int32_t);
-      regions.push_back(VertexRegion{
-          reinterpret_cast<float *>(p), triCount});
-      p += static_cast<ptrdiff_t>(triCount) * 9 * static_cast<ptrdiff_t>(sizeof(float));
-    }
-
-    // Bake pass: volume-LOCAL GL vertices into the buffer, exact world bbox
-    // through the conjugated instance matrix (unshifted -- the shift is a
-    // pure translation applied to the finished box below). Winding swap when
-    // the VOLUME transform is left-handed; the instance's own mirror flips
-    // winding at compose time (det(conjGl) = det(instMat)).
+    // Bake pass: volume-LOCAL GL vertices written once per source vertex
+    // (shared vertices stay shared — the memory point of v3), indices carry
+    // the triangles with invalid faces filtered and the left-handed winding
+    // swap folded in. World bbox through the conjugated instance matrix
+    // (unshifted — the shift is a pure translation applied to the finished
+    // box below), exactly like the v2 bake.
     float bminX = 1e30f, bminY = 1e30f, bminZ = 1e30f;
     float bmaxX = -1e30f, bmaxY = -1e30f, bmaxZ = -1e30f;
-    for (size_t jobIndex = 0; jobIndex < jobs.size(); ++jobIndex)
+    for (const auto &job : jobs)
     {
-      const VolumeJob &job = jobs[jobIndex];
       const auto &its = *job.its;
       const int vcount = int(its.vertices.size());
-      const int emitOrder[3] = {0, job.localLeftHanded ? 2 : 1, job.localLeftHanded ? 1 : 2};
-      float *out = regions[jobIndex].first;
+      const int32_t vertexCount = int32_t(vcount);
+      const int32_t indexCount = job.faceCount * 3;
+      memcpy(p, &job.objectId, sizeof(int32_t));
+      p += sizeof(int32_t);
+      memcpy(p, &vertexCount, sizeof(int32_t));
+      p += sizeof(int32_t);
+      memcpy(p, &indexCount, sizeof(int32_t));
+      p += sizeof(int32_t);
+
+      float *outVerts = reinterpret_cast<float *>(p);
+      p += static_cast<ptrdiff_t>(vcount) * 3 * static_cast<ptrdiff_t>(sizeof(float));
+      uint32_t *outIndices = reinterpret_cast<uint32_t *>(p);
+      p += static_cast<ptrdiff_t>(job.faceCount) * 3 * static_cast<ptrdiff_t>(sizeof(uint32_t));
+
       // Translate-only instance: exact world box from the slic3r-frame local
       // box + translation (two corner points, no per-vertex second transform).
       Slic3r::Vec3d lmin = Slic3r::Vec3d::Constant(std::numeric_limits<double>::max());
       Slic3r::Vec3d lmax = Slic3r::Vec3d::Constant(-std::numeric_limits<double>::max());
 
-      for (const auto &face : its.indices)
+      for (int vi = 0; vi < vcount; ++vi)
       {
-        const int idx0 = face(0);
-        const int idx1 = face(1);
-        const int idx2 = face(2);
-        if (idx0 < 0 || idx0 >= vcount ||
-            idx1 < 0 || idx1 >= vcount ||
-            idx2 < 0 || idx2 >= vcount)
+        const Slic3r::Vec3f &lv = its.vertices[vi];
+        // Volume-local transform only (slic3r frame)...
+        const Slic3r::Vec3d local = (*job.volMat) * Slic3r::Vec3d(
+            (double)lv.x(), (double)lv.y(), (double)lv.z());
+        // ...then the slic3r->GL AXES-ROT (same mapping as the legacy bake).
+        outVerts[vi * 3 + 0] = (float)local.x();
+        outVerts[vi * 3 + 1] = (float)local.z();
+        outVerts[vi * 3 + 2] = -(float)local.y();
+
+        if (job.instTranslateOnly)
         {
-          continue;
+          lmin = lmin.cwiseMin(local);
+          lmax = lmax.cwiseMax(local);
         }
-
-        for (int k = 0; k < 3; ++k)
+        else
         {
-          const Slic3r::Vec3f &lv = its.vertices[face(emitOrder[k])];
-          // Volume-local transform only (slic3r frame)...
-          const Slic3r::Vec3d local = (*job.volMat) * Slic3r::Vec3d(
+          // Exact world box, fused form: world_gl = conjGl * g with
+          // g = A * (volMat * v) and conjGl = A * instMat * A^-1 collapses
+          // to A * (instMat * volMat * v) (A^-1 * A == I exactly for the
+          // +-1 permutation axes map), so one double mat-vec on the raw
+          // vertex plus the free component swap keeps the per-vertex box
+          // cost at the retired v1 bake's level.
+          const Slic3r::Vec3d world = job.worldMat * Slic3r::Vec3d(
               (double)lv.x(), (double)lv.y(), (double)lv.z());
-          // ...then the slic3r->GL AXES-ROT (same mapping as the legacy bake).
-          const float gx = (float)local.x();
-          const float gy = (float)local.z();
-          const float gz = -(float)local.y();
-
-          *out++ = gx;
-          *out++ = gy;
-          *out++ = gz;
-
-          if (job.instTranslateOnly)
-          {
-            // Exact world box deferred to the local box + t fold below.
-            lmin = lmin.cwiseMin(local);
-            lmax = lmax.cwiseMax(local);
-          }
-          else
-          {
-            // Exact world box, fused form: world_gl = conjGl * g with
-            // g = A * (volMat * v) and conjGl = A * instMat * A^-1 collapses
-            // to A * (instMat * volMat * v) (A^-1 * A == I exactly for the
-            // +-1 permutation axes map), so one double mat-vec on the raw
-            // vertex plus the free component swap keeps the per-vertex box
-            // cost at the retired v1 bake's level.
-            const Slic3r::Vec3d world = job.worldMat * Slic3r::Vec3d(
-                (double)lv.x(), (double)lv.y(), (double)lv.z());
-            bminX = std::min(bminX, (float)world.x());
-            bmaxX = std::max(bmaxX, (float)world.x());
-            bminY = std::min(bminY, (float)world.z());
-            bmaxY = std::max(bmaxY, (float)world.z());
-            bminZ = std::min(bminZ, (float)-world.y());
-            bmaxZ = std::max(bmaxZ, (float)-world.y());
-          }
+          bminX = std::min(bminX, (float)world.x());
+          bmaxX = std::max(bmaxX, (float)world.x());
+          bminY = std::min(bminY, (float)world.z());
+          bmaxY = std::max(bmaxY, (float)world.z());
+          bminZ = std::min(bminZ, (float)-world.y());
+          bmaxZ = std::max(bmaxZ, (float)-world.y());
         }
       }
 
@@ -13998,6 +13985,35 @@ QByteArray ProjectService::meshData() const
         bmaxY = std::max(bmaxY, (float)wy1);
         bminZ = std::min(bminZ, (float)wz0);
         bmaxZ = std::max(bmaxZ, (float)wz1);
+      }
+
+      // Indices: filter invalid faces, swap winding for left-handed volume
+      // transforms (v2 swapped the soup vertex ORDER; v3 swaps the corner
+      // order of the emitted triple — same triangle orientation).
+      uint32_t *out = outIndices;
+      for (const auto &face : its.indices)
+      {
+        const int idx0 = face(0);
+        const int idx1 = face(1);
+        const int idx2 = face(2);
+        if (idx0 < 0 || idx0 >= vcount ||
+            idx1 < 0 || idx1 >= vcount ||
+            idx2 < 0 || idx2 >= vcount)
+        {
+          continue;
+        }
+        if (job.localLeftHanded)
+        {
+          *out++ = uint32_t(idx0);
+          *out++ = uint32_t(idx2);
+          *out++ = uint32_t(idx1);
+        }
+        else
+        {
+          *out++ = uint32_t(idx0);
+          *out++ = uint32_t(idx1);
+          *out++ = uint32_t(idx2);
+        }
       }
     }
 

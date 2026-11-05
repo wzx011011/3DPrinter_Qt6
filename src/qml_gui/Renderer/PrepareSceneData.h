@@ -115,6 +115,12 @@ public:
     int instanceIndex = -1;
     int firstVertex = 0;
     int vertexCount = 0;
+    // FIX-5M (indexed blob v3): the batch's triangle corner indices live in
+    // the shared m_modelIndices stream. firstIndex/indexCount are the batch's
+    // range there; a legacy v1/v2 (soup) batch has indexCount == 0 and its
+    // triangles are still the implicit (firstVertex, vertexCount) runs.
+    int firstIndex = 0;
+    int indexCount = 0;
     ModelBounds bounds;
     // P15.2 (COLOR): alpha < 1 batches render in the second, depth-sorted
     // translucent pass (upstream _render_objects(Transparent)). Declared
@@ -413,7 +419,36 @@ public:
                         const QList<int> &batchPrintableFlags,
                         const QList<QVector4D> &extruderColors,
                         const QList<QMatrix4x4> &batchWorldTransforms
-                            = QList<QMatrix4x4>());
+                            = QList<QMatrix4x4>(),
+                        bool expandIndexedToSoup = false);
+  // FIX-5M (indexed blob v3 'MDS3'): per batch [objectId][vertexCount]
+  // [indexCount][xyz*vertexCount][uint32*indexCount]. Shared vertices +
+  // corner indices; the parse composes each SOURCE vertex once (2.5M for a
+  // 5M-face sphere instead of the v2 soup's 15M) and appends batch-relative
+  // corner indices into m_modelIndices. Required covering transform list
+  // (same contract as v2). Returns false on a malformed stream (the caller
+  // clears the scene — same fail-loud contract).
+  bool parseIndexedMeshV3(const QByteArray &meshData,
+                          qsizetype offset,
+                          qint32 batchCount,
+                          const QList<int> &batchSourceObjectIndices,
+                          const QList<int> &batchVolumeIndices,
+                          const QList<int> &batchInstanceIndices,
+                          const QList<int> &activeSourceObjectIndices,
+                          const QList<int> &batchVolumeTypes,
+                          const QList<int> &batchExtruderIds,
+                          const QList<int> &batchPrintableFlags,
+                          const QList<QVector4D> &extruderColors,
+                          const QList<QMatrix4x4> &batchWorldTransforms);
+  // FIX-5M GPU transport bridge: expands the resident indexed scene into the
+  // legacy corner-soup layout (vertex stream rebuilt through m_modelIndices,
+  // batches remapped to corner ranges, index stream dropped). The render-side
+  // scene opts in so every existing soup consumer (vertex pipelines, per-batch
+  // recolor walks, contour/outside triangle walkers) keeps working unchanged;
+  // the GUI-side picking scene stays indexed and lets the BVH dereference
+  // corners through m_modelIndices. After expansion the batches are pure soup
+  // (firstVertex/vertexCount corner ranges, indexCount == 0).
+  void expandIndexedToSoupImpl();
   void setModelMeshData(const QByteArray &meshData,
                         const QList<int> &batchSourceObjectIndices,
                         const QList<int> &batchVolumeIndices,
@@ -535,6 +570,46 @@ public:
   const QList<ModelVertex> &bedLimitVertices() const;
   const QList<ModelVertex> &modelVertices() const;
   const QList<ModelBatch> &modelBatches() const;
+  // FIX-5M (indexed blob v3): shared triangle-corner index stream. Empty for
+  // legacy v1/v2 soup payloads (triangles are implicit vertex runs there).
+  const QList<quint32> &modelIndices() const;
+  // Triangle adapter: calls f(a, b, c) for every triangle of the batch,
+  // indirection through m_modelIndices when the resident payload is indexed
+  // v3, straight vertex runs for legacy soup. All triangle walkers (contours,
+  // brute-force picking, outline rebuilds) consume through this so both
+  // formats stay one source of truth.
+  template <typename F>
+  void forEachBatchTriangle(const ModelBatch &batch, F &&f) const {
+    const int vertexTotal = int(m_modelVertices.size());
+    if (batch.indexCount > 0) {
+      const int end = batch.firstIndex + batch.indexCount;
+      if (batch.firstIndex < 0
+          || end > int(m_modelIndices.size()))
+        return;
+      const quint32 *idx = m_modelIndices.constData() + batch.firstIndex;
+      for (int t = 0; t + 2 < batch.indexCount; t += 3) {
+        const quint32 ia = idx[t], ib = idx[t + 1], ic = idx[t + 2];
+        if (ia >= quint32(vertexTotal) || ib >= quint32(vertexTotal)
+            || ic >= quint32(vertexTotal))
+          continue;
+        const ModelVertex &a = m_modelVertices[int(ia)];
+        const ModelVertex &b = m_modelVertices[int(ib)];
+        const ModelVertex &c = m_modelVertices[int(ic)];
+        f(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+      }
+    } else {
+      const int end = batch.firstVertex + batch.vertexCount;
+      const int first = std::max(0, batch.firstVertex);
+      if (end > vertexTotal)
+        return;
+      for (int i = first; i + 2 < end; i += 3) {
+        const ModelVertex &a = m_modelVertices[i];
+        const ModelVertex &b = m_modelVertices[i + 1];
+        const ModelVertex &c = m_modelVertices[i + 2];
+        f(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+      }
+    }
+  }
   const ModelBounds &modelBounds() const;
   bool hasModelBounds() const;
   // PICK-BVH: BVH-accelerated nearest-triangle pick over the current model
@@ -654,6 +729,10 @@ private:
   QList<ModelVertex> m_bedAxesVertices;
   QList<ModelVertex> m_bedLimitVertices;
   QList<ModelVertex> m_modelVertices;
+  // FIX-5M (indexed blob v3): shared triangle-corner indices. Empty when the
+  // resident blob is legacy v1/v2 soup (triangles are then implicit vertex
+  // runs). uint32 keeps a 4B/tri corner — 5M faces = 60MB.
+  QList<quint32> m_modelIndices;
   QList<ModelBatch> m_modelBatches;
   ModelBounds m_modelBounds;
   bool m_hasModelBounds = false;

@@ -126,11 +126,11 @@ namespace
                              const QVector3D &direction)
   {
     PickingRaycaster raycaster;
-    raycaster.build(scene.modelVertices(), scene.modelBatches());
+    raycaster.build(scene.modelVertices(), scene.modelIndices(), scene.modelBatches());
     const ObjectPicking::Hit brute = ObjectPicking::pick(
-        origin, direction, scene.modelVertices(), scene.modelBatches());
+        origin, direction, scene.modelVertices(), scene.modelIndices(), scene.modelBatches());
     const ObjectPicking::Hit fast = raycaster.pick(
-        origin, direction, scene.modelVertices(), scene.modelBatches());
+        origin, direction, scene.modelVertices(), scene.modelIndices(), scene.modelBatches());
 
     QCOMPARE(fast.isValid(), brute.isValid());
     QCOMPARE(fast.sourceObjectIndex, brute.sourceObjectIndex);
@@ -274,6 +274,7 @@ void ObjectPickingTests::aabbHitTriangleMissDoesNotPickObject()
       QVector3D(9.0f, 9.0f, 5.0f),
       QVector3D(0.0f, 0.0f, -1.0f),
       scene.modelVertices(),
+      scene.modelIndices(),
       scene.modelBatches());
 
   QCOMPARE(hit, -1);
@@ -296,6 +297,7 @@ void ObjectPickingTests::nearestTriangleHitWinsAcrossBatches()
       QVector3D(0.25f, 0.25f, 10.0f),
       QVector3D(0.0f, 0.0f, -1.0f),
       scene.modelVertices(),
+      scene.modelIndices(),
       scene.modelBatches());
 
   QCOMPARE(hit, 7);
@@ -319,7 +321,7 @@ void ObjectPickingTests::nearestTriangleHitCarriesVolumeAndInstanceIdentity()
 
   const ObjectPicking::Hit hit = ObjectPicking::pick(
       QVector3D(0.25f, 0.25f, 10.0f), QVector3D(0.0f, 0.0f, -1.0f),
-      scene.modelVertices(), scene.modelBatches());
+      scene.modelVertices(), scene.modelIndices(), scene.modelBatches());
   QVERIFY(hit.isValid());
   QCOMPARE(hit.sourceObjectIndex, 7);
   QCOMPARE(hit.volumeIndex, 6);
@@ -339,14 +341,15 @@ void ObjectPickingTests::invalidAndDegenerateBatchesAreIgnored()
            << PrepareSceneData::ModelVertex{1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
 
   QList<PrepareSceneData::ModelBatch> batches;
-  batches << PrepareSceneData::ModelBatch{101, -1, -1, -1, 0, 3, boundsFor(vertices, 0, 3)}
-          << PrepareSceneData::ModelBatch{102, 5, 0, 0, 3, 2, boundsFor(vertices, 3, 2)}
-          << PrepareSceneData::ModelBatch{103, 6, 0, 0, 5, 3, boundsFor(vertices, 5, 3)};
+  batches << PrepareSceneData::ModelBatch{101, -1, -1, -1, 0, 3, 0, 0, boundsFor(vertices, 0, 3)}
+          << PrepareSceneData::ModelBatch{102, 5, 0, 0, 3, 2, 0, 0, boundsFor(vertices, 3, 2)}
+          << PrepareSceneData::ModelBatch{103, 6, 0, 0, 5, 3, 0, 0, boundsFor(vertices, 5, 3)};
 
   const int hit = ObjectPicking::pickSourceObject(
       QVector3D(0.25f, 0.25f, 10.0f),
       QVector3D(0.0f, 0.0f, -1.0f),
       vertices,
+      QList<quint32>(),
       batches);
 
   QCOMPARE(hit, -1);
@@ -374,6 +377,7 @@ void ObjectPickingTests::screenRayUsesGizmoMathAndSceneVertices()
       origin,
       direction,
       scene.modelVertices(),
+      scene.modelIndices(),
       scene.modelBatches());
 
   QCOMPARE(hit, 42);
@@ -422,7 +426,7 @@ void ObjectPickingTests::raycasterMatchesBruteForceOnRandomScene()
   fillRandomBoxesScene(scene, 5, 60);
 
   PickingRaycaster raycaster;
-  raycaster.build(scene.modelVertices(), scene.modelBatches());
+  raycaster.build(scene.modelVertices(), scene.modelIndices(), scene.modelBatches());
   QVERIFY(raycaster.isValid());
   QCOMPARE(raycaster.triangleCount(), 5 * 60);
   QVERIFY(raycaster.nodeCount() > 0);
@@ -452,16 +456,16 @@ void ObjectPickingTests::raycasterNeverHitsInvalidBatchTriangles()
            << PrepareSceneData::ModelVertex{0.0f, 1.0f, 3.0f, 1.0f, 1.0f, 1.0f, 1.0f};
 
   QList<PrepareSceneData::ModelBatch> batches;
-  batches << PrepareSceneData::ModelBatch{101, -1, -1, -1, 0, 3,
+  batches << PrepareSceneData::ModelBatch{101, -1, -1, -1, 0, 3, 0, 0,
                                           boundsFor(vertices, 0, 3)};
 
   PickingRaycaster raycaster;
-  raycaster.build(vertices, batches);
+  raycaster.build(vertices, QList<quint32>(), batches);
   QVERIFY(!raycaster.isValid());
 
   const ObjectPicking::Hit hit = raycaster.pick(
       QVector3D(0.25f, 0.25f, 10.0f), QVector3D(0.0f, 0.0f, -1.0f),
-      vertices, batches);
+      vertices, QList<quint32>(), batches);
   QVERIFY(!hit.isValid());
 }
 
@@ -476,7 +480,7 @@ void ObjectPickingTests::sceneRaycasterRebuildsAfterMeshChange()
                .pickingRaycaster()
                ->pick(QVector3D(0.0f, 0.0f, 5.0f),
                       QVector3D(0.0f, 0.0f, -1.0f),
-                      scene.modelVertices(), scene.modelBatches())
+                      scene.modelVertices(), scene.modelIndices(), scene.modelBatches())
                .isValid());
 
   // First mesh: one triangle of object 11.
@@ -491,7 +495,7 @@ void ObjectPickingTests::sceneRaycasterRebuildsAfterMeshChange()
   QCOMPARE(scene.pickingRaycaster()
                ->pick(QVector3D(0.25f, 0.25f, 10.0f),
                       QVector3D(0.0f, 0.0f, -1.0f),
-                      scene.modelVertices(), scene.modelBatches())
+                      scene.modelVertices(), scene.modelIndices(), scene.modelBatches())
                .sourceObjectIndex,
            11);
 
@@ -506,13 +510,13 @@ void ObjectPickingTests::sceneRaycasterRebuildsAfterMeshChange()
                          secondObjects, secondObjects);
   const ObjectPicking::Hit moved = scene.pickingRaycaster()->pick(
       QVector3D(0.25f, 0.25f, 10.0f), QVector3D(0.0f, 0.0f, -1.0f),
-      scene.modelVertices(), scene.modelBatches());
+      scene.modelVertices(), scene.modelIndices(), scene.modelBatches());
   QVERIFY(!moved.isValid());
   QCOMPARE(scene.pickingRaycaster()->triangleCount(), 1);
   QCOMPARE(scene.pickingRaycaster()
                ->pick(QVector3D(5.5f, 5.5f, 10.0f),
                       QVector3D(0.0f, 0.0f, -1.0f),
-                      scene.modelVertices(), scene.modelBatches())
+                      scene.modelVertices(), scene.modelIndices(), scene.modelBatches())
                .sourceObjectIndex,
            13);
 }
@@ -748,7 +752,7 @@ void ObjectPickingTests::rotatedInstanceChainPlacesRawFacetWhereRenderDrawsIt()
 
   const ObjectPicking::Hit render = ObjectPicking::pick(
       aim + facetNormal * 50.0f, -facetNormal,
-      scene.modelVertices(), scene.modelBatches());
+      scene.modelVertices(), scene.modelIndices(), scene.modelBatches());
   QVERIFY(render.isValid());
   QCOMPARE(render.sourceObjectIndex, 42);
   QCOMPARE(render.volumeIndex, 0);

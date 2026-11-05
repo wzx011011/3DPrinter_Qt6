@@ -1762,6 +1762,7 @@ Item {
                         root.editorVm.setCurrentPlateIndex(plateIndex)
                     uniformScale: root.editorVm ? root.editorVm.uniformScale : true
                     meshData: root.editorVm ? root.editorVm.meshData : null
+                    meshDataRevision: root.editorVm ? root.editorVm.meshDataRevision : 0
                     bedWidth: root.editorVm ? root.editorVm.bedWidth : 220
                     // v5.15 (BEDTEX): printer bed texture image (upstream
                     // PartPlate render_logo).

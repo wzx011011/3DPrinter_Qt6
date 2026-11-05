@@ -411,9 +411,22 @@ void AppToolRegistry::buildTools() {
             project_->currentPlateIndex());
         if (plate < 0 || plate >= project_->plateCount())
           return AppToolResult::failure(QStringLiteral("plateIndex out of range"));
-        if (!project_->addFilesToPlate(plate, {path}))
-          return AppToolResult::failure(QStringLiteral("Import failed: %1").arg(path));
-        editor_->refreshAfterLoad();
+        // FIX5M: route through the VM import flow (undo snapshot + entry
+        // rebuild + refreshMeshCacheAndFitHint + slice-result invalidation).
+        // The previous raw service call + refreshAfterLoad left the VM's mesh
+        // cache CLEARED (refreshAfterLoad clears; only the loadFinished /
+        // VM-flow refresh refills it), so the imported model never reached
+        // the viewport bindings.
+        if (editor_->contextPlateIndex() != plate
+            && !editor_->setCurrentPlateIndex(plate))
+          return AppToolResult::failure(
+              QStringLiteral("cannot switch to plate %1 (a slice may be running)")
+                  .arg(plate));
+        // Current-plate variant: the context-plate one rejects when no
+        // context-menu target exists (fresh session contextPlateIndex -1).
+        if (!editor_->addFilesToCurrentPlate({path}))
+          return AppToolResult::failure(
+              QStringLiteral("Import failed: %1").arg(path));
         QJsonObject d;
         d.insert(QStringLiteral("loaded"), true);
         d.insert(QStringLiteral("plateIndex"), plate);

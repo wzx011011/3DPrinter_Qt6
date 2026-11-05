@@ -262,6 +262,7 @@ Item {
                 root.editorVm.clearMeasureReadout()
         }
         meshData: root.editorVm ? root.editorVm.meshData : null
+        meshDataRevision: root.editorVm ? root.editorVm.meshDataRevision : 0
         bedWidth: root.editorVm ? root.editorVm.bedWidth : 220
         bedDepth: root.editorVm ? root.editorVm.bedDepth : 220
         bedOriginX: root.editorVm ? root.editorVm.bedOriginX : 0

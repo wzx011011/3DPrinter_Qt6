@@ -1,5 +1,7 @@
 #include <QtTest>
 
+#include "core/rendering/ObjectPicking.h"
+#include "core/rendering/PickingRaycaster.h"
 #include "qml_gui/Renderer/PrepareSceneData.h"
 
 namespace
@@ -63,6 +65,37 @@ namespace
     appendFloat(bytes, 60.0f);
     return bytes;
   }
+
+  // FIX-5M: indexed blob v3 (magic 'MDS3') -- per batch
+  // [objectId][vertexCount][indexCount][xyz * vertexCount][uint32 * indexCount].
+  // vertices packs xyz triples; indices packs corner triples.
+  constexpr qint32 kMeshBlobMagicV3 = 0x3353444D;
+
+  QByteArray packedIndexedMesh(const QList<int> &objectIds,
+                               const QList<QList<float>> &vertexBlocks,
+                               const QList<QList<quint32>> &indexBlocks)
+  {
+    QByteArray bytes;
+    appendInt32(bytes, kMeshBlobMagicV3);
+    appendInt32(bytes, objectIds.size());
+    for (int i = 0; i < objectIds.size(); ++i) {
+      appendInt32(bytes, objectIds.at(i));
+      appendInt32(bytes, qint32(vertexBlocks.at(i).size() / 3));
+      appendInt32(bytes, qint32(indexBlocks.at(i).size()));
+      for (float value : vertexBlocks.at(i))
+        appendFloat(bytes, value);
+      for (quint32 corner : indexBlocks.at(i)) {
+        bytes.append(reinterpret_cast<const char *>(&corner), sizeof(corner));
+      }
+    }
+    appendFloat(bytes, -10.0f);
+    appendFloat(bytes, -20.0f);
+    appendFloat(bytes, -30.0f);
+    appendFloat(bytes, 40.0f);
+    appendFloat(bytes, 50.0f);
+    appendFloat(bytes, 60.0f);
+    return bytes;
+  }
 }
 
 class PrepareSceneDataTests final : public QObject
@@ -78,6 +111,10 @@ private slots:
   void plateContextDirtyFlagsOnlyChangeOnPlateDifferences();
   void invalidBedDimensionsDoNotGenerateUnboundedBuffers();
   void modelBatchesParsePackedMeshWithSourceIndices();
+  // FIX-5M: indexed blob v3 parse locks (shared verts + corner indices +
+  // mirrored compose winding + BVH dereference; fail-loud corner guard).
+  void indexedMeshV3ParsesSharedVerticesAndIndices();
+  void indexedMeshV3RejectsOutOfRangeCorners();
   // P15.1/15.2 (COLOR): upstream volume coloring lock.
   void modelColorsFollowUpstreamVolumeSemantics();
   void modelBatchesRejectMalformedPayloads();
@@ -1357,6 +1394,82 @@ void PrepareSceneDataTests::legacyBlobIgnoresInstanceTransformChannel()
   scene.setInstanceTransforms(QList<QMatrix4x4>{world});
   QCOMPARE(scene.instanceTransformGeneration(), qint64(0)); // inert
   QCOMPARE(scene.modelVertices().at(0).x, 1.0f);
+}
+
+void PrepareSceneDataTests::indexedMeshV3ParsesSharedVerticesAndIndices()
+{
+  // FIX-5M lock: v3 keeps shared vertices + corner indices. One tetrahedron
+  // (4 unique verts, 4 faces) under a translate-only batch world; a second
+  // batch reuses the encoder's winding-swap path via a mirrored matrix.
+  PrepareSceneData scene;
+  const QList<float> tetra = {
+      0.0f, 0.0f, 0.0f,   10.0f, 0.0f, 0.0f,   0.0f, 10.0f, 0.0f,
+      0.0f, 0.0f, 10.0f};
+  const QList<quint32> tetraIdx = {0, 1, 2,  0, 1, 3,  0, 2, 3,  1, 2, 3};
+  const QByteArray mesh = packedIndexedMesh(QList<int>{7, 8},
+                                            QList<QList<float>>{tetra, tetra},
+                                            QList<QList<quint32>>{tetraIdx, tetraIdx});
+
+  QMatrix4x4 translate;
+  translate.translate(5.0f, 0.0f, 0.0f);
+  QMatrix4x4 mirror;
+  mirror.scale(-1.0f, 1.0f, 1.0f); // det < 0: compose-time winding flip
+  scene.setModelMeshData(mesh, QList<int>{0, 1}, QList<int>{0, 0},
+                         QList<int>{0, 0}, QList<int>{0, 1},
+                         QList<int>(), QList<int>(), QList<int>(),
+                         QList<QVector4D>(),
+                         QList<QMatrix4x4>{translate, mirror});
+  QVERIFY(scene.meshDecomposed());
+  QCOMPARE(scene.modelVertices().size(), 8);      // unique verts, not soup 24
+  QCOMPARE(scene.modelIndices().size(), 24);      // 8 triangles * 3 corners
+  QCOMPARE(scene.modelBatches().size(), 2);
+
+  const PrepareSceneData::ModelBatch &b0 = scene.modelBatches().at(0);
+  QCOMPARE(b0.firstVertex, 0);
+  QCOMPARE(b0.vertexCount, 4);
+  QCOMPARE(b0.firstIndex, 0);
+  QCOMPARE(b0.indexCount, 12);
+  // translate-only compose moved every vertex +5 in X.
+  QCOMPARE(scene.modelVertices().at(1).x, 15.0f);
+
+  const PrepareSceneData::ModelBatch &b1 = scene.modelBatches().at(1);
+  QCOMPARE(b1.firstVertex, 4);
+  QCOMPARE(b1.vertexCount, 4);
+  QCOMPARE(b1.firstIndex, 12);
+  QCOMPARE(b1.indexCount, 12);
+  // mirrored compose negates X of the second batch's verts (base 0 + mirror).
+  QCOMPARE(scene.modelVertices().at(4 + 1).x, -10.0f);
+  // winding flipped at compose time: corners (0,1,2) -> (0,2,1).
+  QCOMPARE(scene.modelIndices().at(12 + 0), quint32(4 + 0));
+  QCOMPARE(scene.modelIndices().at(12 + 1), quint32(4 + 2));
+  QCOMPARE(scene.modelIndices().at(12 + 2), quint32(4 + 1));
+
+  // BVH pick dereferences the index stream: a ray through the mirrored
+  // batch's first triangle hits batch source 1.
+  scene.clearDirtyFlags();
+  scene.setPlateContext(0, 1, QList<int>{0, 1});
+  const ObjectPicking::Hit hit = scene.pickingRaycaster()->pick(
+      QVector3D(-1.0f, 1.0f, 50.0f), QVector3D(0.0f, 0.0f, -1.0f),
+      scene.modelVertices(), scene.modelIndices(), scene.modelBatches());
+  QVERIFY(hit.isValid());
+  QCOMPARE(hit.sourceObjectIndex, 1);
+}
+
+void PrepareSceneDataTests::indexedMeshV3RejectsOutOfRangeCorners()
+{
+  PrepareSceneData scene;
+  const QByteArray mesh = packedIndexedMesh(QList<int>{7},
+                                            QList<QList<float>>{QList<float>{
+                                                0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+                                                0.0f, 1.0f, 0.0f}},
+                                            QList<QList<quint32>>{QList<quint32>{
+                                                0, 1, 99}});
+  scene.setModelMeshData(mesh, QList<int>{0}, QList<int>{0},
+                         QList<int>{0}, QList<int>{0});
+  // fail-loud: the scene is cleared, nothing renders, nothing picks.
+  QVERIFY(scene.modelVertices().isEmpty());
+  QVERIFY(scene.modelBatches().isEmpty());
+  QVERIFY(scene.modelIndices().isEmpty());
 }
 
 QTEST_MAIN(PrepareSceneDataTests)

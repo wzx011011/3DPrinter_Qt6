@@ -1053,7 +1053,8 @@ ViewportContextHit SoftwareViewport::classifyContextAt(const QPointF &position)
   // PICK-BVH: BVH-backed pick over the picking scene
   // (PrepareSceneData::pickingRaycaster).
   const ObjectPicking::Hit objectHit = m_pickScene.pickingRaycaster()->pick(
-      rayOrigin, rayDirection, m_pickScene.modelVertices(), m_pickScene.modelBatches());
+      rayOrigin, rayDirection, m_pickScene.modelVertices(),
+      m_pickScene.modelIndices(), m_pickScene.modelBatches());
   if (objectHit.isValid()) {
     result.target = ViewportContextTarget::Part;
     result.sourceObjectIndex = objectHit.sourceObjectIndex;

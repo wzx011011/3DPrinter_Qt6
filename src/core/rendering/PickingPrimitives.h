@@ -113,4 +113,20 @@ inline bool validBatchSpan(const PrepareSceneData::ModelBatch &batch, int vertex
       && batch.firstVertex <= vertexCount
       && batch.vertexCount <= vertexCount - batch.firstVertex;
 }
+
+// FIX-5M: indexed (blob v3) counterpart. The batch's triangles live in the
+// corner-index stream, so the span sanity check runs against the index range;
+// the vertex range is the batch's UNIQUE-vertex block and is not required to
+// be a multiple of three.
+inline bool validIndexedBatchSpan(const PrepareSceneData::ModelBatch &batch, int indexCount)
+{
+  return batch.sourceObjectIndex >= 0
+      && batch.volumeIndex >= 0
+      && batch.instanceIndex >= 0
+      && batch.firstIndex >= 0
+      && batch.indexCount >= 3
+      && (batch.indexCount % 3) == 0
+      && batch.firstIndex <= indexCount
+      && batch.indexCount <= indexCount - batch.firstIndex;
+}
 }

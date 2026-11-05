@@ -107,12 +107,52 @@ void RhiViewport::setExplosionRatio(float value)
 
 void RhiViewport::setMeshData(const QByteArray &data)
 {
+  fprintf(stderr, "[FIX5M] setMeshData ENTRY bytes=%lld revProp=%d delivered=%d\n",
+          (long long)data.size(), m_meshDataRevision, m_deliveredMeshDataRevision);
+  fflush(stderr);
+  // FIX-5M: the byte compare stays authoritative. A revision-gated early
+  // return is UNSAFE: QML binding evaluation order is unspecified, and a
+  // meshData delivery that races ahead of the meshDataRevision binding
+  // sees the STALE revision and wrongly swallows the new blob (observed
+  // live: empty bed after import). The compare runs once per topology
+  // change (NOTIFY is sceneTopologyChanged, never per drag frame), so the
+  // cost is one 90MB memcmp on a 5M-face scene - not a hot path.
   if (m_meshData == data)
     return;
   m_meshData = data;
+  m_deliveredMeshDataRevision = m_meshDataRevision;
+  // FIX5M: content hash for the renderer parse gate. The delivered
+  // revision flaps (-1 -> 0) with QML binding evaluation order even when
+  // the bytes are identical, which re-parsed the same 90MB blob (and
+  // re-expanded 420MB of soup + 400MB of GPU staging) per flap. A 64-bit
+  // FNV-1a over the blob is computed once per real change and identifies
+  // the content across delivery order races.
+  quint64 hash = 1469598103934665603ULL;
+  const char *hashBytes = data.constData();
+  const qsizetype hashN = data.size();
+  for (qsizetype i = 0; i < hashN; ++i) {
+    hash ^= quint64(quint8(hashBytes[i]));
+    hash *= 1099511628211ULL;
+  }
+  m_meshDataHash = hash;
   ++m_sceneGeneration;
   ++m_modelGeneration;
+  fprintf(stderr, "[FIX5M] setMeshData accepted: bytes=%lld rev=%d\n",
+          (long long)data.size(), m_deliveredMeshDataRevision);
+  fflush(stderr);
   update();
+}
+
+void RhiViewport::setMeshDataRevision(int revision)
+{
+  fprintf(stderr, "[FIX5M] setMeshDataRevision %d -> %d\n", m_meshDataRevision, revision);
+  fflush(stderr);
+  if (m_meshDataRevision == revision)
+    return;
+  m_meshDataRevision = revision;
+  // A revision bump alone never re-uploads: the data binding delivers the
+  // new blob (the == fallback gates identical bytes when revision arrived
+  // first). Nothing else to do here — the data side owns update().
 }
 
 void RhiViewport::setSequentialClearanceActive(bool active)
@@ -2252,7 +2292,8 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
       // (PrepareSceneData::pickingRaycaster).
       const ObjectPicking::Hit hit = m_pickScene.pickingRaycaster()->pick(
           rayOrigin, rayDirection,
-          m_pickScene.modelVertices(), m_pickScene.modelBatches());
+          m_pickScene.modelVertices(), m_pickScene.modelIndices(),
+          m_pickScene.modelBatches());
       if (hit.isValid())
         m_pressPickedVolumeIndex = hit.volumeIndex;
     }
@@ -3165,7 +3206,8 @@ int RhiViewport::pickSourceObjectAt(const QPointF &position)
   // PICK-BVH: BVH-backed pick over the picking scene.
   return m_pickScene.pickingRaycaster()
       ->pick(rayOrigin, rayDirection,
-             m_pickScene.modelVertices(), m_pickScene.modelBatches())
+             m_pickScene.modelVertices(), m_pickScene.modelIndices(),
+             m_pickScene.modelBatches())
       .sourceObjectIndex;
 }
 
@@ -3186,7 +3228,8 @@ ViewportContextHit RhiViewport::classifyContextAt(const QPointF &position)
       m_camera.projMatrix(aspect), m_camera.viewMatrix());
   // PICK-BVH: BVH-backed pick over the picking scene.
   const ObjectPicking::Hit objectHit = m_pickScene.pickingRaycaster()->pick(
-      rayOrigin, rayDirection, m_pickScene.modelVertices(), m_pickScene.modelBatches());
+      rayOrigin, rayDirection, m_pickScene.modelVertices(),
+      m_pickScene.modelIndices(), m_pickScene.modelBatches());
   if (objectHit.isValid()) {
     result.target = ViewportContextTarget::Part;
     result.sourceObjectIndex = objectHit.sourceObjectIndex;

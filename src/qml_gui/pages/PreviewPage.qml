@@ -345,6 +345,7 @@ Item {
                     // renderer draws them semi-transparent behind the
                     // toolpaths (render_shells :4023).
                     meshData: root.editorVm ? root.editorVm.meshData : null
+                    meshDataRevision: root.editorVm ? root.editorVm.meshDataRevision : 0
                     meshBatchSourceObjectIndices: root.editorVm ? root.editorVm.meshBatchSourceObjectIndices : []
                     meshBatchVolumeIndices: root.editorVm ? root.editorVm.meshBatchVolumeIndices : []
                     meshBatchInstanceIndices: root.editorVm ? root.editorVm.meshBatchInstanceIndices : []

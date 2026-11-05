@@ -509,6 +509,8 @@ endif()
             src/qml_gui/Renderer/shaders/bed_texture.vert
             src/qml_gui/Renderer/shaders/model_lit.vert
             src/qml_gui/Renderer/shaders/model_lit.frag
+            src/qml_gui/Renderer/shaders/model_p3.vert
+            src/qml_gui/Renderer/shaders/model_p3.frag
             src/qml_gui/Renderer/shaders/bold_line.vert
             src/qml_gui/Renderer/shaders/bold_line.frag
     )

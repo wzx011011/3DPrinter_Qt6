@@ -232,6 +232,12 @@ class RhiViewport : public QQuickRhiItem
   // editorVm.explosionRatio in AssemblePage.qml.
   Q_PROPERTY(float explosionRatio READ explosionRatio WRITE setExplosionRatio NOTIFY explosionRatioChanged)
   Q_PROPERTY(QByteArray meshData READ meshData WRITE setMeshData)
+  // FIX-5M: topology revision from the viewmodel (bumped on every mesh cache
+  // refresh). When delivered, setMeshData skips the full-blob byte compare
+  // (a 90MB+ QByteArray == on every topology notification) and gates on the
+  // revision alone; the byte compare stays as the fallback for callers that
+  // never send a revision.
+  Q_PROPERTY(int meshDataRevision READ meshDataRevision WRITE setMeshDataRevision)
   // P15.11: backend-packed sequential clearance streams. Geometry is opaque
   // bytes here; collision calculation never occurs in QML/RHI.
   Q_PROPERTY(QByteArray sequentialClearanceOutline READ sequentialClearanceOutline WRITE setSequentialClearanceOutline)
@@ -619,6 +625,8 @@ public:
 
   QByteArray meshData() const { return m_meshData; }
   void setMeshData(const QByteArray &data);
+  int meshDataRevision() const { return m_meshDataRevision; }
+  void setMeshDataRevision(int revision);
   QByteArray sequentialClearanceOutline() const { return m_sequentialClearanceOutline; }
   QByteArray sequentialClearanceFill() const { return m_sequentialClearanceFill; }
   QByteArray sequentialHeightFill() const { return m_sequentialHeightFill; }
@@ -1306,6 +1314,14 @@ private:
   // renderer re-applies the per-volume offset (see RhiViewportRenderer).
   float m_explosionRatio = 1.0f;
   QByteArray m_meshData;
+  // FIX-5M: delivered topology revision. -1 = no revision seen yet (the byte
+  // compare in setMeshData stays authoritative); m_meshDataRevision is the
+  // latest value the viewmodel pushed, m_deliveredMeshDataRevision the one
+  // consumed with the resident blob.
+  int m_meshDataRevision = -1;
+  int m_deliveredMeshDataRevision = -1;
+  // FIX5M: FNV-1a of the resident blob (see setMeshData).
+  quint64 m_meshDataHash = 0;
   QByteArray m_sequentialClearanceOutline;
   QByteArray m_sequentialClearanceFill;
   QByteArray m_sequentialHeightFill;

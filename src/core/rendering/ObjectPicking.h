@@ -34,16 +34,21 @@ public:
     }
   };
 
+  // FIX-5M: `indices` carries the shared triangle-corner stream for indexed
+  // (blob v3) scenes; empty selects the legacy soup walk (consecutive vertex
+  // runs), so existing synthetic test scenes keep working unchanged.
   static Hit pick(
       const QVector3D &rayOrigin,
       const QVector3D &rayDirection,
       const QList<PrepareSceneData::ModelVertex> &vertices,
+      const QList<quint32> &indices,
       const QList<PrepareSceneData::ModelBatch> &batches);
 
   static int pickSourceObject(
       const QVector3D &rayOrigin,
       const QVector3D &rayDirection,
       const QList<PrepareSceneData::ModelVertex> &vertices,
+      const QList<quint32> &indices,
       const QList<PrepareSceneData::ModelBatch> &batches);
 
 private:

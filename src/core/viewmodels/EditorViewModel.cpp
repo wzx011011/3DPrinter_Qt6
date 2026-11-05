@@ -189,6 +189,7 @@ parseAllSourceObjectBoundsFromMeshBlob(const QByteArray &blob,
   constexpr qsizetype kIntBytes = qsizetype(sizeof(qint32));
   constexpr qsizetype kVertexBytes = 3 * kFloatBytes;
   constexpr qint32 kMeshBlobMagicV2 = 0x3244534D; // 'MDS2'
+  constexpr qint32 kMeshBlobMagicV3 = 0x3353444D; // 'MDS3' (indexed)
 
   qsizetype offset = 0;
   qint32 objectCount = 0;
@@ -196,8 +197,18 @@ parseAllSourceObjectBoundsFromMeshBlob(const QByteArray &blob,
     return result;
   memcpy(&objectCount, blob.constData() + offset, kIntBytes);
   offset += kIntBytes;
-  const bool decomposed = (objectCount == kMeshBlobMagicV2);
-  if (decomposed)
+  const bool indexedV3 = (objectCount == kMeshBlobMagicV3);
+  const bool decomposed = indexedV3 || (objectCount == kMeshBlobMagicV2);
+  if (indexedV3)
+  {
+    if (blob.size() < 2 * qsizetype(sizeof(qint32)))
+      return result;
+    memcpy(&objectCount, blob.constData() + offset, kIntBytes);
+    offset += kIntBytes;
+    if (batchWorldTransforms.size() != objectCount)
+      return result;
+  }
+  else if (decomposed)
   {
     if (blob.size() < 2 * qsizetype(sizeof(qint32)))
       return result;
@@ -211,22 +222,47 @@ parseAllSourceObjectBoundsFromMeshBlob(const QByteArray &blob,
 
   for (qint32 i = 0; i < objectCount; ++i)
   {
-    if (offset + 2 * kIntBytes > blob.size())
-      return {};
-    qint32 renderObjectId = 0;
-    qint32 triangleCount = 0;
-    memcpy(&renderObjectId, blob.constData() + offset, kIntBytes);
-    offset += kIntBytes;
-    memcpy(&triangleCount, blob.constData() + offset, kIntBytes);
-    offset += kIntBytes;
-    if (triangleCount < 0)
-      return result;
-    (void)renderObjectId; // not needed for bounds derivation
-
-    const qsizetype vertexCount = qsizetype(triangleCount) * 3;
-    const qsizetype payloadBytes = vertexCount * kVertexBytes;
-    if (payloadBytes < 0 || blob.size() - offset < payloadBytes)
-      return result;
+    qsizetype vertexCount = 0;
+    qsizetype payloadBytes = 0;
+    if (indexedV3)
+    {
+      // FIX-5M: [objectId][vertexCount][indexCount][xyz * vertexCount]
+      //          [uint32 * indexCount]. Bounds from the (shared) vertices.
+      if (offset + 3 * kIntBytes > blob.size())
+        return {};
+      offset += kIntBytes; // renderObjectId (unused)
+      qint32 v32 = 0;
+      qint32 indexCount = 0;
+      memcpy(&v32, blob.constData() + offset, kIntBytes);
+      offset += kIntBytes;
+      memcpy(&indexCount, blob.constData() + offset, kIntBytes);
+      offset += kIntBytes;
+      if (v32 < 0 || indexCount < 0 || (indexCount % 3) != 0)
+        return result;
+      vertexCount = qsizetype(v32);
+      payloadBytes =
+          vertexCount * kVertexBytes + qsizetype(indexCount) * qsizetype(sizeof(quint32));
+      if (blob.size() - offset < payloadBytes)
+        return result;
+    }
+    else
+    {
+      if (offset + 2 * kIntBytes > blob.size())
+        return {};
+      qint32 renderObjectId = 0;
+      qint32 triangleCount = 0;
+      memcpy(&renderObjectId, blob.constData() + offset, kIntBytes);
+      offset += kIntBytes;
+      memcpy(&triangleCount, blob.constData() + offset, kIntBytes);
+      offset += kIntBytes;
+      if (triangleCount < 0)
+        return result;
+      (void)renderObjectId; // not needed for bounds derivation
+      vertexCount = qsizetype(triangleCount) * 3;
+      payloadBytes = vertexCount * kVertexBytes;
+      if (payloadBytes < 0 || blob.size() - offset < payloadBytes)
+        return result;
+    }
 
     const int sourceIndex = batchSourceObjectIndices.value(i, -1);
     if (sourceIndex >= 0)
@@ -309,6 +345,7 @@ parsePerBatchBoundsFromMeshBlob(const QByteArray &blob)
   constexpr qsizetype kIntBytes = qsizetype(sizeof(qint32));
   constexpr qsizetype kVertexBytes = 3 * kFloatBytes;
   constexpr qint32 kMeshBlobMagicV2 = 0x3244534D; // 'MDS2'
+  constexpr qint32 kMeshBlobMagicV3 = 0x3353444D; // 'MDS3' (indexed)
 
   qsizetype offset = 0;
   qint32 objectCount = 0;
@@ -316,8 +353,9 @@ parsePerBatchBoundsFromMeshBlob(const QByteArray &blob)
     return bounds;
   memcpy(&objectCount, blob.constData() + offset, kIntBytes);
   offset += kIntBytes;
-  const bool decomposed = (objectCount == kMeshBlobMagicV2);
-  if (decomposed)
+  const bool indexedV3 = (objectCount == kMeshBlobMagicV3);
+  const bool decomposed = indexedV3 || (objectCount == kMeshBlobMagicV2);
+  if (indexedV3 || decomposed)
   {
     if (blob.size() < 2 * qsizetype(sizeof(qint32)))
       return bounds;
@@ -330,18 +368,43 @@ parsePerBatchBoundsFromMeshBlob(const QByteArray &blob)
   bounds.reserve(objectCount);
   for (qint32 i = 0; i < objectCount; ++i)
   {
-    if (offset + 2 * kIntBytes > blob.size())
-      return {};
-    qint32 triangleCount = 0;
-    offset += kIntBytes; // renderObjectId (unused for bounds)
-    memcpy(&triangleCount, blob.constData() + offset, kIntBytes);
-    offset += kIntBytes;
-    if (triangleCount < 0)
-      return {};
-    const qsizetype vertexCount = qsizetype(triangleCount) * 3;
-    const qsizetype payloadBytes = vertexCount * kVertexBytes;
-    if (payloadBytes < 0 || blob.size() - offset < payloadBytes)
-      return {};
+    qsizetype vertexCount = 0;
+    qsizetype payloadBytes = 0;
+    if (indexedV3)
+    {
+      // FIX-5M: 3-int header; bounds from the shared vertex block only.
+      if (offset + 3 * kIntBytes > blob.size())
+        return {};
+      offset += kIntBytes; // renderObjectId (unused)
+      qint32 v32 = 0;
+      qint32 indexCount = 0;
+      memcpy(&v32, blob.constData() + offset, kIntBytes);
+      offset += kIntBytes;
+      memcpy(&indexCount, blob.constData() + offset, kIntBytes);
+      offset += kIntBytes;
+      if (v32 < 0 || indexCount < 0 || (indexCount % 3) != 0)
+        return {};
+      vertexCount = qsizetype(v32);
+      payloadBytes =
+          vertexCount * kVertexBytes + qsizetype(indexCount) * qsizetype(sizeof(quint32));
+      if (blob.size() - offset < payloadBytes)
+        return {};
+    }
+    else
+    {
+      if (offset + 2 * kIntBytes > blob.size())
+        return {};
+      qint32 triangleCount = 0;
+      offset += kIntBytes; // renderObjectId (unused for bounds)
+      memcpy(&triangleCount, blob.constData() + offset, kIntBytes);
+      offset += kIntBytes;
+      if (triangleCount < 0)
+        return {};
+      vertexCount = qsizetype(triangleCount) * 3;
+      payloadBytes = vertexCount * kVertexBytes;
+      if (payloadBytes < 0 || blob.size() - offset < payloadBytes)
+        return {};
+    }
 
     PrepareSceneData::ModelBounds batchBounds{};
     bool first = true;
@@ -527,6 +590,9 @@ QVariantMap EditorViewModel::arrangeWipeTowerContext() const
 
 void EditorViewModel::refreshMeshCacheAndFitHint()
 {
+  // FIX-5M: every blob replacement bumps the revision so RhiViewport's
+  // delivery gate stays O(1) (see the meshDataRevision property).
+  ++m_meshDataRevision;
   // S3 (2026-10-14) contract: this refresh is for MODEL TOPOLOGY changes
   // only. The mesh payload is volume-local and transform-free -- the
   // transform family (gizmo drags, sidebar position/rotation/scale writes,
@@ -605,12 +671,13 @@ QVector4D EditorViewModel::fitHint() const
   // transformChanged will own this NOTIFY later). Legacy blobs keep the
   // trailer-derived m_fitHint untouched.
   constexpr qint32 kMeshBlobMagicV2 = 0x3244534D; // 'MDS2'
+  constexpr qint32 kMeshBlobMagicV3 = 0x3353444D; // 'MDS3' (indexed)
   if (!m_cachedMeshBatchLocalBounds.isEmpty() && m_cachedMeshData.size() >= qsizetype(sizeof(qint32))
       && projectService_)
   {
     qint32 magic = 0;
     memcpy(&magic, m_cachedMeshData.constData(), sizeof(qint32));
-    if (magic == kMeshBlobMagicV2)
+    if (magic == kMeshBlobMagicV2 || magic == kMeshBlobMagicV3)
     {
       const QList<QMatrix4x4> transforms = projectService_->meshBatchInstanceTransforms();
       if (transforms.size() == m_cachedMeshBatchLocalBounds.size())
@@ -6376,6 +6443,7 @@ EditorViewModel::EditorViewModel(ProjectService *projectService, SliceService *s
       m_selectedVolumeIndex = -1;
       m_fitHint = QVector4D();
       m_cachedMeshData.clear();
+      ++m_meshDataRevision;
       m_cachedMeshBatchSourceObjectIndices.clear();
     }
     // S1: a load replaces the whole scene (mesh blob, batch tables,
@@ -6866,7 +6934,13 @@ int EditorViewModel::settingsTargetVolumeIndex() const
                                     : *m_selectedVolumeIndices.begin();
 }
 
-QByteArray EditorViewModel::meshData() const { return m_cachedMeshData; }
+QByteArray EditorViewModel::meshData() const
+{
+  fprintf(stderr, "[FIX5M] vm meshData getter: %lld bytes rev=%d\n",
+          (long long)m_cachedMeshData.size(), m_meshDataRevision);
+  fflush(stderr);
+  return m_cachedMeshData;
+}
 
 void EditorViewModel::onSequentialPrintClearanceReady(const SequentialPrintClearance &clearance)
 {
@@ -11711,6 +11785,7 @@ bool EditorViewModel::loadFile(const QString &filePath)
     m_selectedVolumeIndex = -1;
     m_fitHint = QVector4D();
     m_cachedMeshData.clear();
+    ++m_meshDataRevision;
     m_cachedMeshBatchSourceObjectIndices.clear();
   }
   else
@@ -12125,6 +12200,7 @@ void EditorViewModel::clearWorkspace()
   m_sliceAllQueue.clear();
   m_fitHint = QVector4D();
   m_cachedMeshData.clear();
+  ++m_meshDataRevision;
   m_cachedMeshBatchSourceObjectIndices.clear();
   m_sliceAllQueue.clear();
   statusText_ = QStringLiteral("已新建项目");
@@ -12145,6 +12221,7 @@ void EditorViewModel::refreshAfterLoad()
   m_selectedVolumeIndex = -1;
   m_fitHint = QVector4D();
   m_cachedMeshData.clear();
+  ++m_meshDataRevision;
   m_cachedMeshBatchSourceObjectIndices.clear();
   m_slicedPlateIndices.clear();
   m_stalePlateIndices.clear();

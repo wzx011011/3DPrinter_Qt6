@@ -193,6 +193,10 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(int contextPlateIndex READ contextPlateIndex NOTIFY selectionChanged)
   /// 模型网格数据（TLV 格式，用于 GLViewport 渲染）
   Q_PROPERTY(QByteArray meshData READ meshData NOTIFY sceneTopologyChanged)
+  /// FIX-5M: mesh-cache topology revision, bumped on every refreshMeshCacheAndFitHint.
+  /// Bound to RhiViewport.meshDataRevision so blob delivery can gate on the
+  /// revision instead of a full-blob byte compare.
+  Q_PROPERTY(int meshDataRevision READ meshDataRevision NOTIFY sceneTopologyChanged)
   // P15.11: post-validate clearance streams, packed as raw float XYZ triples.
   Q_PROPERTY(QByteArray sequentialClearanceOutline READ sequentialClearanceOutline NOTIFY sequentialClearanceChanged)
   Q_PROPERTY(QByteArray sequentialClearanceFill READ sequentialClearanceFill NOTIFY sequentialClearanceChanged)
@@ -374,6 +378,8 @@ public:
   int settingsTargetObjectIndex() const;
   int settingsTargetVolumeIndex() const;
   QByteArray meshData() const;
+  /// FIX-5M: see the meshDataRevision Q_PROPERTY.
+  int meshDataRevision() const { return m_meshDataRevision; }
   QByteArray sequentialClearanceOutline() const { return m_sequentialClearanceOutline; }
   QByteArray sequentialClearanceFill() const { return m_sequentialClearanceFill; }
   QByteArray sequentialHeightFill() const { return m_sequentialHeightFill; }
@@ -2507,6 +2513,10 @@ private:
   // Measure selection (对齐上游 GLGizmoMeasure)
   int m_measureSelectionMode = 0; ///< 0=Default point, 1=Feature selection
   QByteArray m_cachedMeshData;
+  /// FIX-5M: bumped on every mesh-cache refresh (refreshMeshCacheAndFitHint
+  /// and the clear paths) so RhiViewport can gate blob delivery on the
+  /// revision instead of a full-blob byte compare.
+  int m_meshDataRevision = 0;
   QByteArray m_sequentialClearanceOutline;
   QByteArray m_sequentialClearanceFill;
   QByteArray m_sequentialHeightFill;

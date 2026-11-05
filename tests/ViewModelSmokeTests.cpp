@@ -256,6 +256,10 @@ private slots:
   // the structural replacement for the refreshMeshCacheAndFitHint whitelist
   // on the transform path.
   void meshInstanceChannelKeepsBlobStableUnderTransforms();
+  // FIX-5M live regression: the REAL 5M-face sphere's v3 blob must parse into
+  // the render scene (expandIndexedToSoup) with the full corner stream and one
+  // batch — this is the exact production path the empty-bed bug hid in.
+  void realFiveMillionFaceBlobParsesIntoRenderScene();
   // S3: fitHint derives LIVE under the decomposed blob (cached local bounds x
   // live channel) so the camera-fit hint tracks transform edits without any
   // whitelist refresh.
@@ -4871,18 +4875,20 @@ void ViewModelSmokeTests::plateSettingsSyncIntoPlateConfig()
 
 void ViewModelSmokeTests::meshInstanceChannelKeepsBlobStableUnderTransforms()
 {
-  // S3 (2026-10-14): meshData() bakes volume-local geometry (blob v2) and
-  // the per-batch instance transform channel carries ALL world placement.
+  // S3 (2026-10-14): meshData() bakes volume-local geometry and the
+  // per-batch instance transform channel carries ALL world placement.
+  // FIX-5M: the blob is now indexed v3 ('MDS3' — shared vertices + corner
+  // indices); v2 ('MDS2') stays parseable downstream for legacy scenes.
   ProjectService project;
   QVERIFY(project.addPrimitiveToPlate(0) >= 0);
 
   const QByteArray blobA = project.meshData();
   QVERIFY(!blobA.isEmpty());
 
-  // v2 magic sniff: the decomposed blob starts with 'MDS2', not a count.
+  // v3 magic sniff: the decomposed blob starts with 'MDS3', not a count.
   qint32 magic = 0;
   memcpy(&magic, blobA.constData(), sizeof(qint32));
-  QCOMPARE(magic, qint32(0x3244534D));
+  QCOMPARE(magic, qint32(0x3353444D));
 
   // Channel alignment: one transform per blob batch (object -> instance ->
   // volume walk), non-identity overall (the frozen plate shift rides inside).
@@ -4962,6 +4968,51 @@ void ViewModelSmokeTests::fitHintTracksInstanceTransformsWithoutMeshRefresh()
   const QVector4D hintAfter = vm.fitHint();
   QVERIFY(std::abs(hintAfter.x() - hintBefore.x() - 17.0f) < 0.5f);
   QVERIFY(std::abs(hintAfter.z() - hintBefore.z()) < 0.5f);
+}
+
+void ViewModelSmokeTests::realFiveMillionFaceBlobParsesIntoRenderScene()
+{
+  const QString spherePath = QDir::cleanPath(
+      QCoreApplication::applicationDirPath() + QStringLiteral("/perf_models/bench_sphere_5m.stl"));
+  if (!QFileInfo::exists(spherePath))
+    QSKIP("bench_sphere_5m.stl not generated on this machine");
+
+  ProjectService project;
+  SliceService slice(&project);
+  EditorViewModel vm(&project, &slice);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
+  QVERIFY(project.loadFile(spherePath));
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 60000);
+  QCOMPARE(project.modelCount(), 1);
+
+  const QByteArray blob = project.meshData();
+  QVERIFY(!blob.isEmpty());
+  qint32 magic = 0;
+  memcpy(&magic, blob.constData(), sizeof(qint32));
+  QCOMPARE(magic, qint32(0x3353444D)); // 'MDS3'
+
+  const QList<QMatrix4x4> transforms = project.meshBatchInstanceTransforms();
+  PrepareSceneData scene;
+  scene.setModelMeshData(blob,
+                         project.meshBatchSourceObjectIndices(),
+                         project.meshBatchVolumeIndices(),
+                         project.meshBatchInstanceIndices(),
+                         QList<int>{0},
+                         project.meshBatchVolumeTypes(),
+                         project.meshBatchExtruderIds(),
+                         project.meshBatchPrintableFlags(),
+                         QList<QVector4D>(),
+                         transforms,
+                         /*expandIndexedToSoup=*/true);
+  QCOMPARE(scene.modelBatches().size(), 1);
+  // 4,995,224 faces -> 14,985,672 soup corners after the GPU expansion.
+  QCOMPARE(scene.modelBatches().at(0).vertexCount, 14985672);
+  QCOMPARE(scene.modelVertices().size(), 14985672);
+  QVERIFY(scene.modelIndices().isEmpty()); // expanded away
+  // World position sane: the sphere sits near (40, z -40), above the bed.
+  const auto &b = scene.modelBatches().at(0);
+  QVERIFY(b.bounds.maxY > 0.0f);
+  QVERIFY(b.bounds.minY > -1.0f);
 }
 
 void ViewModelSmokeTests::meshBatchRenderTablesStayAlignedWithBlobBatches()

@@ -18,27 +18,34 @@
 // tests read vertices from the caller's list, so the raycaster stores only
 // indices and node bounds; pick() reproduces ObjectPicking::pick nearest-hit
 // semantics exactly (parity asserted by ObjectPickingTests and PerfBench).
+//
+// FIX-5M: geometry may be indexed (blob v3) — `indices` then carries the
+// triangle corners and every corner read goes through it. Empty `indices`
+// selects the legacy soup path (consecutive vertex runs), so existing
+// synthetic test scenes keep working unchanged.
 class PickingRaycaster final
 {
-public:
+ public:
   // Rebuilds the tree over every pickable triangle of `batches`. Triangles
   // with non-finite coordinates are excluded (they can never produce a hit
   // in the brute-force sweep either).
   void build(const QList<PrepareSceneData::ModelVertex> &vertices,
+             const QList<quint32> &indices,
              const QList<PrepareSceneData::ModelBatch> &batches);
 
-  // Nearest-hit semantics identical to ObjectPicking::pick. `vertices` and
-  // `batches` must be the same lists the tree was built from.
+  // Nearest-hit semantics identical to ObjectPicking::pick. `vertices`,
+  // `indices` and `batches` must be the same lists the tree was built from.
   ObjectPicking::Hit pick(const QVector3D &rayOrigin,
                           const QVector3D &rayDirection,
                           const QList<PrepareSceneData::ModelVertex> &vertices,
+                          const QList<quint32> &indices,
                           const QList<PrepareSceneData::ModelBatch> &batches) const;
 
   bool isValid() const { return m_triangleCount > 0 && !m_nodes.empty(); }
   int triangleCount() const { return m_triangleCount; }
   int nodeCount() const { return int(m_nodes.size()); }
 
-private:
+ private:
   struct Node
   {
     float minX = 0.0f;
@@ -71,14 +78,16 @@ private:
   std::vector<Node> m_nodes;
   // Triangle ordinals permuted by the build partitions; leaf slots index in.
   std::vector<int> m_triangleOrder;
-  // Per ordinal: owning batch index into the batches list, and the first of
-  // the triangle's 3 consecutive vertex indices.
+  // Per ordinal: owning batch index into the batches list, and the triangle
+  // locator — for indexed geometry the triangle's first slot in the caller's
+  // corner-index stream, for soup the first of its 3 consecutive vertices.
   std::vector<int> m_triangleBatch;
-  std::vector<int> m_triangleFirstVertex;
+  std::vector<int> m_triangleCornerStart;
   // PERF (pick_ray): the same two arrays permuted into leaf-slot order at
   // the end of build(), so the per-ray leaf loop reads dense slot-indexed
   // entries instead of chasing the scattered ordinal indirection.
   std::vector<int> m_leafTriangleBatch;
-  std::vector<int> m_leafTriangleFirstVertex;
+  std::vector<int> m_leafTriangleCornerStart;
+  bool m_indexedTriangles = false;
   int m_triangleCount = 0;
 };

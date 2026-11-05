@@ -229,11 +229,12 @@ void PerfBench::benchModel(const QString &modelPath, bool includeSlice,
       const QVector3D direction = (center - origin).normalized();
       const ObjectPicking::Hit brute =
           ObjectPicking::pick(origin, direction, scene.modelVertices(),
-                              scene.modelBatches());
+                              scene.modelIndices(), scene.modelBatches());
       QElapsedTimer rayTimer;
       rayTimer.start();
       const ObjectPicking::Hit hit = raycaster->pick(
-          origin, direction, scene.modelVertices(), scene.modelBatches());
+          origin, direction, scene.modelVertices(), scene.modelIndices(),
+          scene.modelBatches());
       rayMs.append(double(rayTimer.nsecsElapsed()) / 1e6);
       if (hit.isValid())
         ++hits;

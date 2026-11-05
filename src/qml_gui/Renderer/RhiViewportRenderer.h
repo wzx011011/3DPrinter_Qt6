@@ -161,6 +161,10 @@ private:
   quint32 uploadPlateIcons(QRhiResourceUpdateBatch *updates);
   void renderPlateIcons(QRhiCommandBuffer *cb);
   bool ensureModelLitPipeline();
+  // FIX5M: P3 derivative-lit pipeline for the model pass (single binding,
+  // no normal attribute -- normals from screen-space derivatives).
+  bool ensureModelP3Pipeline();
+  bool ensureModelP3BlendPipeline();
   // P15.2 (COLOR): blended clone of the lit pipeline for the translucent
   // model pass (blend on, depth write off).
   bool ensureModelLitBlendPipeline();
@@ -373,6 +377,11 @@ private:
   std::unique_ptr<QRhiBuffer> m_modelNormalBuffer;
   quint32 m_modelNormalBufferBytes = 0;
   bool m_modelLitEnabled = true;
+  // FIX5M: P3 derivative-lit pipeline (model pass only; bedAxes keeps
+  // the two-binding model_lit pipeline).
+  QRhiGraphicsPipeline *m_modelP3Pipeline = nullptr;
+  QRhiGraphicsPipeline *m_modelP3BlendPipeline = nullptr;
+  QRhiShaderResourceBindings *m_modelP3Srb = nullptr;
   // P15.2 (COLOR): upstream _render_objects(Transparent) — translucent
   // modifier/negative volumes drawn after the opaque pass and the bed/plate,
   // depth-tested without depth writes, far-to-near by view-space depth
@@ -391,6 +400,15 @@ private:
   };
   QVector<TranslucentBatchRange> m_modelTranslucentBatches;
   QString m_extrudersColorsSignature;
+  // FIX5M-churn: identity of the blob the render scene was parsed from
+  // (shared-pointer identity + plate context) so generation bumps from
+  // non-mesh channels do not re-parse the same payload.
+  bool m_pickBufferRequested = false; // FIX5M: on-demand pick soup
+  quint64 m_parsedMeshHash = 0;
+  int m_parsedPlateContext = -1;
+  quint64 m_uploadedMeshHash = 0;
+  int m_uploadedPlateContext = -1;
+  qint64 m_uploadedRecomposeGeneration = -1;
   // Parsed filament colours (rgba 0..1, index 0 = extruder 1) mirrored from
   // RhiViewport::m_extrudersColors; consumed by the P15.1 tint and the
   // P17.5 ghost-shell tint.

@@ -291,15 +291,17 @@ int PickingRaycaster::buildRange(BuildScratch &scratch, int first, int count, in
 }
 
 void PickingRaycaster::build(const QList<PrepareSceneData::ModelVertex> &vertices,
+                             const QList<quint32> &indices,
                              const QList<PrepareSceneData::ModelBatch> &batches)
 {
   m_nodes.clear();
   m_triangleOrder.clear();
   m_triangleBatch.clear();
-  m_triangleFirstVertex.clear();
+  m_triangleCornerStart.clear();
   m_leafTriangleBatch.clear();
-  m_leafTriangleFirstVertex.clear();
+  m_leafTriangleCornerStart.clear();
   m_triangleCount = 0;
+  m_indexedTriangles = !indices.isEmpty();
 
   const int vertexCount = vertices.size();
   BuildScratch scratch;
@@ -310,8 +312,49 @@ void PickingRaycaster::build(const QList<PrepareSceneData::ModelVertex> &vertice
   // invalid batches must never produce a hit, so they never enter the tree.
   for (int batchIndex = 0; batchIndex < batches.size(); ++batchIndex) {
     const PrepareSceneData::ModelBatch &batch = batches.at(batchIndex);
-    if (!PickingPrimitives::validBatchSpan(batch, vertexCount))
+    if (m_indexedTriangles
+        ? !PickingPrimitives::validIndexedBatchSpan(batch, indices.size())
+        : !PickingPrimitives::validBatchSpan(batch, vertexCount))
       continue;
+
+    if (m_indexedTriangles) {
+      // FIX-5M: corners come from the shared index stream (batch.firstIndex
+      // is the batch's base there; validBatchSpan above already vetted the
+      // batch's vertex range, so all corners it spans are in-range).
+      const int indexEnd = batch.firstIndex + batch.indexCount;
+      if (batch.firstIndex < 0 || indexEnd > indices.size())
+        continue;
+      for (int t = batch.firstIndex; t + 2 < indexEnd; t += 3) {
+        const quint32 ia = indices.at(t);
+        const quint32 ib = indices.at(t + 1);
+        const quint32 ic = indices.at(t + 2);
+        if (int(ia) >= vertexCount || int(ib) >= vertexCount
+            || int(ic) >= vertexCount)
+          continue;
+        const PrepareSceneData::ModelVertex &a = vertices.at(int(ia));
+        const PrepareSceneData::ModelVertex &b = vertices.at(int(ib));
+        const PrepareSceneData::ModelVertex &c = vertices.at(int(ic));
+        if (!PickingPrimitives::isFiniteVec(QVector3D(a.x, a.y, a.z))
+            || !PickingPrimitives::isFiniteVec(QVector3D(b.x, b.y, b.z))
+            || !PickingPrimitives::isFiniteVec(QVector3D(c.x, c.y, c.z)))
+          continue;
+
+        Bounds bounds;
+        bounds.extend(a.x, a.y, a.z);
+        bounds.extend(b.x, b.y, b.z);
+        bounds.extend(c.x, c.y, c.z);
+
+        const int ordinal = int(scratch.centroids.size());
+        scratch.centroids.push_back({(a.x + b.x + c.x) / 3.0f,
+                                     (a.y + b.y + c.y) / 3.0f,
+                                     (a.z + b.z + c.z) / 3.0f});
+        scratch.triangleBounds.push_back(bounds);
+        m_triangleBatch.push_back(batchIndex);
+        m_triangleCornerStart.push_back(t);
+        m_triangleOrder.push_back(ordinal);
+      }
+      continue;
+    }
 
     const int end = batch.firstVertex + batch.vertexCount;
     for (int i = batch.firstVertex; i + 2 < end; i += 3) {
@@ -334,7 +377,7 @@ void PickingRaycaster::build(const QList<PrepareSceneData::ModelVertex> &vertice
                                    (a.z + b.z + c.z) / 3.0f});
       scratch.triangleBounds.push_back(bounds);
       m_triangleBatch.push_back(batchIndex);
-      m_triangleFirstVertex.push_back(i);
+      m_triangleCornerStart.push_back(i);
       m_triangleOrder.push_back(ordinal);
     }
   }
@@ -353,11 +396,11 @@ void PickingRaycaster::build(const QList<PrepareSceneData::ModelVertex> &vertice
   // ordinal-indexed arrays were touched in near-random order on every ray.
   // One O(n) permutation gives the leaf loop two dense, slot-ordered arrays.
   m_leafTriangleBatch.resize(size_t(m_triangleCount));
-  m_leafTriangleFirstVertex.resize(size_t(m_triangleCount));
+  m_leafTriangleCornerStart.resize(size_t(m_triangleCount));
   for (int k = 0; k < m_triangleCount; ++k) {
     const int ordinal = m_triangleOrder[k];
     m_leafTriangleBatch[size_t(k)] = m_triangleBatch[size_t(ordinal)];
-    m_leafTriangleFirstVertex[size_t(k)] = m_triangleFirstVertex[size_t(ordinal)];
+    m_leafTriangleCornerStart[size_t(k)] = m_triangleCornerStart[size_t(ordinal)];
   }
 }
 
@@ -365,6 +408,7 @@ ObjectPicking::Hit PickingRaycaster::pick(
     const QVector3D &rayOrigin,
     const QVector3D &rayDirection,
     const QList<PrepareSceneData::ModelVertex> &vertices,
+    const QList<quint32> &indices,
     const QList<PrepareSceneData::ModelBatch> &batches) const
 {
   // Input handling mirrors ObjectPicking::pick exactly.
@@ -409,9 +453,38 @@ ObjectPicking::Hit PickingRaycaster::pick(
 
     if (node.triangleCount > 0) {
       const int end = node.firstChildOrTriangle + node.triangleCount;
+      if (m_indexedTriangles) {
+        // FIX-5M: leaf slots locate triangles in the caller's corner-index
+        // stream; the three corners dereference through it.
+        const quint32 *const indexBase = indices.constData();
+        for (int k = node.firstChildOrTriangle; k < end; ++k) {
+          const int cornerStart = m_leafTriangleCornerStart[size_t(k)];
+          const quint32 ia = indexBase[cornerStart];
+          const quint32 ib = indexBase[cornerStart + 1];
+          const quint32 ic = indexBase[cornerStart + 2];
+          float tTriangle = 0.0f;
+          if (!rayTriangleFast(rayOrigin, direction,
+                               vertexBase[int(ia)],
+                               vertexBase[int(ib)],
+                               vertexBase[int(ic)],
+                               tTriangle))
+            continue;
+          if (tTriangle < bestT) {
+            const PrepareSceneData::ModelBatch &batch =
+                batchBase[m_leafTriangleBatch[size_t(k)]];
+            bestT = tTriangle;
+            bestHit.sourceObjectIndex = batch.sourceObjectIndex;
+            bestHit.volumeIndex = batch.volumeIndex;
+            bestHit.instanceIndex = batch.instanceIndex;
+            bestHit.distance = tTriangle;
+            bestHit.position = rayOrigin + direction * tTriangle;
+          }
+        }
+        continue;
+      }
       for (int k = node.firstChildOrTriangle; k < end; ++k) {
         // Leaf slots address the pre-permuted slot-ordered arrays directly.
-        const int vertexIndex = m_leafTriangleFirstVertex[size_t(k)];
+        const int vertexIndex = m_leafTriangleCornerStart[size_t(k)];
         float tTriangle = 0.0f;
         if (!rayTriangleFast(rayOrigin, direction,
                              vertexBase[vertexIndex],
