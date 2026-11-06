@@ -161,6 +161,11 @@ private:
   quint32 uploadPlateIcons(QRhiResourceUpdateBatch *updates);
   void renderPlateIcons(QRhiCommandBuffer *cb);
   bool ensureModelLitPipeline();
+  // FIX5M-B3 (step 2, additive): per-batch world matrices for the
+  // volume-local model path. One SRB with a dynamic-offset UBO
+  // binding; unused until the indexed pipeline switches on.
+  bool ensureBatchMatrixSrb();
+  bool uploadBatchMatrixUbo(QRhiResourceUpdateBatch *updates);
   // FIX5M: P3 derivative-lit pipeline for the model pass (single binding,
   // no normal attribute -- normals from screen-space derivatives).
   bool ensureModelP3Pipeline();
@@ -400,6 +405,11 @@ private:
   };
   QVector<TranslucentBatchRange> m_modelTranslucentBatches;
   QString m_extrudersColorsSignature;
+  // FIX5M-B3 (step 2, additive): per-batch world-matrix UBO + SRB.
+  std::unique_ptr<QRhiBuffer> m_batchMatrixUbo;
+  quint32 m_batchMatrixUboBytes = 0;
+  int m_batchMatrixCount = -1;
+  QRhiShaderResourceBindings *m_batchMatrixSrb = nullptr;
   // FIX5M-churn: identity of the blob the render scene was parsed from
   // (shared-pointer identity + plate context) so generation bumps from
   // non-mesh channels do not re-parse the same payload.

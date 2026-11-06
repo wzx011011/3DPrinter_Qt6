@@ -3433,6 +3433,78 @@ bool RhiViewportRenderer::ensureModelP3BlendPipeline()
   return true;
 }
 
+// FIX5M-B3 (step 2, additive): per-batch world matrices for the volume-
+// local model path. Entry stride = rhi()->ubufAlignment() (256B on D3D11/
+// Vulkan); each draw selects its batch entry via setShaderResources with a
+// dynamic offset. The buffer uploads in full -- batchCount * 256B at most
+// (tens of KB), so a drag frame pays a tiny constant upload instead of
+// any vertex traffic. Identity entries for world-baked scenes make the
+// same pipeline usable by both modes.
+bool RhiViewportRenderer::ensureBatchMatrixSrb()
+{
+  if (m_batchMatrixSrb && m_batchMatrixCount == int(m_prepareScene.batchWorldTransforms().size()))
+    return true;
+  if (m_pipelineFailed || rhi() == nullptr || m_cameraUniformBuffer == nullptr)
+    return false;
+
+  const int batchCount = int(m_prepareScene.batchWorldTransforms().size());
+  const quint32 stride = rhi()->ubufAlignment();
+  const quint32 bytes = quint32(qMax(batchCount, 1)) * stride;
+  if (!ensureBuffer(m_batchMatrixUbo, bytes, m_batchMatrixUboBytes,
+                    QRhiBuffer::UniformBuffer))
+    return false;
+
+  if (!m_batchMatrixSrb) {
+    m_batchMatrixSrb = rhi()->newShaderResourceBindings();
+    m_batchMatrixSrb->setBindings({
+        QRhiShaderResourceBinding::uniformBuffer(0,
+                                                 QRhiShaderResourceBinding::VertexStage
+                                                     | QRhiShaderResourceBinding::FragmentStage,
+                                                 m_cameraUniformBuffer.get()),
+        QRhiShaderResourceBinding::uniformBufferWithDynamicOffset(1,
+                                                 QRhiShaderResourceBinding::VertexStage,
+                                                 m_batchMatrixUbo.get(),
+                                                 stride),
+    });
+    if (!m_batchMatrixSrb->create()) {
+      m_batchMatrixSrb->deleteLater();
+      m_batchMatrixSrb = nullptr;
+      m_pipelineFailed = true;
+      return false;
+    }
+  }
+  m_batchMatrixCount = batchCount;
+  return true;
+}
+
+// FIX5M-B3 (step 2, additive): fill + upload the per-batch matrix array.
+// Identity for world-baked scenes; the live channel entry per blob batch
+// for the volume-local render scene.
+bool RhiViewportRenderer::uploadBatchMatrixUbo(QRhiResourceUpdateBatch *updates)
+{
+  if (updates == nullptr || rhi() == nullptr)
+    return false;
+  if (!ensureBatchMatrixSrb())
+    return false;
+  const QList<QMatrix4x4> &channel = m_prepareScene.batchWorldTransforms();
+  const int batchCount = int(channel.size());
+  const quint32 stride = rhi()->ubufAlignment();
+  const quint32 bytes = quint32(qMax(batchCount, 1)) * stride;
+  const bool volumeLocal = m_prepareScene.meshVolumeLocal();
+  QByteArray blob;
+  blob.resize(int(bytes));
+  for (int i = 0; i < batchCount; ++i) {
+    const QMatrix4x4 &mat = volumeLocal ? channel.at(i) : QMatrix4x4();
+    memcpy(blob.data() + i * int(stride), mat.constData(), 64);
+  }
+  if (batchCount == 0) {
+    const QMatrix4x4 identity;
+    memcpy(blob.data(), identity.constData(), 64);
+  }
+  updates->uploadStaticBuffer(m_batchMatrixUbo.get(), 0, bytes, blob.constData());
+  return true;
+}
+
 bool RhiViewportRenderer::ensureModelLitPipeline()
 {
   if (m_modelLitPipeline)
