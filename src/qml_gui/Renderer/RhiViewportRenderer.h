@@ -166,6 +166,11 @@ private:
   // binding; unused until the indexed pipeline switches on.
   bool ensureBatchMatrixSrb();
   bool uploadBatchMatrixUbo(QRhiResourceUpdateBatch *updates);
+  // FIX5M-B3 (step 3): indexed model pipeline (volume-local vertices +
+  // shared IB + per-batch BatchBlock offsets). Armed by OWZX_B3_INDEXED=1
+  // AND a volume-local scene; otherwise the existing path runs untouched.
+  bool ensureModelP3IndexedPipeline();
+  bool indexedModelPathActive() const;
   // FIX5M: P3 derivative-lit pipeline for the model pass (single binding,
   // no normal attribute -- normals from screen-space derivatives).
   bool ensureModelP3Pipeline();
@@ -410,6 +415,12 @@ private:
   quint32 m_batchMatrixUboBytes = 0;
   int m_batchMatrixCount = -1;
   QRhiShaderResourceBindings *m_batchMatrixSrb = nullptr;
+  // FIX5M-B3 (step 3): shared index buffer + the indexed pipeline.
+  std::unique_ptr<QRhiBuffer> m_modelIndexBuffer;
+  quint32 m_modelIndexBufferBytes = 0;
+  quint32 m_modelIndexCount = 0;
+  QRhiGraphicsPipeline *m_modelP3IndexedPipeline = nullptr;
+  bool m_indexedPathArmed = false; // env switch, latched once
   // FIX5M-churn: identity of the blob the render scene was parsed from
   // (shared-pointer identity + plate context) so generation bumps from
   // non-mesh channels do not re-parse the same payload.

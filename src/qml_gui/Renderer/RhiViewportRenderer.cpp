@@ -240,6 +240,13 @@ void RhiViewportRenderer::initialize(QRhiCommandBuffer *cb)
 
 void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
 {
+  // FIX5M-B3 (step 3): latch the opt-in once. OWZX_B3_INDEXED=1 arms the
+  // indexed draw path for volume-local scenes (default off).
+  if (!m_indexedPathArmed
+      && qEnvironmentVariableIsSet("OWZX_B3_INDEXED")) {
+    m_indexedPathArmed =
+        qEnvironmentVariableIntValue("OWZX_B3_INDEXED") > 0;
+  }
   auto *viewport = qobject_cast<RhiViewport *>(item);
   if (viewport == nullptr)
     return;
@@ -3428,6 +3435,61 @@ bool RhiViewportRenderer::ensureModelP3BlendPipeline()
   if (!m_modelP3BlendPipeline->create()) {
     delete m_modelP3BlendPipeline;
     m_modelP3BlendPipeline = nullptr;
+    return false;
+  }
+  return true;
+}
+
+// FIX5M-B3 (step 3): the indexed path arms ONLY when the env switch is
+// set AND the scene is volume-local. Default builds keep the exact
+// existing behavior.
+bool RhiViewportRenderer::indexedModelPathActive() const
+{
+  return m_indexedPathArmed && m_prepareScene.meshVolumeLocal()
+      && !m_prepareScene.modelIndices().isEmpty();
+}
+
+bool RhiViewportRenderer::ensureModelP3IndexedPipeline()
+{
+  if (m_modelP3IndexedPipeline)
+    return true;
+  if (m_pipelineFailed || rhi() == nullptr || renderTarget() == nullptr)
+    return false;
+  if (!ensureBatchMatrixSrb())
+    return false;
+
+  const QShader vertexShader = loadShader(
+      QStringLiteral(":/rhi_viewport/shaders/model_p3i.vert.qsb"));
+  const QShader fragmentShader = loadShader(
+      QStringLiteral(":/rhi_viewport/shaders/model_p3i.frag.qsb"));
+  if (!vertexShader.isValid() || !fragmentShader.isValid())
+    return false;
+
+  QRhiVertexInputLayout inputLayout;
+  inputLayout.setBindings({
+      QRhiVertexInputBinding(sizeof(Vertex)),          // pos3 + color4
+  });
+  inputLayout.setAttributes({
+      QRhiVertexInputAttribute(0, 0, QRhiVertexInputAttribute::Float3, offsetof(Vertex, x)),
+      QRhiVertexInputAttribute(0, 1, QRhiVertexInputAttribute::Float4, offsetof(Vertex, r)),
+  });
+
+  m_renderPassDescriptor = renderTarget()->renderPassDescriptor();
+  m_modelP3IndexedPipeline = rhi()->newGraphicsPipeline();
+  m_modelP3IndexedPipeline->setTopology(QRhiGraphicsPipeline::Triangles);
+  m_modelP3IndexedPipeline->setShaderStages({
+      QRhiShaderStage(QRhiShaderStage::Vertex, vertexShader),
+      QRhiShaderStage(QRhiShaderStage::Fragment, fragmentShader),
+  });
+  m_modelP3IndexedPipeline->setShaderResourceBindings(m_batchMatrixSrb);
+  m_modelP3IndexedPipeline->setVertexInputLayout(inputLayout);
+  m_modelP3IndexedPipeline->setRenderPassDescriptor(m_renderPassDescriptor);
+  m_modelP3IndexedPipeline->setDepthTest(true);
+  m_modelP3IndexedPipeline->setDepthWrite(true);
+  m_modelP3IndexedPipeline->setTargetBlends({});
+  if (!m_modelP3IndexedPipeline->create()) {
+    m_modelP3IndexedPipeline->deleteLater();
+    m_modelP3IndexedPipeline = nullptr;
     return false;
   }
   return true;
