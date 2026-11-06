@@ -115,6 +115,12 @@ private slots:
   // mirrored compose winding + BVH dereference; fail-loud corner guard).
   void indexedMeshV3ParsesSharedVerticesAndIndices();
   void indexedMeshV3RejectsOutOfRangeCorners();
+  // FIX5M-B3 step 0: volume-local parse contract (composeWorld=false).
+  // Vertices stay in the VOLUME frame; world data (bounds, contours,
+  // channel semantics) is derived, never baked into the stream.
+  void volumeLocalParseKeepsVolumeFrameVertices();
+  void volumeLocalSetInstanceTransformsUpdatesDerivedStateOnly();
+  void volumeLocalContourWalkTransformsThroughBatchMatrix();
   // P15.1/15.2 (COLOR): upstream volume coloring lock.
   void modelColorsFollowUpstreamVolumeSemantics();
   void modelBatchesRejectMalformedPayloads();
@@ -1470,6 +1476,127 @@ void PrepareSceneDataTests::indexedMeshV3RejectsOutOfRangeCorners()
   QVERIFY(scene.modelVertices().isEmpty());
   QVERIFY(scene.modelBatches().isEmpty());
   QVERIFY(scene.modelIndices().isEmpty());
+}
+
+// == FIX5M-B3 step 0: volume-local contract tests =========================
+// One tetrahedron under a translate(+50, 0, 0) batch matrix. Volume-local
+// parse must keep the raw (0..10, 0..20) coordinates in the vertex stream,
+// expose meshVolumeLocal() == true, and still report WORLD bounds.
+void PrepareSceneDataTests::volumeLocalParseKeepsVolumeFrameVertices()
+{
+  PrepareSceneData scene;
+  const QList<float> tetra = {
+      0.0f, 0.0f, 0.0f,   10.0f, 0.0f, 0.0f,   0.0f, 20.0f, 0.0f,
+      0.0f, 0.0f, 10.0f};
+  const QList<quint32> tetraIdx = {0, 1, 2,  0, 1, 3,  0, 2, 3,  1, 2, 3};
+  const QByteArray mesh = packedIndexedMesh(QList<int>{7},
+                                            QList<QList<float>>{tetra},
+                                            QList<QList<quint32>>{tetraIdx});
+  QMatrix4x4 moved;
+  moved.translate(50.0f, 0.0f, 0.0f);
+  scene.setModelMeshData(mesh, QList<int>{0}, QList<int>{0},
+                         QList<int>{0}, QList<int>{0},
+                         QList<int>(), QList<int>(), QList<int>(),
+                         QList<QVector4D>(),
+                         QList<QMatrix4x4>{moved},
+                         /*expandIndexedToSoup=*/false,
+                         /*composeWorld=*/false);
+  QVERIFY(scene.meshDecomposed());
+  QVERIFY(scene.meshVolumeLocal());
+  // Raw volume frame: the first vertex is still at the origin.
+  QCOMPARE(scene.modelVertices().at(0).x, 0.0f);
+  QCOMPARE(scene.modelVertices().at(0).y, 0.0f);
+  QCOMPARE(scene.modelVertices().at(0).z, 0.0f);
+  // Unique vertices kept: 4, not the 12-corner soup.
+  QCOMPARE(scene.modelVertices().size(), 4);
+  QCOMPARE(scene.modelIndices().size(), 12);
+  // Derived WORLD bounds: shifted by +50 on X.
+  const PrepareSceneData::ModelBatch &b0 = scene.modelBatches().at(0);
+  QCOMPARE(b0.bounds.minX, 50.0f);
+  QCOMPARE(b0.bounds.maxX, 60.0f);
+  QCOMPARE(b0.blobIndex, 0);
+}
+
+// A channel move in the volume-local mode must NOT rewrite vertices (they
+// are volume-frame constants); it updates the derived world bounds, flips
+// winding through the INDEX triples on handedness change, and bumps the
+// generation.
+void PrepareSceneDataTests::volumeLocalSetInstanceTransformsUpdatesDerivedStateOnly()
+{
+  PrepareSceneData scene;
+  const QList<float> tetra = {
+      0.0f, 0.0f, 0.0f,   10.0f, 0.0f, 0.0f,   0.0f, 20.0f, 0.0f,
+      0.0f, 0.0f, 10.0f};
+  const QList<quint32> tetraIdx = {0, 1, 2,  0, 1, 3,  0, 2, 3,  1, 2, 3};
+  const QByteArray mesh = packedIndexedMesh(QList<int>{7},
+                                            QList<QList<float>>{tetra},
+                                            QList<QList<quint32>>{tetraIdx});
+  QMatrix4x4 placed;
+  placed.translate(50.0f, 0.0f, 0.0f);
+  scene.setModelMeshData(mesh, QList<int>{0}, QList<int>{0},
+                         QList<int>{0}, QList<int>{0},
+                         QList<int>(), QList<int>(), QList<int>(),
+                         QList<QVector4D>(),
+                         QList<QMatrix4x4>{placed},
+                         /*expandIndexedToSoup=*/false,
+                         /*composeWorld=*/false);
+  scene.clearDirtyFlags();
+  const qint64 gen0 = scene.instanceTransformGeneration();
+
+  // Move the instance by another +30 on X (the channel carries the FULL
+  // world matrix).
+  QMatrix4x4 further;
+  further.translate(80.0f, 0.0f, 0.0f);
+  scene.setInstanceTransforms(QList<QMatrix4x4>{further});
+
+  // Vertices untouched (still the raw volume frame).
+  QCOMPARE(scene.modelVertices().at(1).x, 10.0f);
+  QCOMPARE(scene.modelVertices().size(), 4);
+  // Derived world bounds moved.
+  const PrepareSceneData::ModelBatch &b0 = scene.modelBatches().at(0);
+  QCOMPARE(b0.bounds.minX, 80.0f);
+  QCOMPARE(b0.bounds.maxX, 90.0f);
+  QVERIFY(scene.instanceTransformGeneration() > gen0);
+
+  // Handedness flip goes through the index triples, never the vertices.
+  QMatrix4x4 mirrored;
+  mirrored.translate(80.0f, 0.0f, 0.0f);
+  mirrored.scale(-1.0f, 1.0f, 1.0f);
+  const quint32 idxBefore = scene.modelIndices().at(1);
+  scene.setInstanceTransforms(QList<QMatrix4x4>{mirrored});
+  const quint32 idxAfter = scene.modelIndices().at(1);
+  QVERIFY(idxBefore != idxAfter); // the triple was swapped
+  QCOMPARE(scene.modelVertices().at(1).x, 10.0f); // stream still untouched
+}
+
+// The sinking-contour walk must compose volume-local triangles through the
+// batch matrix before slicing at the bed plane (world-space bands).
+void PrepareSceneDataTests::volumeLocalContourWalkTransformsThroughBatchMatrix()
+{
+  PrepareSceneData scene;
+  scene.setBed(220.0f, 220.0f, 0.0f, 0.0f, 0, 220.0f);
+  scene.setPlateContext(0, 1, QList<int>{0});
+  // A flat quad spanning y=0 in the VOLUME frame (bed-plane crosser once the
+  // batch matrix drops it below the plane): two triangles.
+  const QList<float> quad = {
+      0.0f, -5.0f, 0.0f,   10.0f, -5.0f, 0.0f,
+      10.0f,   5.0f, 0.0f,   0.0f,   5.0f, 0.0f};
+  const QList<quint32> quadIdx = {0, 1, 2,  0, 2, 3};
+  const QByteArray mesh = packedIndexedMesh(QList<int>{7},
+                                            QList<QList<float>>{quad},
+                                            QList<QList<quint32>>{quadIdx});
+  QMatrix4x4 identity;
+  scene.setModelMeshData(mesh, QList<int>{0}, QList<int>{0},
+                         QList<int>{0}, QList<int>{0},
+                         QList<int>(), QList<int>(), QList<int>(),
+                         QList<QVector4D>(),
+                         QList<QMatrix4x4>{identity},
+                         /*expandIndexedToSoup=*/false,
+                         /*composeWorld=*/false);
+  // The sinking contours exist (the parse-time rebuild ran through the
+  // matrix path). Each crossing band is 6 vertices; non-empty == the walk
+  // transformed + sliced correctly rather than crashing or skipping.
+  QVERIFY(!scene.sinkingContourVertices().isEmpty());
 }
 
 QTEST_MAIN(PrepareSceneDataTests)

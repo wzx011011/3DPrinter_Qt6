@@ -375,7 +375,8 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
                                         const QList<int> &batchPrintableFlags,
                                         const QList<QVector4D> &extruderColors,
                                         const QList<QMatrix4x4> &batchWorldTransforms,
-                                        bool expandIndexedToSoup)
+                                        bool expandIndexedToSoup,
+                                        bool composeWorld)
 {
   // Blob v2 magic ('MDS2'): decomposed volume-local geometry. A v1 blob's
   // first int32 is the batch count (>= 0), so a leading 0x3244534D can only
@@ -402,7 +403,7 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
     valid = readValue(meshData, offset, objectCount)
         && objectCount >= 0;
     if (valid)
-      valid = parseIndexedMeshV3(meshData, offset, objectCount,
+      valid = parseIndexedMeshV3(meshData, offset, objectCount, composeWorld,
                                  batchSourceObjectIndices,
                                  batchVolumeIndices,
                                  batchInstanceIndices,
@@ -672,6 +673,12 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
     m_meshDecomposedFormat = decomposed;
     m_batchWorldTransforms = decomposed ? batchWorldTransforms
                                         : QList<QMatrix4x4>();
+    // FIX5M-B3: volume-local mode -- vertices stay in the volume frame and
+    // the per-batch channel matrices go to the GPU as a uniform array
+    // (upstream "matrix is the transform" GLVolume semantics). The pick
+    // scene and software viewport keep composeWorld=true (world-baked CPU
+    // copies for raycasting and software rasterization).
+    m_meshVolumeLocal = decomposed && indexedV3 && !composeWorld;
     // FIX-5M GPU transport bridge: the render-side scene opts into the
     // corner-soup expansion so every soup consumer downstream stays
     // unchanged; the derived world-space state below then runs on soup as
@@ -722,6 +729,7 @@ const QList<quint32> &PrepareSceneData::modelIndices() const
 bool PrepareSceneData::parseIndexedMeshV3(const QByteArray &meshData,
                                           qsizetype offset,
                                           qint32 batchCount,
+                                          bool composeWorld,
                                           const QList<int> &batchSourceObjectIndices,
                                           const QList<int> &batchVolumeIndices,
                                           const QList<int> &batchInstanceIndices,
@@ -884,15 +892,20 @@ bool PrepareSceneData::parseIndexedMeshV3(const QByteArray &meshData,
       if (!active)
         continue;
 
-      if (translateOnly) {
-        x += tx;
-        y += ty;
-        z += tz;
-      } else {
-        const QVector3D worldPoint = batchWorld.map(QVector3D(x, y, z));
-        x = worldPoint.x();
-        y = worldPoint.y();
-        z = worldPoint.z();
+      // FIX5M-B3: volume-local mode keeps (x, y, z) raw -- the batch
+      // matrix goes to the GPU as a per-batch uniform (upstream GLVolume
+      // "matrix is the transform").
+      if (composeWorld) {
+        if (translateOnly) {
+          x += tx;
+          y += ty;
+          z += tz;
+        } else {
+          const QVector3D worldPoint = batchWorld.map(QVector3D(x, y, z));
+          x = worldPoint.x();
+          y = worldPoint.y();
+          z = worldPoint.z();
+        }
       }
 
       const ModelVertex vertex{x, y, z, r, g, b, a};
@@ -911,6 +924,34 @@ bool PrepareSceneData::parseIndexedMeshV3(const QByteArray &meshData,
       updateModelBounds(vertex);
     }
     batch.vertexCount = m_modelVertices.size() - batch.firstVertex;
+    batch.blobIndex = objectIndex;
+
+    // FIX5M-B3: world bounds for the volume-local mode -- the 8 corners of
+    // the LOCAL box through the batch matrix (conservative transformed
+    // bounding box, the same semantics upstream uses). World-composed
+    // modes already accumulated world bounds in the walk above.
+    if (!composeWorld && boundsStarted) {
+      const ModelBounds local = batch.bounds;
+      bool worldStarted = false;
+      for (int corner = 0; corner < 8; ++corner) {
+        const QVector3D worldPoint = batchWorld.map(QVector3D(
+            (corner & 1) ? local.maxX : local.minX,
+            (corner & 2) ? local.maxY : local.minY,
+            (corner & 4) ? local.maxZ : local.minZ));
+        if (!worldStarted) {
+          batch.bounds = ModelBounds{worldPoint.x(), worldPoint.y(), worldPoint.z(),
+                                     worldPoint.x(), worldPoint.y(), worldPoint.z()};
+          worldStarted = true;
+        } else {
+          batch.bounds.minX = std::min(batch.bounds.minX, worldPoint.x());
+          batch.bounds.minY = std::min(batch.bounds.minY, worldPoint.y());
+          batch.bounds.minZ = std::min(batch.bounds.minZ, worldPoint.z());
+          batch.bounds.maxX = std::max(batch.bounds.maxX, worldPoint.x());
+          batch.bounds.maxY = std::max(batch.bounds.maxY, worldPoint.y());
+          batch.bounds.maxZ = std::max(batch.bounds.maxZ, worldPoint.z());
+        }
+      }
+    }
 
     offset += vertexBytes;
 
@@ -1783,6 +1824,76 @@ void PrepareSceneData::setInstanceTransforms(
   const int batchCount = m_modelBatches.size();
   const bool fullRecompose = batchWorldTransforms.size() != batchCount;
   bool anyChanged = false;
+  // FIX5M-B3: volume-local mode keeps the vertices untouched -- the per-
+  // batch channel matrix IS the transform (upstream GLVolume semantics).
+  // Only the CPU-side world bounds (8 local-box corners through the new
+  // matrix), a possible handedness index flip, and the derived state
+  // (sinking/outside) update here; the renderer re-uploads the tiny matrix
+  // array -- zero vertex traffic per drag frame.
+  if (m_meshVolumeLocal) {
+    for (int batchIndex = 0; batchIndex < batchCount; ++batchIndex) {
+      ModelBatch &batch = m_modelBatches[batchIndex];
+      const int blobIdx = batch.blobIndex;
+      const QMatrix4x4 &next = fullRecompose
+          ? batchWorldTransforms.value(blobIdx)
+          : batchWorldTransforms.at(blobIdx);
+      if (!fullRecompose && next == m_batchWorldTransforms.at(blobIdx))
+        continue;
+      const QMatrix4x4 previous = m_batchWorldTransforms.value(blobIdx);
+      // Handedness flip: the winding lives in the index triples (the
+      // vertices are volume-local), so flip them in place.
+      if ((next.determinant() < 0.0f) != (previous.determinant() < 0.0f)
+          && batch.indexCount >= 3) {
+        for (int t = batch.firstIndex; t + 2 < batch.firstIndex + batch.indexCount; t += 3)
+          std::swap(m_modelIndices[t + 1], m_modelIndices[t + 2]);
+      }
+      // World bounds: the 8 corners of the LOCAL box through the new
+      // matrix (conservative transformed bounding box).
+      ModelBounds local{0, 0, 0, 0, 0, 0};
+      bool localStarted = false;
+      const int vEnd = batch.firstVertex + batch.vertexCount;
+      for (int v = batch.firstVertex; v < vEnd; ++v) {
+        const ModelVertex &lv = m_modelVertices.at(v);
+        if (!localStarted) {
+          local = ModelBounds{lv.x, lv.y, lv.z, lv.x, lv.y, lv.z};
+          localStarted = true;
+        } else {
+          local.minX = std::min(local.minX, lv.x);
+          local.minY = std::min(local.minY, lv.y);
+          local.minZ = std::min(local.minZ, lv.z);
+          local.maxX = std::max(local.maxX, lv.x);
+          local.maxY = std::max(local.maxY, lv.y);
+          local.maxZ = std::max(local.maxZ, lv.z);
+        }
+      }
+      if (localStarted) {
+        bool worldStarted = false;
+        for (int corner = 0; corner < 8; ++corner) {
+          const QVector3D worldPoint = next.map(QVector3D(
+              (corner & 1) ? local.maxX : local.minX,
+              (corner & 2) ? local.maxY : local.minY,
+              (corner & 4) ? local.maxZ : local.minZ));
+          if (!worldStarted) {
+            batch.bounds = ModelBounds{worldPoint.x(), worldPoint.y(), worldPoint.z(),
+                                     worldPoint.x(), worldPoint.y(), worldPoint.z()};
+            worldStarted = true;
+          } else {
+            batch.bounds.minX = std::min(batch.bounds.minX, worldPoint.x());
+            batch.bounds.minY = std::min(batch.bounds.minY, worldPoint.y());
+            batch.bounds.minZ = std::min(batch.bounds.minZ, worldPoint.z());
+            batch.bounds.maxX = std::max(batch.bounds.maxX, worldPoint.x());
+            batch.bounds.maxY = std::max(batch.bounds.maxY, worldPoint.y());
+            batch.bounds.maxZ = std::max(batch.bounds.maxZ, worldPoint.z());
+          }
+        }
+      }
+      m_batchWorldTransforms[blobIdx] = next;
+      anyChanged = true;
+    }
+  } else {
+    // World-composed scene (v2 blobs / pick scene): the vertices carry
+    // the previous channel composition; apply only the delta
+    // (next * previous^-1) to the resident world-space vertices.
   for (int batchIndex = 0; batchIndex < batchCount; ++batchIndex) {
     const QMatrix4x4 &next = fullRecompose
         ? batchWorldTransforms.value(batchIndex)
@@ -1808,6 +1919,8 @@ void PrepareSceneData::setInstanceTransforms(
     anyChanged = true;
     m_batchWorldTransforms[batchIndex] = next;
   }
+  }
+
   // Full-recompose mode may also SHRINK the channel (protocol violation from
   // the producer); keep the stored list aligned with what was applied.
   if (fullRecompose) {

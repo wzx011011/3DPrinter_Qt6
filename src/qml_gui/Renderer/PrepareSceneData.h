@@ -137,6 +137,9 @@ public:
     // by the preview ghost-shell pass to tint per volume
     // (update_colors_by_extruder, 3DScene.cpp:1216-1224). Trailing field.
     int extruderId = 0;
+    // FIX5M-B3: this batch's index into the blob-aligned transform
+    // channel; -1 for legacy blobs. Trailing field.
+    int blobIndex = -1;
   };
 
   // P15.3 (OUTOFBED): upstream PrintVolumeDetection (gouraud.fs:11-22),
@@ -420,7 +423,8 @@ public:
                         const QList<QVector4D> &extruderColors,
                         const QList<QMatrix4x4> &batchWorldTransforms
                             = QList<QMatrix4x4>(),
-                        bool expandIndexedToSoup = false);
+                        bool expandIndexedToSoup = false,
+                        bool composeWorld = true);
   // FIX-5M (indexed blob v3 'MDS3'): per batch [objectId][vertexCount]
   // [indexCount][xyz*vertexCount][uint32*indexCount]. Shared vertices +
   // corner indices; the parse composes each SOURCE vertex once (2.5M for a
@@ -431,6 +435,7 @@ public:
   bool parseIndexedMeshV3(const QByteArray &meshData,
                           qsizetype offset,
                           qint32 batchCount,
+                          bool composeWorld,
                           const QList<int> &batchSourceObjectIndices,
                           const QList<int> &batchVolumeIndices,
                           const QList<int> &batchInstanceIndices,
@@ -573,6 +578,11 @@ public:
   // FIX-5M (indexed blob v3): shared triangle-corner index stream. Empty for
   // legacy v1/v2 soup payloads (triangles are implicit vertex runs there).
   const QList<quint32> &modelIndices() const;
+  // FIX5M-B3: true when the resident v3 payload keeps VOLUME-LOCAL
+  // vertices (parse with composeWorld=false) -- per-batch world
+  // matrices then live in the transform channel. False for world-
+  // composed scenes and legacy v1/v2 blobs.
+  bool meshVolumeLocal() const { return m_meshVolumeLocal; }
   // Triangle adapter: calls f(a, b, c) for every triangle of the batch,
   // indirection through m_modelIndices when the resident payload is indexed
   // v3, straight vertex runs for legacy soup. All triangle walkers (contours,
@@ -733,6 +743,9 @@ private:
   // resident blob is legacy v1/v2 soup (triangles are then implicit vertex
   // runs). uint32 keeps a 4B/tri corner — 5M faces = 60MB.
   QList<quint32> m_modelIndices;
+  // FIX5M-B3: see meshVolumeLocal(). Only ever true for an indexed v3
+  // scene parsed with composeWorld=false.
+  bool m_meshVolumeLocal = false;
   QList<ModelBatch> m_modelBatches;
   ModelBounds m_modelBounds;
   bool m_hasModelBounds = false;
