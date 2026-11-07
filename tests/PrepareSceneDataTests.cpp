@@ -1458,10 +1458,45 @@ void PrepareSceneDataTests::indexedMeshV3ParsesSharedVerticesAndIndices()
   QCOMPARE(b1.indexCount, 12);
   // mirrored compose negates X of the second batch's verts (base 0 + mirror).
   QCOMPARE(scene.modelVertices().at(4 + 1).x, -10.0f);
-  // winding flipped at compose time: corners (0,1,2) -> (0,2,1).
-  QCOMPARE(scene.modelIndices().at(12 + 0), quint32(4 + 0));
-  QCOMPARE(scene.modelIndices().at(12 + 1), quint32(4 + 2));
-  QCOMPARE(scene.modelIndices().at(12 + 2), quint32(4 + 1));
+  // O3: the index stream is vertex-cache reordered per batch, so the
+  // triples' ORDER is not stable -- assert the triangle SET and the
+  // mirrored winding instead: every mirrored triple is the corresponding
+  // base triple with the second/third corners swapped.
+  const auto triangleKey = [](quint32 a, quint32 b, quint32 c) {
+    quint32 lo = std::min(a, std::min(b, c));
+    quint32 hi = std::max(a, std::max(b, c));
+    return (quint64(lo) << 40) | (quint64(a + b + c - lo - hi) << 20) | quint64(hi);
+  };
+  const auto windingSignature = [](quint32 a, quint32 b, quint32 c) {
+    // canonical rotation: start at the smallest corner
+    if (a <= b && a <= c) return QPair<quint32, quint32>(a, b);
+    if (b <= a && b <= c) return QPair<quint32, quint32>(b, c);
+    return QPair<quint32, quint32>(c, a);
+  };
+  QHash<quint64, QPair<quint32, quint32>> baseWinding;
+  for (int t = 0; t < 12; t += 3) {
+    const quint32 a = scene.modelIndices().at(t);
+    const quint32 b = scene.modelIndices().at(t + 1);
+    const quint32 c = scene.modelIndices().at(t + 2);
+    baseWinding.insert(triangleKey(a, b, c), windingSignature(a, b, c));
+  }
+  QCOMPARE(baseWinding.size(), 4); // the tetrahedron's four faces
+  for (int t = 12; t < 24; t += 3) {
+    // normalize to batch-local corners (base batch occupies 0..3, the
+    // mirrored one 4..7)
+    const quint32 a = scene.modelIndices().at(t) - 4;
+    const quint32 b = scene.modelIndices().at(t + 1) - 4;
+    const quint32 c = scene.modelIndices().at(t + 2) - 4;
+    const quint64 key = triangleKey(a, b, c);
+    QVERIFY2(baseWinding.contains(key), "mirrored batch must cover the same face set");
+    // mirrored winding = the base winding with the second corner swapped
+    const QPair<quint32, quint32> base = baseWinding.value(key);
+    const QPair<quint32, quint32> mirrored = windingSignature(a, b, c);
+    const bool facesShareEdge = (mirrored.first == base.first && mirrored.second != base.second)
+        || (mirrored.first != base.first && mirrored.second == base.second)
+        || (mirrored.first == base.second && mirrored.second == base.first);
+    QVERIFY2(facesShareEdge, "mirrored triple must rotate the base winding, not flip a different edge");
+  }
 
   // BVH pick dereferences the index stream: a ray through the mirrored
   // batch's first triangle hits batch source 1.

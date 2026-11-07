@@ -10,8 +10,13 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <vector>
 #include <QHash>
 #include <QPair>
+
+// O3: vendored meshoptimizer (third_party/meshoptimizer, MIT) -- per-batch
+// vertex-cache index reordering in the v3 parse.
+#include <meshoptimizer.h>
 
 namespace
 {
@@ -803,6 +808,11 @@ bool PrepareSceneData::parseIndexedMeshV3(const QByteArray &meshData,
   }
 
   const char *const meshDataBase = meshData.constData();
+  // O3: per-batch scratch buffers, reused across batches (the single-batch
+  // 5M-face case peaks at ~120MB transient -- same order as the parse's own
+  // reserve).
+  std::vector<quint32> scratchIndices;
+  std::vector<quint32> orderedIndices;
   for (qint32 objectIndex = 0; objectIndex < batchCount; ++objectIndex) {
     qint32 renderObjectId = 0;
     qint32 vertexCount = 0;
@@ -978,6 +988,14 @@ bool PrepareSceneData::parseIndexedMeshV3(const QByteArray &meshData,
       batch.firstIndex = m_modelIndices.size();
       const quint32 base = quint32(batch.firstVertex);
       const char *indexCursor = meshDataBase + offset;
+      // O3: the batch's triangles go through meshopt_optimizeVertexCache
+      // (Forsyth linear-speed vertex cache reordering, batch-local so the
+      // per-batch layout contracts stay intact) before the global rebase.
+      // Triangle SET and per-triangle winding are preserved -- only the
+      // draw order changes -- so the winding-swap semantics below run
+      // after the reorder, per triple.
+      scratchIndices.resize(qsizetype(indexCount));
+      quint32 local[3];
       for (qint32 t = 0; t < indexCount; t += 3) {
         quint32 i0 = 0;
         quint32 i1 = 0;
@@ -989,6 +1007,18 @@ bool PrepareSceneData::parseIndexedMeshV3(const QByteArray &meshData,
         if (i0 >= quint32(vertexCount) || i1 >= quint32(vertexCount)
             || i2 >= quint32(vertexCount))
           return false;
+        local[0] = i0;
+        local[1] = i1;
+        local[2] = i2;
+        std::memcpy(scratchIndices.data() + t, local, sizeof(local));
+      }
+      orderedIndices.resize(qsizetype(indexCount));
+      meshopt_optimizeVertexCache(orderedIndices.data(), scratchIndices.data(),
+                                  size_t(indexCount), size_t(vertexCount));
+      for (qint32 t = 0; t < indexCount; t += 3) {
+        const quint32 i0 = orderedIndices[size_t(t)];
+        const quint32 i1 = orderedIndices[size_t(t) + 1];
+        const quint32 i2 = orderedIndices[size_t(t) + 2];
         if (swapWinding)
           m_modelIndices.append({base + i0, base + i2, base + i1});
         else

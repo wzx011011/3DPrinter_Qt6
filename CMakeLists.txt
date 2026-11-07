@@ -366,6 +366,22 @@ endif()
     else()
         message(WARNING "libcurl not found in DEPS_PREFIX, FTP upload disabled")
     endif()
+    # O3: vendored meshoptimizer (MIT, vendor/meshoptimizer/LICENSE.md)
+    # -- per-batch vertex-cache index reordering in the v3 parse
+    # (PrepareSceneData::parseIndexedMeshV3). Minimal set: allocator +
+    # vcacheoptimizer + vfetchoptimizer.
+    add_library(owzx_meshopt STATIC
+        vendor/meshoptimizer/allocator.cpp
+        vendor/meshoptimizer/vcacheoptimizer.cpp
+        vendor/meshoptimizer/vfetchoptimizer.cpp
+    )
+    # The tree's Ninja generator emits module-scan rule variants; a bare new
+    # target references the _unscanned rule that was never generated
+    # (mixed-generation state). These translation units are plain C++.
+    set_target_properties(owzx_meshopt PROPERTIES CXX_SCAN_FOR_MODULES OFF)
+    target_include_directories(owzx_app_core PUBLIC
+        "${CMAKE_SOURCE_DIR}/vendor/meshoptimizer")
+    target_link_libraries(owzx_app_core PUBLIC owzx_meshopt)
     # FFmpeg is optional in this migration build. Compile the RTSP decoder only
     # when headers and all required libraries are present.
     set(OWZX_FFMPEG_COMPONENTS avcodec avformat avutil swscale)
@@ -902,7 +918,10 @@ if(BUILD_TESTING)
         src/qml_gui/Renderer/ViewportContextHit.h
     )
     target_include_directories(PrepareSceneDataTests PRIVATE src)
-    target_link_libraries(PrepareSceneDataTests PRIVATE Qt6::Test Qt6::Core Qt6::Gui)
+    # O3: PrepareSceneData.cpp calls meshopt_optimizeVertexCache.
+    target_include_directories(PrepareSceneDataTests PRIVATE
+        "${CMAKE_SOURCE_DIR}/vendor/meshoptimizer")
+    target_link_libraries(PrepareSceneDataTests PRIVATE Qt6::Test Qt6::Core Qt6::Gui owzx_meshopt)
     add_test(NAME PrepareSceneDataTests COMMAND PrepareSceneDataTests)
     set_tests_properties(PrepareSceneDataTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
@@ -998,8 +1017,9 @@ if(BUILD_TESTING)
         src/qml_gui/Renderer/PrepareSceneData.h
         src/qml_gui/Renderer/ViewportContextHit.h
     )
-    target_include_directories(ObjectPickingTests PRIVATE src)
-    target_link_libraries(ObjectPickingTests PRIVATE Qt6::Test Qt6::Core Qt6::Gui)
+    target_include_directories(ObjectPickingTests PRIVATE src
+        "${CMAKE_SOURCE_DIR}/vendor/meshoptimizer")
+    target_link_libraries(ObjectPickingTests PRIVATE Qt6::Test Qt6::Core Qt6::Gui owzx_meshopt)
     add_test(NAME ObjectPickingTests COMMAND ObjectPickingTests)
     set_tests_properties(ObjectPickingTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
@@ -1107,8 +1127,9 @@ if(BUILD_TESTING)
         src/core/rendering/PickingPrimitives.h
         src/qml_gui/Renderer/ViewportContextHit.h
     )
-    target_include_directories(GizmoStateWiringTests PRIVATE src)
-    target_link_libraries(GizmoStateWiringTests PRIVATE Qt6::Test Qt6::Core Qt6::Gui)
+    target_include_directories(GizmoStateWiringTests PRIVATE src
+        "${CMAKE_SOURCE_DIR}/vendor/meshoptimizer")
+    target_link_libraries(GizmoStateWiringTests PRIVATE Qt6::Test Qt6::Core Qt6::Gui owzx_meshopt)
     add_test(NAME GizmoStateWiringTests COMMAND GizmoStateWiringTests)
     set_tests_properties(GizmoStateWiringTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
