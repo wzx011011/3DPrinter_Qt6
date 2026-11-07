@@ -126,6 +126,14 @@ private slots:
   // tints instead of building recolored vertex duplicates.
   void batchTintChannelsCoverEveryBatch();
   void batchTintChannelsSurviveSoupExpansion();
+  // O2 (REGION UPLOAD): per-batch geometry revisions keyed by (object,
+  // volume) identity -- an edit re-encodes the whole plate blob, but only
+  // the edited batch's bytes change, so only its revision may bump and the
+  // renderer re-uploads only that batch's byte range.
+  void batchRevisionsInheritOnSameGeometryReparse();
+  void batchRevisionBumpsOnlyForEditedBatch();
+  void batchRevisionBumpsOnColorChange();
+  void batchRevisionFollowsIdentityAcrossReorder();
   // P15.1/15.2 (COLOR): upstream volume coloring lock.
   void modelColorsFollowUpstreamVolumeSemantics();
   void modelBatchesRejectMalformedPayloads();
@@ -1704,6 +1712,168 @@ void PrepareSceneDataTests::batchTintChannelsSurviveSoupExpansion()
   QCOMPARE(scene.batchPickColors().at(0).x(), float((h0 >> 16) & 0xFF) / 255.0f);
   QCOMPARE(scene.batchGhostColors().at(0), QVector4D(red.x(), red.y(), red.z(), 0.5f));
   QCOMPARE(scene.batchGhostColors().at(1), QVector4D(red.x(), red.y(), red.z(), 0.5f));
+}
+
+// == O2 (REGION UPLOAD): per-batch geometry revision locks =================
+
+namespace {
+  // A 1-tetra batch block in the v3 wire form (geometry only, no trailer).
+  void appendBatchBlock(QByteArray &bytes, int objectId,
+                        const QList<float> &verts, const QList<quint32> &idx)
+  {
+    appendInt32(bytes, objectId);
+    appendInt32(bytes, qint32(verts.size() / 3));
+    appendInt32(bytes, qint32(idx.size()));
+    for (float v : verts) appendFloat(bytes, v);
+    for (quint32 c : idx) bytes.append(reinterpret_cast<const char *>(&c), sizeof(c));
+  }
+
+  QByteArray threeBatchBlob(const QList<QList<float>> &verts,
+                            const QList<QList<quint32>> &idx)
+  {
+    QByteArray bytes;
+    appendInt32(bytes, 0x3353444D); // MDS3
+    appendInt32(bytes, qint32(verts.size()));
+    for (int i = 0; i < verts.size(); ++i)
+      appendBatchBlock(bytes, 7 + i, verts.at(i), idx.at(i));
+    appendFloat(bytes, -10.0f); appendFloat(bytes, -20.0f); appendFloat(bytes, -30.0f);
+    appendFloat(bytes, 40.0f); appendFloat(bytes, 50.0f); appendFloat(bytes, 60.0f);
+    return bytes;
+  }
+
+  QList<QList<float>> tetraBlocks(int count)
+  {
+    QList<QList<float>> blocks;
+    const QList<float> tetra = {
+        0.0f, 0.0f, 0.0f,   10.0f, 0.0f, 0.0f,   0.0f, 10.0f, 0.0f,
+        0.0f, 0.0f, 10.0f};
+    for (int i = 0; i < count; ++i) blocks.append(tetra);
+    return blocks;
+  }
+
+  QList<QList<quint32>> tetraIndexBlocks(int count)
+  {
+    QList<QList<quint32>> blocks;
+    const QList<quint32> idx = {0, 1, 2,  0, 1, 3,  0, 2, 3,  1, 2, 3};
+    for (int i = 0; i < count; ++i) blocks.append(idx);
+    return blocks;
+  }
+}
+
+void PrepareSceneDataTests::batchRevisionsInheritOnSameGeometryReparse()
+{
+  PrepareSceneData scene;
+  const QByteArray blob = threeBatchBlob(tetraBlocks(3), tetraIndexBlocks(3));
+  const QList<int> sources{0, 1, 2};
+  const QList<QMatrix4x4> ids{QMatrix4x4(), QMatrix4x4(), QMatrix4x4()};
+  scene.setModelMeshData(blob, sources, QList<int>{0, 0, 0}, QList<int>{0, 0, 0},
+                         sources, QList<int>{0, 0, 0}, QList<int>{1, 1, 1},
+                         QList<int>{1, 1, 1}, QList<QVector4D>(),
+                         ids, false, false);
+  QCOMPARE(scene.modelBatches().size(), 3);
+  QCOMPARE(scene.batchVertexRevisions().size(), 3);
+  const quint64 gen0 = scene.meshBatchDataGeneration();
+  const QList<quint64> rev0 = scene.batchVertexRevisions();
+
+  // Re-parse the SAME blob: identity + geometry bytes unchanged -> revisions
+  // inherited, generation not bumped.
+  scene.setModelMeshData(blob, sources, QList<int>{0, 0, 0}, QList<int>{0, 0, 0},
+                         sources, QList<int>{0, 0, 0}, QList<int>{1, 1, 1},
+                         QList<int>{1, 1, 1}, QList<QVector4D>(),
+                         ids, false, false);
+  QCOMPARE(scene.batchVertexRevisions(), rev0);
+  QCOMPARE(scene.meshBatchDataGeneration(), gen0);
+}
+
+void PrepareSceneDataTests::batchRevisionBumpsOnlyForEditedBatch()
+{
+  PrepareSceneData scene;
+  const QList<int> sources{0, 1, 2};
+  const QList<QMatrix4x4> ids{QMatrix4x4(), QMatrix4x4(), QMatrix4x4()};
+  scene.setModelMeshData(threeBatchBlob(tetraBlocks(3), tetraIndexBlocks(3)),
+                         sources, QList<int>{0, 0, 0}, QList<int>{0, 0, 0},
+                         sources, QList<int>{0, 0, 0}, QList<int>{1, 1, 1},
+                         QList<int>{1, 1, 1}, QList<QVector4D>(),
+                         ids, false, false);
+  const QList<quint64> rev0 = scene.batchVertexRevisions();
+  QVERIFY(rev0.at(0) != rev0.at(1)); // fresh assignments are unique
+
+  // Edit the MIDDLE batch's geometry (move one vertex), re-encode.
+  auto blocks = tetraBlocks(3);
+  blocks[1][0] = 3.0f; // first vertex x: 0 -> 3
+  scene.setModelMeshData(threeBatchBlob(blocks, tetraIndexBlocks(3)),
+                         sources, QList<int>{0, 0, 0}, QList<int>{0, 0, 0},
+                         sources, QList<int>{0, 0, 0}, QList<int>{1, 1, 1},
+                         QList<int>{1, 1, 1}, QList<QVector4D>(),
+                         ids, false, false);
+  const QList<quint64> rev1 = scene.batchVertexRevisions();
+  QCOMPARE(rev1.at(0), rev0.at(0)); // untouched batch inherits
+  QVERIFY(rev1.at(1) != rev0.at(1)); // edited batch bumps
+  QCOMPARE(rev1.at(2), rev0.at(2)); // untouched batch inherits
+  QVERIFY(scene.meshBatchDataGeneration() > 0);
+}
+
+void PrepareSceneDataTests::batchRevisionBumpsOnColorChange()
+{
+  // The vertex color is baked into the VB bytes; an extruder recolor must
+  // bump the batch revision even though the geometry bytes are identical.
+  PrepareSceneData scene;
+  const QByteArray blob = threeBatchBlob(tetraBlocks(2), tetraIndexBlocks(2));
+  const QList<int> sources{0, 1};
+  const QList<QMatrix4x4> ids{QMatrix4x4(), QMatrix4x4()};
+  const QVector4D red(1.0f, 0.0f, 0.0f, 1.0f);
+  const QVector4D green(0.0f, 1.0f, 0.0f, 1.0f);
+  scene.setModelMeshData(blob, sources, QList<int>{0, 0}, QList<int>{0, 0},
+                         sources, QList<int>{0, 0}, QList<int>{1, 1},
+                         QList<int>{1, 1}, QList<QVector4D>{red, red},
+                         ids, false, false);
+  const QList<quint64> rev0 = scene.batchVertexRevisions();
+  scene.setModelMeshData(blob, sources, QList<int>{0, 0}, QList<int>{0, 0},
+                         sources, QList<int>{0, 0}, QList<int>{1, 2},
+                         QList<int>{1, 1}, QList<QVector4D>{red, green},
+                         ids, false, false);
+  const QList<quint64> rev1 = scene.batchVertexRevisions();
+  QCOMPARE(rev1.at(0), rev0.at(0));
+  QVERIFY(rev1.at(1) != rev0.at(1)); // recolored batch bumps
+}
+
+void PrepareSceneDataTests::batchRevisionFollowsIdentityAcrossReorder()
+{
+  // Re-encode the SAME two (identity, geometry) pairs in swapped positional
+  // order: revisions must follow the identity, not the position.
+  PrepareSceneData scene;
+  auto blocks = tetraBlocks(2);
+  auto idx = tetraIndexBlocks(2);
+  // Make the two geometries distinct so identity -> bytes mapping matters.
+  blocks[1][0] = 5.0f;
+  const QList<int> sources{0, 1};
+  const QList<QMatrix4x4> ids{QMatrix4x4(), QMatrix4x4()};
+  scene.setModelMeshData(threeBatchBlob(blocks, idx),
+                         sources, QList<int>{0, 0}, QList<int>{0, 0},
+                         sources, QList<int>{0, 0}, QList<int>{1, 1},
+                         QList<int>{1, 1}, QList<QVector4D>(),
+                         ids, false, false);
+  const QList<quint64> rev0 = scene.batchVertexRevisions();
+
+  // Swapped order: identity 1's geometry block first, identity 0's second.
+  QByteArray swapped;
+  appendInt32(swapped, 0x3353444D);
+  appendInt32(swapped, 2);
+  appendBatchBlock(swapped, 8, blocks.at(1), idx.at(1));
+  appendBatchBlock(swapped, 7, blocks.at(0), idx.at(0));
+  appendFloat(swapped, -10.0f); appendFloat(swapped, -20.0f); appendFloat(swapped, -30.0f);
+  appendFloat(swapped, 40.0f); appendFloat(swapped, 50.0f); appendFloat(swapped, 60.0f);
+  scene.setModelMeshData(swapped,
+                         QList<int>{1, 0}, QList<int>{0, 0}, QList<int>{0, 0},
+                         QList<int>{0, 1},
+                         QList<int>{0, 0}, QList<int>{1, 1},
+                         QList<int>{1, 1}, QList<QVector4D>(),
+                         ids, false, false);
+  const QList<quint64> rev1 = scene.batchVertexRevisions();
+  // Position 0 now holds identity (1,0): it must carry identity 1's old
+  // revision (rev0.at(1)); position 1 carries identity 0's (rev0.at(0)).
+  QCOMPARE(rev1.at(0), rev0.at(1));
+  QCOMPARE(rev1.at(1), rev0.at(0));
 }
 
 QTEST_MAIN(PrepareSceneDataTests)

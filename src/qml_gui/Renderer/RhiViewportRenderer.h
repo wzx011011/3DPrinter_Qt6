@@ -408,6 +408,19 @@ private:
     QVector3D center;
   };
   QVector<TranslucentBatchRange> m_modelTranslucentBatches;
+  // Per-batch draw base into the opaque model VB, aligned with
+  // m_prepareScene.modelBatches(). Indexed mode keeps the full unique-vertex
+  // stream (the shared IB's bases depend on it), so the entry is the batch's
+  // own firstVertex; soup mode records the compacted position (translucent
+  // batches are excluded from the opaque VB and carry 0 here -- the draw
+  // loops skip them anyway).
+  QList<quint32> m_batchOpaqueFirstVertex;
+  // O2 (REGION UPLOAD): the per-batch state behind the last VB/IB upload --
+  // a batch whose revision and layout match skips its byte range.
+  QList<quint64> m_uploadedBatchRevisions;
+  QList<quint32> m_uploadedBatchVertexCounts;
+  QList<quint32> m_uploadedBatchIndexCounts;
+  quint32 m_uploadedModelVertexCount = 0;
   QString m_extrudersColorsSignature;
   // FIX5M-B3 (step 2, additive): per-batch world-matrix UBO + SRB.
   std::unique_ptr<QRhiBuffer> m_batchMatrixUbo;

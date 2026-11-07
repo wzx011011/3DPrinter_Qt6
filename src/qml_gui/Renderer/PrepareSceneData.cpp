@@ -656,8 +656,13 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
 
     if (valid && active) {
       batch.vertexCount = m_modelVertices.size() - batch.firstVertex;
-      if (batch.vertexCount > 0)
+      if (batch.vertexCount > 0) {
+        // O2: the legacy v1/v2 walk bakes world transforms into the
+        // vertices (no wire-stable bytes) -- always a fresh revision.
+        m_batchVertexRevisions.append(++m_batchDataRevisionCounter);
+        ++m_batchDataGeneration;
         m_modelBatches.append(batch);
+      }
     }
   }
 
@@ -993,8 +998,33 @@ bool PrepareSceneData::parseIndexedMeshV3(const QByteArray &meshData,
     }
     offset += indexBytes;
 
-    if (active && (batch.vertexCount > 0 || batch.indexCount > 0))
+    if (active && (batch.vertexCount > 0 || batch.indexCount > 0)) {
+      // O2 (REGION UPLOAD): geometry revision keyed by (sourceObject,
+      // volume) identity. The hash covers the batch's raw wire bytes
+      // (volume-local geometry) plus the resolved batch color -- a recolor
+      // rewrites the baked vertex colors, so it must bump the revision
+      // even though the geometry bytes are identical. An unchanged
+      // identity+hash inherits the previous revision so the renderer can
+      // skip that batch's byte range on re-upload.
+      const quint64 identity = (quint64(quint32(sourceObjectIndex)) << 32)
+          | quint32(volumeIndex);
+      quint64 geom = fnv1aHash(meshDataBase + offset - vertexBytes - indexBytes,
+                               vertexBytes + indexBytes);
+      const float colorBytes[4] = {r, g, b, a};
+      geom = fnv1aHash(reinterpret_cast<const char *>(colorBytes),
+                       qsizetype(sizeof(colorBytes)), geom);
+      quint64 revision;
+      const auto it = m_batchGeometryHashes.constFind(identity);
+      if (it != m_batchGeometryHashes.constEnd() && it.value().first == geom) {
+        revision = it.value().second; // inherit
+      } else {
+        revision = ++m_batchDataRevisionCounter;
+        ++m_batchDataGeneration;
+        m_batchGeometryHashes.insert(identity, {geom, revision});
+      }
+      m_batchVertexRevisions.append(revision);
       m_modelBatches.append(batch);
+    }
   }
   return true;
 }
@@ -1037,6 +1067,11 @@ void PrepareSceneData::expandIndexedToSoupImpl()
     batch.indexCount = 0; // pure soup semantics from here on
     cornerBase += batch.vertexCount;
   }
+  // O2: the soup expansion rewrote every batch's corner ranges -- the old
+  // revisions no longer describe the resident bytes.
+  for (quint64 &rev : m_batchVertexRevisions)
+    rev = ++m_batchDataRevisionCounter;
+  ++m_batchDataGeneration;
   m_modelIndices.clear();
 }
 
@@ -1745,10 +1780,26 @@ void PrepareSceneData::clearModelGeometry()
   // O1 (TINT): derived tint channels follow the batches.
   m_batchPickColors.clear();
   m_batchGhostColors.clear();
+  // O2 (REGION UPLOAD): revisions follow the batches. The identity->hash
+  // map deliberately SURVIVES the clear: a re-parse of an edited scene
+  // inherits revisions for batches whose bytes did not change.
+  m_batchVertexRevisions.clear();
   // P15.5 (SINK)/P15.3 (OUTOFBED): derived state follows the batches.
   m_sinkingContourVertices.clear();
   m_sinkingContourRanges.clear();
   m_anyVolumeOutside = false;
+}
+
+// O2 (REGION UPLOAD): FNV-1a 64 over a byte range (optionally seeded, so a
+// color digest can be folded into the geometry hash).
+quint64 PrepareSceneData::fnv1aHash(const char *data, qsizetype size, quint64 seed)
+{
+  quint64 hash = seed ^ quint64(0xcbf29ce484222325ULL);
+  for (qsizetype i = 0; i < size; ++i) {
+    hash ^= quint64(uchar(data[i]));
+    hash *= quint64(0x100000001b3ULL);
+  }
+  return hash;
 }
 
 // O1 (TINT): per-batch uniform colors for the tint pipelines. The renderer
@@ -1902,6 +1953,11 @@ void PrepareSceneData::setInstanceTransforms(
           && batch.indexCount >= 3) {
         for (int t = batch.firstIndex; t + 2 < batch.firstIndex + batch.indexCount; t += 3)
           std::swap(m_modelIndices[t + 1], m_modelIndices[t + 2]);
+        // O2: the batch's index bytes changed -- bump its revision so the
+        // renderer re-uploads this index range too.
+        if (batchIndex < m_batchVertexRevisions.size())
+          m_batchVertexRevisions[batchIndex] = ++m_batchDataRevisionCounter;
+        ++m_batchDataGeneration;
       }
       // World bounds: the 8 corners of the LOCAL box through the new
       // matrix (conservative transformed bounding box).
@@ -1972,6 +2028,11 @@ void PrepareSceneData::setInstanceTransforms(
     // matrix; flip again only when the handedness changes.
     const bool swapWinding = (next.determinant() < 0.0f) != (previous.determinant() < 0.0f);
     recomposeBatchRange(batch, delta, swapWinding);
+    // O2: the recompose rewrote this batch's vertex bytes -- bump its
+    // revision so the renderer re-uploads exactly this range.
+    if (batchIndex < m_batchVertexRevisions.size())
+      m_batchVertexRevisions[batchIndex] = ++m_batchDataRevisionCounter;
+    ++m_batchDataGeneration;
     anyChanged = true;
     m_batchWorldTransforms[batchIndex] = next;
   }

@@ -1629,13 +1629,23 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
         cb->setVertexInput(0, 1, &ghostBinding);
       }
       const quint32 stride = rhi()->ubufAlignment();
+      const bool rangesValid = m_batchOpaqueFirstVertex.size()
+          == m_prepareScene.modelBatches().size();
       int ghostSlot = 0;
       for (const PrepareSceneData::ModelBatch &batch : m_prepareScene.modelBatches()) {
         const int slot = ghostSlot++;
         if (batch.volumeType != 0)
           continue; // shell eligibility: model parts only (load_shells rules)
-        if (batch.vertexCount <= 0 || batch.firstVertex < 0
-            || qsizetype(batch.firstVertex) + batch.vertexCount > m_modelVertexCount)
+        if (batch.vertexCount <= 0 || !rangesValid)
+          continue;
+        // O2: the draw base into the opaque VB (indexed mode keeps the
+        // full stream so firstVertex is direct; soup mode reads the
+        // compacted position).
+        const quint32 drawFirst = ghostIndexed
+            ? quint32(batch.firstVertex)
+            : m_batchOpaqueFirstVertex.at(slot);
+        if (!ghostIndexed
+            && qsizetype(drawFirst) + batch.vertexCount > m_modelVertexCount)
           continue;
         const QRhiCommandBuffer::DynamicOffset offsets[2] = {
             QRhiCommandBuffer::DynamicOffset(
@@ -2271,13 +2281,20 @@ void RhiViewportRenderer::renderThumbnailPass(QRhiCommandBuffer *cb)
         cb->setVertexInput(0, 1, &pickBinding);
       }
       const quint32 stride = rhi()->ubufAlignment();
+      const bool pickRangesValid = m_batchOpaqueFirstVertex.size()
+          == m_prepareScene.modelBatches().size();
       int pickSlot = 0;
       for (const PrepareSceneData::ModelBatch &batch : m_prepareScene.modelBatches()) {
         const int slot = pickSlot++;
-        if (batch.translucent)
+        if (batch.translucent || !pickRangesValid)
           continue;
-        if (batch.firstVertex < 0
-            || qsizetype(batch.firstVertex) + batch.vertexCount > m_modelVertexCount)
+        // O2: draw base into the opaque VB (direct firstVertex on the
+        // full indexed stream; compacted position on soup).
+        const quint32 drawFirst = pickIndexed
+            ? quint32(batch.firstVertex)
+            : m_batchOpaqueFirstVertex.at(slot);
+        if (!pickIndexed
+            && qsizetype(drawFirst) + batch.vertexCount > m_modelVertexCount)
           continue;
         const quint32 matrixDyn = quint32(batch.blobIndex < 0 ? 0 : batch.blobIndex) * stride;
         const QRhiCommandBuffer::DynamicOffset offsets[2] = {
@@ -2287,7 +2304,7 @@ void RhiViewportRenderer::renderThumbnailPass(QRhiCommandBuffer *cb)
         if (pickIndexed)
           cb->drawIndexed(batch.indexCount, 1, batch.firstIndex);
         else
-          cb->draw(quint32(batch.vertexCount), 1, quint32(batch.firstVertex));
+          cb->draw(quint32(batch.vertexCount), 1, drawFirst);
       }
     }
   } else if (m_modelVertexBuffer && m_modelVertexCount > 0) {
@@ -4454,25 +4471,44 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
   // palette UBO (uploadBatchTintUbos below).
   m_modelTranslucentBatches.clear();
   m_modelTranslucentVertexCount = 0;
-  for (const PrepareSceneData::ModelBatch &batch : sceneBatches) {
-    if (batch.firstVertex < 0
-        || qsizetype(batch.firstVertex) + batch.vertexCount > allVertices.size())
-      continue;
-    if (!batch.translucent) {
+  // O2: per-batch draw base into the opaque VB. Indexed mode keeps the
+  // FULL unique-vertex stream (the shared IB's per-batch bases depend on
+  // it -- compacting translucent corners out would corrupt every later
+  // batch's index base); soup mode compacts and records the position.
+  const bool indexedMode = indexedModelPathActive();
+  m_batchOpaqueFirstVertex.clear();
+  m_batchOpaqueFirstVertex.reserve(sceneBatches.size());
+  {
+    quint32 opaqueCursor = 0;
+    for (int batchIndex = 0; batchIndex < sceneBatches.size(); ++batchIndex) {
+      const PrepareSceneData::ModelBatch &batch = sceneBatches.at(batchIndex);
+      if (batch.firstVertex < 0
+          || qsizetype(batch.firstVertex) + batch.vertexCount > allVertices.size()) {
+        m_batchOpaqueFirstVertex.append(0);
+        continue;
+      }
+      if (!batch.translucent) {
+        m_batchOpaqueFirstVertex.append(indexedMode
+            ? quint32(batch.firstVertex) : opaqueCursor);
+        if (!indexedMode) {
+          for (int i = 0; i < batch.vertexCount; ++i)
+            modelVertices.append(allVertices.at(batch.firstVertex + i));
+          opaqueCursor += quint32(batch.vertexCount);
+        }
+        continue;
+      }
+      m_batchOpaqueFirstVertex.append(0);
+      TranslucentBatchRange range;
+      range.firstVertex = quint32(translucentVertices.size());
       for (int i = 0; i < batch.vertexCount; ++i)
-        modelVertices.append(allVertices.at(batch.firstVertex + i));
-      continue;
-    }
-    TranslucentBatchRange range;
-    range.firstVertex = quint32(translucentVertices.size());
-    for (int i = 0; i < batch.vertexCount; ++i)
-      translucentVertices.append(allVertices.at(batch.firstVertex + i));
-    range.vertexCount = quint32(batch.vertexCount);
-    range.center = QVector3D(
+        translucentVertices.append(allVertices.at(batch.firstVertex + i));
+      range.vertexCount = quint32(batch.vertexCount);
+      range.center = QVector3D(
         (batch.bounds.minX + batch.bounds.maxX) * 0.5f,
         (batch.bounds.minY + batch.bounds.maxY) * 0.5f,
         (batch.bounds.minZ + batch.bounds.maxZ) * 0.5f);
-    m_modelTranslucentBatches.append(range);
+      m_modelTranslucentBatches.append(range);
+    }
   }
   m_modelTranslucentVertexCount = quint32(translucentVertices.size());
   // FIX5M: when no translucent batch exists the split is a byte-identical
@@ -4499,12 +4535,50 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
   }
 
   m_modelVertexCount = quint32(modelVertices.size());
-  if (m_modelVertexBuffer && modelBytes > 0) {
+  // O2 (REGION UPLOAD): a batch whose geometry revision and layout match
+  // the last upload skips its byte range; any structural change (batch
+  // count, stream size, buffer recreate) falls back to the full upload.
+  const QList<quint64> &revisions = m_prepareScene.batchVertexRevisions();
+  const bool vbLayoutStable =
+      m_uploadedBatchRevisions.size() == sceneBatches.size()
+      && m_uploadedBatchVertexCounts.size() == sceneBatches.size()
+      && m_uploadedModelVertexCount == m_modelVertexCount
+      && m_modelVertexBufferBytes == modelBytes
+      && m_batchOpaqueFirstVertex.size() == sceneBatches.size()
+      && revisions.size() == sceneBatches.size();
+  QList<bool> batchDirty;
+  batchDirty.resize(sceneBatches.size());
+  if (vbLayoutStable) {
+    for (int i = 0; i < sceneBatches.size(); ++i) {
+      batchDirty[i] = m_uploadedBatchRevisions.at(i) != revisions.at(i)
+          || m_uploadedBatchVertexCounts.at(i) != quint32(sceneBatches.at(i).vertexCount);
+    }
+  } else {
+    for (int i = 0; i < sceneBatches.size(); ++i)
+      batchDirty[i] = true;
+  }
+  if (vbLayoutStable && modelBytes > 0) {
+    for (int i = 0; i < sceneBatches.size(); ++i) {
+      const PrepareSceneData::ModelBatch &batch = sceneBatches.at(i);
+      if (!batchDirty.at(i) || batch.translucent || batch.vertexCount <= 0)
+        continue;
+      const quint32 first = m_batchOpaqueFirstVertex.at(i);
+      const quint32 rangeBytes = quint32(batch.vertexCount) * sizeof(Vertex);
+      updates->uploadStaticBuffer(m_modelVertexBuffer.get(),
+                                  size_t(first) * sizeof(Vertex), rangeBytes,
+                                  modelVertices.constData() + first);
+    }
+  } else if (m_modelVertexBuffer && modelBytes > 0) {
     updates->uploadStaticBuffer(m_modelVertexBuffer.get(),
                                 0,
                                 modelBytes,
                                 modelVertices.constData());
   }
+  m_uploadedBatchRevisions = revisions;
+  m_uploadedBatchVertexCounts.clear();
+  for (const PrepareSceneData::ModelBatch &batch : sceneBatches)
+    m_uploadedBatchVertexCounts.append(quint32(batch.vertexCount));
+  m_uploadedModelVertexCount = m_modelVertexCount;
 
   const quint32 translucentBytes = quint32(translucentVertices.size() * int(sizeof(Vertex)));
   if (!ensureBuffer(m_modelTranslucentBuffer, translucentBytes,
@@ -4587,11 +4661,33 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
     m_modelIndexCount = quint32(indices.size());
     const quint32 indexBytes = m_modelIndexCount * sizeof(quint32);
     if (indexBytes > 0) {
+      // O2 (REGION UPLOAD): the IB mirrors the VB's per-batch dirty logic.
+      const bool ibLayoutStable =
+          m_modelIndexBufferBytes == indexBytes
+          && m_uploadedBatchIndexCounts.size() == sceneBatches.size()
+          && m_uploadedBatchRevisions.size() == sceneBatches.size();
       if (!ensureBuffer(m_modelIndexBuffer, indexBytes, m_modelIndexBufferBytes,
                         QRhiBuffer::IndexBuffer))
         return false;
-      updates->uploadStaticBuffer(m_modelIndexBuffer.get(), 0, indexBytes,
-                                  indices.constData());
+      if (ibLayoutStable) {
+        for (int i = 0; i < sceneBatches.size(); ++i) {
+          const PrepareSceneData::ModelBatch &batch = sceneBatches.at(i);
+          if (!batchDirty.at(i) || batch.indexCount <= 0)
+            continue;
+          const qsizetype first = batch.firstIndex;
+          const quint32 rangeBytes = quint32(batch.indexCount) * sizeof(quint32);
+          updates->uploadStaticBuffer(m_modelIndexBuffer.get(),
+                                      size_t(first) * sizeof(quint32),
+                                      rangeBytes,
+                                      indices.constData() + first);
+        }
+      } else {
+        updates->uploadStaticBuffer(m_modelIndexBuffer.get(), 0, indexBytes,
+                                    indices.constData());
+      }
+      m_uploadedBatchIndexCounts.clear();
+      for (const PrepareSceneData::ModelBatch &batch : sceneBatches)
+        m_uploadedBatchIndexCounts.append(quint32(batch.indexCount));
     }
   }
   // O1 (TINT): the per-batch matrix + tint arrays serve both modes (the

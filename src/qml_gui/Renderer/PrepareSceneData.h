@@ -503,6 +503,13 @@ public:
   // modelBatches() and rebuilt with the batches.
   const QList<QVector4D> &batchPickColors() const { return m_batchPickColors; }
   const QList<QVector4D> &batchGhostColors() const { return m_batchGhostColors; }
+  // O2 (REGION UPLOAD): per-batch geometry revisions. A re-parse assigns
+  // each batch a revision; a batch whose (sourceObject, volume) identity
+  // and geometry bytes are unchanged from the previous parse INHERITS the
+  // previous revision. Consumers (the renderer's per-batch upload skip)
+  // compare against the revisions they last uploaded.
+  const QList<quint64> &batchVertexRevisions() const { return m_batchVertexRevisions; }
+  quint64 meshBatchDataGeneration() const { return m_batchDataGeneration; }
   void setSelectedSourceObjectIndex(int sourceObjectIndex);
   // P15.11 (MULTICENTER): ALL selected source object indices (upstream
   // Selection::get_bounding_box() unions every selected volume's bounds).
@@ -668,6 +675,8 @@ private:
   // O1 (TINT): fills the per-batch pick/ghost color channels from the
   // resident batches (see the batchPickColors/batchGhostColors accessors).
   void rebuildBatchTintColors();
+  // O2 (REGION UPLOAD): FNV-1a over a byte range (batch geometry hashing).
+  static quint64 fnv1aHash(const char *data, qsizetype size, quint64 seed = 0);
   // PERF (scene_expand): the per-batch vertex walk specialized on the compose
   // mode so the hot loop carries no per-vertex compose branching (the S3
   // decomposed compose dispatched translate-only adds through two runtime
@@ -776,6 +785,14 @@ private:
   // The extruder palette the resident parse colored batches with (stashed
   // from setModelMeshData; the ghost tint channel resolves ids against it).
   QList<QVector4D> m_extruderColorsForTints;
+  // O2 (REGION UPLOAD): per-batch geometry revisions (aligned with
+  // m_modelBatches) + the identity-keyed hash map that lets a re-parse
+  // inherit revisions for unchanged batches.
+  QList<quint64> m_batchVertexRevisions;
+  quint64 m_batchDataRevisionCounter = 0;
+  quint64 m_batchDataGeneration = 0;
+  // identity key -> (geometry hash, last revision)
+  QHash<quint64, QPair<quint64, quint64>> m_batchGeometryHashes;
   qint64 m_instanceTransformGeneration = 0;
   int m_selectedSourceObjectIndex = -1;
   // P15.11 (MULTICENTER): every selected source object (sorted ascending).
