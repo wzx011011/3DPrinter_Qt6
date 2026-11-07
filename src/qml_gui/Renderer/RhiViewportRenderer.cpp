@@ -219,8 +219,7 @@ void RhiViewportRenderer::initialize(QRhiCommandBuffer *cb)
   m_assemblyMeasureTriBufferUploaded = false;
   m_assemblyMeasureValueBufferUploaded = false;
   m_previewSegmentBufferUploaded = false;
-  // Phase 238 (PREV-01/02): ghost shells + tool marker re-upload on rebuild.
-  m_ghostShellBufferUploaded = false;
+  // Phase 238 (PREV-02): tool marker re-upload on rebuild.
   m_toolMarkerBufferUploaded = false;
   // P15.5 (SINK)/P15.7 (AXES)/P15.8 (BOLDGRID): derived bed buffers follow
   // the same swapchain-rebuild re-upload rule as the scene buffers.
@@ -495,12 +494,6 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   // run AFTER the model gate above so a same-frame mesh+transform change
   // parses once with the fresh channel and this call settles as a no-op.
   m_prepareScene.setInstanceTransforms(batchWorldTransforms);
-  // S2 (PREV-01): the ghost-shell buffer rebuilds with the model generation
-  // (protocol 1) — arm its channel whenever the resident generation lags the
-  // mirrored one (boot, object edits, extruder re-tint). The upload itself
-  // re-checks the generation, so a no-op attempt settles the channel.
-  if (m_modelGeneration != m_ghostShellModelGeneration)
-    m_prepareScene.markDirty(PrepareSceneData::DirtyGhostShell);
   const int prevSelectedSourceObjectIndex = m_prepareScene.selectedSourceObjectIndex();
   m_prepareScene.setSelectedSourceObjectIndex(viewport->m_selectedSourceObjectIndex);
   // P15.11 (MULTICENTER): mirror the full multi-selection so the renderer's
@@ -1117,14 +1110,10 @@ quint32 RhiViewportRenderer::uploadPendingChannels(QRhiResourceUpdateBatch *upda
         handled |= PrepareSceneData::DirtyPreviewSegment;
       }
     }
-    // Phase 238 (PREV-01): ghost shells rebuild on the model generation; the
-    // upload re-checks the generation, so a no-op attempt settles.
-    if ((channels & PrepareSceneData::DirtyGhostShell)
-        && uploadGhostShellBuffer(updates)) {
-      handled |= PrepareSceneData::DirtyGhostShell;
-    }
     // Phase 238 (PREV-02): tool marker (rebuilds on position/visibility
     // change; hidden markers settle with a zero vertex count).
+    // O1: the ghost shells draw from the model VB + the batch tint UBOs,
+    // so they carry no dedicated dirty channel anymore.
     if ((channels & PrepareSceneData::DirtyToolMarker)
         && uploadToolMarkerBuffer(updates)) {
       handled |= PrepareSceneData::DirtyToolMarker;
@@ -1434,8 +1423,13 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
             || qsizetype(batch.firstVertex) + batch.vertexCount > m_modelVertexCount)
           continue;
         const quint32 dyn = quint32(batch.blobIndex < 0 ? 0 : batch.blobIndex) * stride;
-        const QRhiCommandBuffer::DynamicOffset dynOffset(0, dyn);
-        cb->setShaderResources(m_batchMatrixSrb);
+        // O1 fix: the dynamic offset MUST be passed to setShaderResources.
+        // The convenience overload defaults every dynamic offset to 0, so
+        // every batch read slot 0's matrix (invisible on a one-object
+        // scene, all objects stacked on the first transform otherwise).
+        const QRhiCommandBuffer::DynamicOffset dynOffsets[1] = {
+            QRhiCommandBuffer::DynamicOffset(0, dyn)};
+        cb->setShaderResources(m_batchMatrixSrb, 1, dynOffsets);
         cb->drawIndexed(batch.indexCount, 1, batch.firstIndex);
       }
     } else if (m_modelVertexBuffer && m_modelVertexCount > 0) {
@@ -1618,13 +1612,41 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // Phase 238 (PREV-01): ghost object shells BEHIND the toolpaths
     // (upstream render_shells, GCodeViewer.cpp:4023, drawn before
     // render_toolpaths in the render() order :1247; BBS always loads shells
-    // for preview, :983-988). Translucent fill pipeline = blended, depth test
-    // but no depth write -- mirrors the upstream glDepthMask(GL_FALSE).
-    if (m_ghostShellBuffer && m_ghostShellVertexCount > 0) {
-      setPipeline(cb, m_translucentFillPipeline.get());
-      const QRhiCommandBuffer::VertexInput ghostBinding(m_ghostShellBuffer.get(), 0);
-      cb->setVertexInput(0, 1, &ghostBinding);
-      cb->draw(m_ghostShellVertexCount);
+    // for preview, :983-988). O1 (TINT): the model VB draws per batch with
+    // the ghost tint UBO (extruder color + the upstream 0.5 alpha) through
+    // a blended pipeline with no depth write -- mirrors the upstream
+    // glDepthMask(GL_FALSE). No recolored vertex duplicate.
+    if (m_modelVertexBuffer && m_modelVertexCount > 0
+        && ensureGhostTintPipeline() && ensureBatchTintSrbs()) {
+      setPipeline(cb, m_modelGhostTintPipeline.get());
+      const QRhiCommandBuffer::VertexInput ghostBinding(m_modelVertexBuffer.get(), 0);
+      const bool ghostIndexed = indexedModelPathActive()
+          && m_modelIndexBuffer && m_modelIndexCount > 0;
+      if (ghostIndexed) {
+        cb->setVertexInput(0, 1, &ghostBinding, m_modelIndexBuffer.get(), 0,
+                           QRhiCommandBuffer::IndexUInt32);
+      } else {
+        cb->setVertexInput(0, 1, &ghostBinding);
+      }
+      const quint32 stride = rhi()->ubufAlignment();
+      int ghostSlot = 0;
+      for (const PrepareSceneData::ModelBatch &batch : m_prepareScene.modelBatches()) {
+        const int slot = ghostSlot++;
+        if (batch.volumeType != 0)
+          continue; // shell eligibility: model parts only (load_shells rules)
+        if (batch.vertexCount <= 0 || batch.firstVertex < 0
+            || qsizetype(batch.firstVertex) + batch.vertexCount > m_modelVertexCount)
+          continue;
+        const QRhiCommandBuffer::DynamicOffset offsets[2] = {
+            QRhiCommandBuffer::DynamicOffset(
+                0, quint32(batch.blobIndex < 0 ? 0 : batch.blobIndex) * stride),
+            QRhiCommandBuffer::DynamicOffset(0, quint32(slot) * stride)};
+        cb->setShaderResources(m_batchGhostTintSrb.get(), 2, offsets);
+        if (ghostIndexed)
+          cb->drawIndexed(batch.indexCount, 1, batch.firstIndex);
+        else
+          cb->draw(quint32(batch.vertexCount), 1, quint32(batch.firstVertex));
+      }
     }
 
     // P17.2: spans carry their topology — extrusion prisms draw through the
@@ -1775,6 +1797,9 @@ void RhiViewportRenderer::releaseRenderPassDependentResources()
   m_bedTexturePipeline.reset();
   m_modelLitPipeline.reset();
   m_modelLitBlendPipeline.reset();
+  // O1 (TINT): ghost tint pipeline rides the main render pass descriptor.
+  m_modelGhostTintPipeline.reset();
+  m_modelGhostTintPipelineSrb = nullptr;
   m_gizmoLinePipeline.reset();
   m_gizmoTriPipeline.reset();
   m_gizmoPipelineCreated = false;
@@ -1874,6 +1899,37 @@ void RhiViewportRenderer::releaseResources()
   m_assemblyMeasureValueBuffer.reset();
   m_srb.reset();
   m_cameraUniformBuffer.reset();
+  // FIX5M-B3/O1: the batch matrix + tint SRBs reference m_cameraUniformBuffer
+  // and the batch UBOs; a full teardown destroys those, so the SRBs must die
+  // with them (a SRB still referencing a destroyed buffer reads a dead
+  // resource -- the invisible-sphere lesson). ensureBatchMatrixSrb /
+  // ensureBatchTintSrbs rebuild everything lazily on the next use. Every
+  // member may be null here (a no-RHI harness never created them).
+  if (m_batchMatrixSrb) {
+    m_batchMatrixSrb->deleteLater();
+    m_batchMatrixSrb = nullptr;
+  }
+  m_batchMatrixCount = -1;
+  m_batchMatrixUbo.reset();
+  m_batchMatrixUboBytes = 0;
+  m_batchPickTintSrb.reset();
+  m_batchGhostTintSrb.reset();
+  m_thumbnailP3fSrb.reset();
+  m_batchTintSrbMatrixBytes = 0;
+  m_batchTintSrbPickBytes = 0;
+  m_batchTintSrbGhostBytes = 0;
+  m_modelP3IndexedPipelineSrb = nullptr;
+  m_modelGhostTintPipelineSrb = nullptr;
+  m_thumbnailTintPipelineSrb = nullptr;
+  m_thumbnailP3fPipelineSrb = nullptr;
+  m_batchPickTintUbo.reset();
+  m_batchPickTintUboBytes = 0;
+  m_batchGhostTintUbo.reset();
+  m_batchGhostTintUboBytes = 0;
+  m_modelGhostTintPipeline.reset();
+  m_modelIndexBuffer.reset();
+  m_modelIndexBufferBytes = 0;
+  m_modelIndexCount = 0;
   // SHADER-PORT v6: per-draw uniform variants ride the same lifecycle.
   m_bedLitSrb.reset();
   m_axesLitSrb.reset();
@@ -1896,13 +1952,9 @@ void RhiViewportRenderer::releaseResources()
   // v5.16 (NAVIGATOR): overlay cube buffer.
   m_navigatorFillBuffer.reset();
   resetPreviewGpuState(true);
-  // Phase 238 (PREV-01/02): drop the preview ghost-shell + tool-marker GPU
-  // buffers with the rest of the scene resources.
-  m_ghostShellBuffer.reset();
-  m_ghostShellBufferBytes = 0;
-  m_ghostShellVertexCount = 0;
-  m_ghostShellBufferUploaded = false;
-  m_ghostShellModelGeneration = 0;
+  // Phase 238 (PREV-02): drop the preview tool-marker GPU buffer with the
+  // rest of the scene resources. (O1: the ghost shell has no buffer of its
+  // own anymore; the batch tint state rides the m_batch* lifecycle below.)
   m_toolMarkerBuffer.reset();
   m_toolMarkerBufferBytes = 0;
   m_toolMarkerVertexCount = 0;
@@ -2005,7 +2057,14 @@ void RhiViewportRenderer::releaseThumbnailResources()
 {
   m_thumbnailFillPipeline.reset();
   m_thumbnailLinePipeline.reset();
-  m_pickVertexBuffer.reset();
+  // O1 (TINT): thumbnail tint pipelines + the SRB bound to the thumbnail UBO.
+  m_thumbnailTintPipeline.reset();
+  m_thumbnailP3fPipeline.reset();
+  m_thumbnailP3fSrb.reset();
+  m_batchPickTintSrb.reset();
+  m_batchTintSrbMatrixBytes = 0;
+  m_batchTintSrbPickBytes = 0;
+  m_batchTintSrbGhostBytes = 0;
   m_thumbnailSrb.reset();
   m_thumbnailUniformBuffer.reset();
   m_thumbnailUniformBufferBytes = 0;
@@ -2195,21 +2254,69 @@ void RhiViewportRenderer::renderThumbnailPass(QRhiCommandBuffer *cb)
   }
   // Model mesh (triangles) — the actual rendered scene, not just a clear color.
   if (m_thumbnailVariant == ThumbnailPicking) {
-    // G-04: picking pass -- the pick vertex buffer bakes one flat palette
-    // color per ModelBatch (keyed by sourceObjectIndex), so the same unlit
-    // fragment path renders the upstream pick_thumbnail family
-    // (Plater.cpp:12086-12094).
-    if (m_pickVertexBuffer && m_pickVertexCount > 0) {
-      setPipeline(cb, m_thumbnailFillPipeline.get());
-      const QRhiCommandBuffer::VertexInput pickBinding(m_pickVertexBuffer.get(), 0);
-      cb->setVertexInput(0, 1, &pickBinding);
-      cb->draw(m_pickVertexCount);
+    // G-04 + O1 (TINT): the picking pass draws the model VB per batch with
+    // the pick palette UBO (one flat palette color per ModelBatch keyed by
+    // sourceObjectIndex) -- the upstream pick_thumbnail family
+    // (Plater.cpp:12086-12094). No recolored vertex duplicate.
+    if (m_modelVertexBuffer && m_modelVertexCount > 0
+        && ensureThumbnailTintPipeline() && ensureBatchTintSrbs()) {
+      setPipeline(cb, m_thumbnailTintPipeline.get());
+      const QRhiCommandBuffer::VertexInput pickBinding(m_modelVertexBuffer.get(), 0);
+      const bool pickIndexed = indexedModelPathActive()
+          && m_modelIndexBuffer && m_modelIndexCount > 0;
+      if (pickIndexed) {
+        cb->setVertexInput(0, 1, &pickBinding, m_modelIndexBuffer.get(), 0,
+                           QRhiCommandBuffer::IndexUInt32);
+      } else {
+        cb->setVertexInput(0, 1, &pickBinding);
+      }
+      const quint32 stride = rhi()->ubufAlignment();
+      int pickSlot = 0;
+      for (const PrepareSceneData::ModelBatch &batch : m_prepareScene.modelBatches()) {
+        const int slot = pickSlot++;
+        if (batch.translucent)
+          continue;
+        if (batch.firstVertex < 0
+            || qsizetype(batch.firstVertex) + batch.vertexCount > m_modelVertexCount)
+          continue;
+        const quint32 matrixDyn = quint32(batch.blobIndex < 0 ? 0 : batch.blobIndex) * stride;
+        const QRhiCommandBuffer::DynamicOffset offsets[2] = {
+            QRhiCommandBuffer::DynamicOffset(0, matrixDyn),
+            QRhiCommandBuffer::DynamicOffset(0, matrixDyn)};
+        cb->setShaderResources(m_batchPickTintSrb.get(), 2, offsets);
+        if (pickIndexed)
+          cb->drawIndexed(batch.indexCount, 1, batch.firstIndex);
+        else
+          cb->draw(quint32(batch.vertexCount), 1, quint32(batch.firstVertex));
+      }
     }
   } else if (m_modelVertexBuffer && m_modelVertexCount > 0) {
-    setPipeline(cb, m_thumbnailFillPipeline.get());
-    const QRhiCommandBuffer::VertexInput modelBinding(m_modelVertexBuffer.get(), 0);
-    cb->setVertexInput(0, 1, &modelBinding);
-    cb->draw(m_modelVertexCount);
+    if (indexedModelPathActive() && m_modelIndexBuffer && m_modelIndexCount > 0
+        && ensureThumbnailP3fPipeline() && ensureBatchTintSrbs()) {
+      // O1 (TINT): indexed path -- the VB is the volume-local unique-vertex
+      // stream, so the soup single-draw fill would render garbage. Draw per
+      // batch through the flat p3f pipeline with the BatchBlock matrices.
+      setPipeline(cb, m_thumbnailP3fPipeline.get());
+      const QRhiCommandBuffer::VertexInput modelBinding(m_modelVertexBuffer.get(), 0);
+      cb->setVertexInput(0, 1, &modelBinding, m_modelIndexBuffer.get(), 0,
+                         QRhiCommandBuffer::IndexUInt32);
+      const quint32 stride = rhi()->ubufAlignment();
+      for (const PrepareSceneData::ModelBatch &batch : m_prepareScene.modelBatches()) {
+        if (batch.translucent || batch.indexCount < 3
+            || qsizetype(batch.firstVertex) + batch.vertexCount > m_modelVertexCount)
+          continue;
+        const QRhiCommandBuffer::DynamicOffset offsets[1] = {
+            QRhiCommandBuffer::DynamicOffset(
+                0, quint32(batch.blobIndex < 0 ? 0 : batch.blobIndex) * stride)};
+        cb->setShaderResources(m_thumbnailP3fSrb.get(), 1, offsets);
+        cb->drawIndexed(batch.indexCount, 1, batch.firstIndex);
+      }
+    } else {
+      setPipeline(cb, m_thumbnailFillPipeline.get());
+      const QRhiCommandBuffer::VertexInput modelBinding(m_modelVertexBuffer.get(), 0);
+      cb->setVertexInput(0, 1, &modelBinding);
+      cb->draw(m_modelVertexCount);
+    }
   }
 
   cb->endPass();
@@ -3475,12 +3582,18 @@ bool RhiViewportRenderer::indexedModelPathActive() const
 
 bool RhiViewportRenderer::ensureModelP3IndexedPipeline()
 {
-  if (m_modelP3IndexedPipeline)
-    return true;
   if (m_pipelineFailed || rhi() == nullptr || renderTarget() == nullptr)
     return false;
   if (!ensureBatchMatrixSrb())
     return false;
+  // Rebuild when the matrix SRB was replaced (a UBO resize recreates the
+  // SRB object; a pipeline holding the replaced one reads a dead resource).
+  if (m_modelP3IndexedPipeline && m_modelP3IndexedPipelineSrb == m_batchMatrixSrb)
+    return true;
+  if (m_modelP3IndexedPipeline) {
+    m_modelP3IndexedPipeline->deleteLater();
+    m_modelP3IndexedPipeline = nullptr;
+  }
 
   const QShader vertexShader = loadShader(
       QStringLiteral(":/rhi_viewport/shaders/model_p3i.vert.qsb"));
@@ -3516,6 +3629,7 @@ bool RhiViewportRenderer::ensureModelP3IndexedPipeline()
     m_modelP3IndexedPipeline = nullptr;
     return false;
   }
+  m_modelP3IndexedPipelineSrb = m_batchMatrixSrb;
   return true;
 }
 
@@ -3528,14 +3642,19 @@ bool RhiViewportRenderer::ensureModelP3IndexedPipeline()
 // same pipeline usable by both modes.
 bool RhiViewportRenderer::ensureBatchMatrixSrb()
 {
-  if (m_batchMatrixSrb && m_batchMatrixCount == int(m_prepareScene.batchWorldTransforms().size()))
+  // O1: slot count covers the transform channel AND every batch (identity
+  // beyond the channel) so the per-batch dynamic offsets of the tint draws
+  // (which run on world-baked soup scenes with an empty channel too) stay
+  // in range and read identity.
+  const int slotCount = qMax(int(m_prepareScene.batchWorldTransforms().size()),
+                             int(m_prepareScene.modelBatches().size()));
+  if (m_batchMatrixSrb && m_batchMatrixCount == slotCount)
     return true;
   if (m_pipelineFailed || rhi() == nullptr || m_cameraUniformBuffer == nullptr)
     return false;
 
-  const int batchCount = int(m_prepareScene.batchWorldTransforms().size());
   const quint32 stride = rhi()->ubufAlignment();
-  const quint32 bytes = quint32(qMax(batchCount, 1)) * stride;
+  const quint32 bytes = quint32(qMax(slotCount, 1)) * stride;
   const bool uboResized = !m_batchMatrixUbo || m_batchMatrixUboBytes != bytes;
   if (!ensureBuffer(m_batchMatrixUbo, bytes, m_batchMatrixUboBytes,
                     QRhiBuffer::UniformBuffer))
@@ -3568,13 +3687,15 @@ bool RhiViewportRenderer::ensureBatchMatrixSrb()
       return false;
     }
   }
-  m_batchMatrixCount = batchCount;
+  m_batchMatrixCount = slotCount;
   return true;
 }
 
 // FIX5M-B3 (step 2, additive): fill + upload the per-batch matrix array.
 // Identity for world-baked scenes; the live channel entry per blob batch
-// for the volume-local render scene.
+// for the volume-local render scene. O1: identity beyond the channel so
+// the tint draws' per-batch offsets always read a valid (identity) entry
+// on soup scenes.
 bool RhiViewportRenderer::uploadBatchMatrixUbo(QRhiResourceUpdateBatch *updates)
 {
   if (updates == nullptr || rhi() == nullptr)
@@ -3582,21 +3703,303 @@ bool RhiViewportRenderer::uploadBatchMatrixUbo(QRhiResourceUpdateBatch *updates)
   if (!ensureBatchMatrixSrb())
     return false;
   const QList<QMatrix4x4> &channel = m_prepareScene.batchWorldTransforms();
-  const int batchCount = int(channel.size());
+  const int batchCount = int(m_prepareScene.modelBatches().size());
+  const int channelCount = int(channel.size());
+  const int slotCount = qMax(qMax(channelCount, batchCount), 1);
   const quint32 stride = rhi()->ubufAlignment();
-  const quint32 bytes = quint32(qMax(batchCount, 1)) * stride;
+  const quint32 bytes = quint32(slotCount) * stride;
   const bool volumeLocal = m_prepareScene.meshVolumeLocal();
   QByteArray blob;
   blob.resize(int(bytes));
-  for (int i = 0; i < batchCount; ++i) {
-    const QMatrix4x4 &mat = volumeLocal ? channel.at(i) : QMatrix4x4();
+  for (int i = 0; i < slotCount; ++i) {
+    const QMatrix4x4 &mat = (volumeLocal && i < channelCount)
+        ? channel.at(i) : QMatrix4x4();
     memcpy(blob.data() + i * int(stride), mat.constData(), 64);
   }
-  if (batchCount == 0) {
-    const QMatrix4x4 identity;
-    memcpy(blob.data(), identity.constData(), 64);
-  }
   updates->uploadStaticBuffer(m_batchMatrixUbo.get(), 0, bytes, blob.constData());
+  return true;
+}
+
+// O1 (TINT): upload the per-batch pick/ghost tint color channels. Two
+// stride-aligned UBOs (16B vec4 payload per slot) -- a few KB against the
+// recolored full-model vertex duplicates they replace.
+bool RhiViewportRenderer::uploadBatchTintUbos(QRhiResourceUpdateBatch *updates)
+{
+  if (updates == nullptr || rhi() == nullptr)
+    return false;
+  const int batchCount = int(m_prepareScene.modelBatches().size());
+  const int slotCount = qMax(batchCount, 1);
+  const quint32 stride = rhi()->ubufAlignment();
+  const quint32 bytes = quint32(slotCount) * stride;
+
+  auto uploadOne = [&](std::unique_ptr<QRhiBuffer> &ubo, quint32 &uboBytes,
+                       const QList<QVector4D> &colors) -> bool {
+    if (!ensureBuffer(ubo, bytes, uboBytes, QRhiBuffer::UniformBuffer))
+      return false;
+    QByteArray blob;
+    blob.resize(int(bytes));
+    for (int i = 0; i < slotCount; ++i) {
+      const QVector4D tint = (i < batchCount && i < colors.size())
+          ? colors.at(i) : QVector4D(0.0f, 0.0f, 0.0f, -1.0f);
+      memcpy(blob.data() + i * int(stride), &tint, 16);
+    }
+    updates->uploadStaticBuffer(ubo.get(), 0, bytes, blob.constData());
+    return true;
+  };
+  if (!uploadOne(m_batchPickTintUbo, m_batchPickTintUboBytes,
+                 m_prepareScene.batchPickColors()))
+    return false;
+  return uploadOne(m_batchGhostTintUbo, m_batchGhostTintUboBytes,
+                   m_prepareScene.batchGhostColors());
+}
+
+// O1 (TINT): the tint SRBs. Each binds its pass camera (thumbnail UBO for
+// the pick thumbnail, the shared scene camera for the ghost), the shared
+// per-batch matrix UBO (dynamic offset) and the pass tint UBO (dynamic
+// offset). Built per pass camera: a missing thumbnail UBO must not take
+// the ghost down with it (and vice versa). Rebuilt whenever any referenced
+// UBO resized -- ensureBuffer destroys the old buffer object, and a SRB
+// still referencing it reads a dead resource (the FIX5M-B3
+// invisible-sphere lesson).
+bool RhiViewportRenderer::ensureBatchTintSrbs()
+{
+  if (m_pipelineFailed || rhi() == nullptr || !m_batchMatrixUbo
+      || !m_batchPickTintUbo || !m_batchGhostTintUbo)
+    return false;
+  const bool thumbnailReady = m_thumbnailUniformBuffer != nullptr;
+  const bool sceneCameraReady = m_cameraUniformBuffer != nullptr;
+  const bool stampsMatch =
+      m_batchTintSrbMatrixBytes == m_batchMatrixUboBytes
+      && m_batchTintSrbPickBytes == m_batchPickTintUboBytes
+      && m_batchTintSrbGhostBytes == m_batchGhostTintUboBytes;
+  if (stampsMatch
+      && (!thumbnailReady || (m_batchPickTintSrb && m_thumbnailP3fSrb))
+      && (!sceneCameraReady || m_batchGhostTintSrb))
+    return true;
+
+  const quint32 stride = rhi()->ubufAlignment();
+  auto buildSrb = [&](std::unique_ptr<QRhiShaderResourceBindings> &srb,
+                      QRhiBuffer *cameraUbo, QRhiBuffer *tintUbo,
+                      bool withTint) -> bool {
+    if (srb) {
+      srb->deleteLater();
+      srb.reset();
+    }
+    srb.reset(rhi()->newShaderResourceBindings());
+    const QRhiShaderResourceBinding camera =
+        QRhiShaderResourceBinding::uniformBuffer(
+            0, QRhiShaderResourceBinding::VertexStage
+                   | QRhiShaderResourceBinding::FragmentStage,
+            cameraUbo);
+    const QRhiShaderResourceBinding matrices =
+        QRhiShaderResourceBinding::uniformBufferWithDynamicOffset(
+            1, QRhiShaderResourceBinding::VertexStage, m_batchMatrixUbo.get(),
+            stride);
+    if (withTint) {
+      const QRhiShaderResourceBinding tints =
+          QRhiShaderResourceBinding::uniformBufferWithDynamicOffset(
+              2, QRhiShaderResourceBinding::FragmentStage, tintUbo, stride);
+      srb->setBindings({camera, matrices, tints});
+    } else {
+      srb->setBindings({camera, matrices});
+    }
+    if (!srb->create()) {
+      srb.reset();
+      m_pipelineFailed = true;
+      return false;
+    }
+    return true;
+  };
+  if (m_thumbnailUniformBuffer) {
+    if (!buildSrb(m_batchPickTintSrb, m_thumbnailUniformBuffer.get(),
+                  m_batchPickTintUbo.get(), true))
+      return false;
+    if (!buildSrb(m_thumbnailP3fSrb, m_thumbnailUniformBuffer.get(), nullptr,
+                  false))
+      return false;
+  }
+  if (m_cameraUniformBuffer) {
+    if (!buildSrb(m_batchGhostTintSrb, m_cameraUniformBuffer.get(),
+                  m_batchGhostTintUbo.get(), true))
+      return false;
+  }
+
+  m_batchTintSrbMatrixBytes = m_batchMatrixUboBytes;
+  m_batchTintSrbPickBytes = m_batchPickTintUboBytes;
+  m_batchTintSrbGhostBytes = m_batchGhostTintUboBytes;
+  return true;
+}
+
+// O1 (TINT): the ghost-shell pass pipeline -- the model_tint shaders over
+// the main render pass, blended (SrcAlpha/OneMinusSrcAlpha), depth test on
+// and depth write off (mirrors the upstream glDepthMask(GL_FALSE)).
+bool RhiViewportRenderer::ensureGhostTintPipeline()
+{
+  if (m_pipelineFailed || rhi() == nullptr || renderTarget() == nullptr)
+    return false;
+  if (!ensureBatchTintSrbs())
+    return false;
+  if (!m_batchGhostTintSrb)
+    return false;
+  // Rebuild when the tint SRB was replaced (a UBO resize recreates the SRB
+  // object; a pipeline holding the replaced one reads a dead resource).
+  if (m_modelGhostTintPipeline && m_modelGhostTintPipelineSrb == m_batchGhostTintSrb.get())
+    return true;
+  if (m_modelGhostTintPipeline)
+    m_modelGhostTintPipeline.reset();
+
+  const QShader vertexShader = loadShader(
+      QStringLiteral(":/rhi_viewport/shaders/model_tint.vert.qsb"));
+  const QShader fragmentShader = loadShader(
+      QStringLiteral(":/rhi_viewport/shaders/model_tint.frag.qsb"));
+  if (!vertexShader.isValid() || !fragmentShader.isValid())
+    return false;
+
+  QRhiVertexInputLayout inputLayout;
+  inputLayout.setBindings({
+      QRhiVertexInputBinding(sizeof(Vertex)),          // pos3 + color4
+  });
+  inputLayout.setAttributes({
+      QRhiVertexInputAttribute(0, 0, QRhiVertexInputAttribute::Float3, offsetof(Vertex, x)),
+      QRhiVertexInputAttribute(0, 1, QRhiVertexInputAttribute::Float4, offsetof(Vertex, r)),
+  });
+
+  m_modelGhostTintPipeline.reset(rhi()->newGraphicsPipeline());
+  m_modelGhostTintPipeline->setTopology(QRhiGraphicsPipeline::Triangles);
+  m_modelGhostTintPipeline->setShaderStages({
+      QRhiShaderStage(QRhiShaderStage::Vertex, vertexShader),
+      QRhiShaderStage(QRhiShaderStage::Fragment, fragmentShader),
+  });
+  m_modelGhostTintPipeline->setShaderResourceBindings(m_batchGhostTintSrb.get());
+  m_modelGhostTintPipeline->setVertexInputLayout(inputLayout);
+  m_modelGhostTintPipeline->setRenderPassDescriptor(m_renderPassDescriptor);
+  m_modelGhostTintPipeline->setDepthTest(true);
+  m_modelGhostTintPipeline->setDepthWrite(false);
+  QRhiGraphicsPipeline::TargetBlend blend;
+  blend.enable = true;
+  blend.srcColor = QRhiGraphicsPipeline::SrcAlpha;
+  blend.dstColor = QRhiGraphicsPipeline::OneMinusSrcAlpha;
+  blend.srcAlpha = QRhiGraphicsPipeline::One;
+  blend.dstAlpha = QRhiGraphicsPipeline::OneMinusSrcAlpha;
+  m_modelGhostTintPipeline->setTargetBlends({blend});
+  if (!m_modelGhostTintPipeline->create()) {
+    m_modelGhostTintPipeline.reset();
+    m_pipelineFailed = true;
+    return false;
+  }
+  m_modelGhostTintPipelineSrb = m_batchGhostTintSrb.get();
+  return true;
+}
+
+// O1 (TINT): the pick-thumbnail pipeline -- flat per-batch palette colors
+// over the thumbnail render pass, opaque.
+bool RhiViewportRenderer::ensureThumbnailTintPipeline()
+{
+  if (m_pipelineFailed || rhi() == nullptr
+      || m_thumbnailRenderPassDescriptor == nullptr)
+    return false;
+  if (!ensureBatchTintSrbs())
+    return false;
+  if (!m_batchPickTintSrb)
+    return false;
+  // Rebuild when the tint SRB was replaced (a UBO resize recreates the SRB
+  // object; a pipeline holding the replaced one reads a dead resource).
+  if (m_thumbnailTintPipeline && m_thumbnailTintPipelineSrb == m_batchPickTintSrb.get())
+    return true;
+  if (m_thumbnailTintPipeline)
+    m_thumbnailTintPipeline.reset();
+
+  const QShader vertexShader = loadShader(
+      QStringLiteral(":/rhi_viewport/shaders/model_tint.vert.qsb"));
+  const QShader fragmentShader = loadShader(
+      QStringLiteral(":/rhi_viewport/shaders/model_tint.frag.qsb"));
+  if (!vertexShader.isValid() || !fragmentShader.isValid())
+    return false;
+
+  QRhiVertexInputLayout inputLayout;
+  inputLayout.setBindings({
+      QRhiVertexInputBinding(sizeof(Vertex)),
+  });
+  inputLayout.setAttributes({
+      QRhiVertexInputAttribute(0, 0, QRhiVertexInputAttribute::Float3, offsetof(Vertex, x)),
+      QRhiVertexInputAttribute(0, 1, QRhiVertexInputAttribute::Float4, offsetof(Vertex, r)),
+  });
+
+  m_thumbnailTintPipeline.reset(rhi()->newGraphicsPipeline());
+  m_thumbnailTintPipeline->setTopology(QRhiGraphicsPipeline::Triangles);
+  m_thumbnailTintPipeline->setShaderStages({
+      QRhiShaderStage(QRhiShaderStage::Vertex, vertexShader),
+      QRhiShaderStage(QRhiShaderStage::Fragment, fragmentShader),
+  });
+  m_thumbnailTintPipeline->setShaderResourceBindings(m_batchPickTintSrb.get());
+  m_thumbnailTintPipeline->setVertexInputLayout(inputLayout);
+  m_thumbnailTintPipeline->setRenderPassDescriptor(m_thumbnailRenderPassDescriptor);
+  m_thumbnailTintPipeline->setDepthTest(true);
+  m_thumbnailTintPipeline->setDepthWrite(true);
+  m_thumbnailTintPipeline->setTargetBlends({});
+  if (!m_thumbnailTintPipeline->create()) {
+    m_thumbnailTintPipeline.reset();
+    m_pipelineFailed = true;
+    return false;
+  }
+  m_thumbnailTintPipelineSrb = m_batchPickTintSrb.get();
+  return true;
+}
+
+// O1 (TINT): flat vertex-color fill over the model_p3i vertex stage for
+// the thumbnail model draw on the indexed path (volume-local vertices need
+// the per-batch matrix; the soup single-draw fill pipeline cannot address
+// them).
+bool RhiViewportRenderer::ensureThumbnailP3fPipeline()
+{
+  if (m_pipelineFailed || rhi() == nullptr
+      || m_thumbnailRenderPassDescriptor == nullptr)
+    return false;
+  if (!ensureBatchTintSrbs())
+    return false;
+  if (!m_thumbnailP3fSrb)
+    return false;
+  // Rebuild when the tint SRB was replaced (a UBO resize recreates the SRB
+  // object; a pipeline holding the replaced one reads a dead resource).
+  if (m_thumbnailP3fPipeline && m_thumbnailP3fPipelineSrb == m_thumbnailP3fSrb.get())
+    return true;
+  if (m_thumbnailP3fPipeline)
+    m_thumbnailP3fPipeline.reset();
+
+  const QShader vertexShader = loadShader(
+      QStringLiteral(":/rhi_viewport/shaders/model_p3i.vert.qsb"));
+  const QShader fragmentShader = loadShader(
+      QStringLiteral(":/rhi_viewport/shaders/model_p3f.frag.qsb"));
+  if (!vertexShader.isValid() || !fragmentShader.isValid())
+    return false;
+
+  QRhiVertexInputLayout inputLayout;
+  inputLayout.setBindings({
+      QRhiVertexInputBinding(sizeof(Vertex)),
+  });
+  inputLayout.setAttributes({
+      QRhiVertexInputAttribute(0, 0, QRhiVertexInputAttribute::Float3, offsetof(Vertex, x)),
+      QRhiVertexInputAttribute(0, 1, QRhiVertexInputAttribute::Float4, offsetof(Vertex, r)),
+  });
+
+  m_thumbnailP3fPipeline.reset(rhi()->newGraphicsPipeline());
+  m_thumbnailP3fPipeline->setTopology(QRhiGraphicsPipeline::Triangles);
+  m_thumbnailP3fPipeline->setShaderStages({
+      QRhiShaderStage(QRhiShaderStage::Vertex, vertexShader),
+      QRhiShaderStage(QRhiShaderStage::Fragment, fragmentShader),
+  });
+  m_thumbnailP3fPipeline->setShaderResourceBindings(m_thumbnailP3fSrb.get());
+  m_thumbnailP3fPipeline->setVertexInputLayout(inputLayout);
+  m_thumbnailP3fPipeline->setRenderPassDescriptor(m_thumbnailRenderPassDescriptor);
+  m_thumbnailP3fPipeline->setDepthTest(true);
+  m_thumbnailP3fPipeline->setDepthWrite(true);
+  m_thumbnailP3fPipeline->setTargetBlends({});
+  if (!m_thumbnailP3fPipeline->create()) {
+    m_thumbnailP3fPipeline.reset();
+    m_pipelineFailed = true;
+    return false;
+  }
+  m_thumbnailP3fPipelineSrb = m_thumbnailP3fSrb.get();
   return true;
 }
 
@@ -4046,16 +4449,9 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
   }
   modelVertices.reserve(reservableCorners);
   translucentVertices.reserve(reservableCorners);
-  // G-04: picking variant vertex buffer -- same soup positions, but
-  // every vertex's color is overwritten with its batch's flat palette
-  // color (keyed by sourceObjectIndex, deterministic hash like upstream
-  // id encoding). FIX5M: built ON DEMAND -- only while a picking
-  // thumbnail is scheduled -- because it is a full 400MB duplicate of
-  // the model on a 5M-face scene.
-  const bool pickBufferNeeded = m_pickBufferRequested || m_pickVertexCount > 0;
-  QVector<Vertex> pickVertices;
-  if (pickBufferNeeded)
-    pickVertices.reserve(reservableCorners);
+  // O1 (TINT): the pick thumbnail no longer gets a recolored vertex
+  // duplicate -- the pick pass draws the model VB per batch with the pick
+  // palette UBO (uploadBatchTintUbos below).
   m_modelTranslucentBatches.clear();
   m_modelTranslucentVertexCount = 0;
   for (const PrepareSceneData::ModelBatch &batch : sceneBatches) {
@@ -4063,17 +4459,6 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
         || qsizetype(batch.firstVertex) + batch.vertexCount > allVertices.size())
       continue;
     if (!batch.translucent) {
-      if (pickBufferNeeded) {
-        const quint32 h = quint32(batch.sourceObjectIndex) * 2654435761u;
-        const float pr = float((h >> 16) & 0xFF) / 255.0f;
-        const float pg = float((h >> 8) & 0xFF) / 255.0f;
-        const float pb = float(h & 0xFF) / 255.0f;
-        for (int i = 0; i < batch.vertexCount; ++i) {
-          Vertex pv = allVertices.at(batch.firstVertex + i);
-          pv.r = pr; pv.g = pg; pv.b = pb; pv.a = 1.0f;
-          pickVertices.append(pv);
-        }
-      }
       for (int i = 0; i < batch.vertexCount; ++i)
         modelVertices.append(allVertices.at(batch.firstVertex + i));
       continue;
@@ -4119,22 +4504,6 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
                                 0,
                                 modelBytes,
                                 modelVertices.constData());
-  }
-
-  m_pickVertexCount = quint32(pickVertices.size());
-  const quint32 pickBytes = quint32(pickVertices.size() * int(sizeof(Vertex)));
-  if (pickBytes > 0) {
-    if (ensureBuffer(m_pickVertexBuffer, pickBytes, m_pickVertexBufferBytes,
-                     QRhiBuffer::VertexBuffer)
-        && m_pickVertexBuffer) {
-      updates->uploadStaticBuffer(m_pickVertexBuffer.get(), 0, pickBytes,
-                                  pickVertices.constData());
-      m_pickBufferRequested = false;
-    }
-    // FIX5M: on ensure failure keep the request pending but DO NOT fail
-    // the whole model upload -- the retry death spiral (400MB create
-    // attempt per frame) is what crashed the AMD driver under VRAM
-    // pressure.
   }
 
   const quint32 translucentBytes = quint32(translucentVertices.size() * int(sizeof(Vertex)));
@@ -4224,9 +4593,12 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
       updates->uploadStaticBuffer(m_modelIndexBuffer.get(), 0, indexBytes,
                                   indices.constData());
     }
-    if (!uploadBatchMatrixUbo(updates))
-      return false;
   }
+  // O1 (TINT): the per-batch matrix + tint arrays serve both modes (the
+  // tint draws run on soup scenes too -- identity matrices there), so
+  // they upload unconditionally.
+  if (!uploadBatchMatrixUbo(updates) || !uploadBatchTintUbos(updates))
+    return false;
 
   m_uploadedMeshHash = m_parsedMeshHash;
   m_uploadedPlateContext = m_parsedPlateContext;
@@ -6843,98 +7215,6 @@ bool RhiViewportRenderer::ensurePreviewLitPipeline()
     m_previewLitPipeline.reset();
     return false;
   }
-  return true;
-}
-
-// Phase 238 (PREV-01): ghost shells -- semi-transparent object meshes drawn
-// behind the preview toolpaths (upstream GCodeViewer ALWAYS renders the
-// shells in preview: load_shells GCodeViewer.cpp:3076 + the always-on call
-// site :983-988 "BBS: always load shell at preview", render_shells :4023
-// with glDepthMask(GL_FALSE) + Transparent volume render). The vertices come
-// from the SAME prepare-pass mesh staging (m_prepareScene.modelVertices --
-// fed by PreviewPage.qml's meshData/meshBatch* bindings, mirroring
-// PreparePage), with the per-vertex alpha overridden to the ghost alpha.
-//
-// PREVIEW-GHOST-SHELL per-volume lifecycle: the ghost buffer is built PER
-// ModelBatch, not as one merged blob (upstream Shells is a per-volume
-// GLVolumeCollection, GCodeViewer.hpp:381-389). Eligibility mirrors
-// load_shells: only model-part volumes become shells -- modifier/negative/
-// blocker/enforcer volumes are dropped (upstream deletes modifier shell
-// volumes, GCodeViewer.cpp:3163-3171; load_object only feeds model parts,
-// 3DScene.cpp:689-743). Each surviving batch is tinted with ITS OWN extruder
-// color (update_colors_by_extruder filament_colour[extruder-1] with the
-// first-color fallback for an invalid id, 3DScene.cpp:1216-1224), replacing
-// the previous extruder-1-only tint. An empty eligible set is the upstream
-// reset_shell transition (clear volumes + empty collection,
-// GCodeViewer.cpp:1193-1198, :3091-3095): the generation is recorded so an
-// empty scene does not rebuild every frame and no stale shell draws.
-bool RhiViewportRenderer::uploadGhostShellBuffer(QRhiResourceUpdateBatch *updates)
-{
-  if (updates == nullptr || rhi() == nullptr)
-    return false;
-  // Rebuild only when the model generation changed (object edits) or after a
-  // swapchain rebuild. Not tied to PrepareSceneData dirty flags: the preview
-  // path never takes them, so they can stay set indefinitely.
-  if (m_ghostShellBufferUploaded && m_ghostShellModelGeneration == m_modelGeneration)
-    return true;
-
-  // Ghost alpha override (upstream renders the shell volumes in Transparent
-  // mode with per-volume color alpha 0.5 -- load_shells
-  // GCodeViewer.cpp:2330-2337 `volume->color.a(0.5f)`; render_shells
-  // :2522-2545 blends with glDepthMask(GL_FALSE)). PREVIEW-ALIGN 2026-10-19:
-  // 0.15 -> 0.50, matching the upstream shell opacity.
-  constexpr float kGhostAlpha = 0.5f;
-
-  QVector<Vertex> ghost;
-  const QList<PrepareSceneData::ModelBatch> &batches = m_prepareScene.modelBatches();
-  if (!batches.isEmpty()) {
-    // 1:1 with modelVertices() for CanvasPreview (buildModelVertices only
-    // diverges for the AssembleView explosion/transform paths), so per-batch
-    // [firstVertex, firstVertex+vertexCount) ranges map directly onto the
-    // built output.
-    const QVector<Vertex> built = buildModelVertices(m_prepareScene.modelVertices());
-    ghost.reserve(built.size());
-    for (const PrepareSceneData::ModelBatch &batch : batches) {
-      if (batch.volumeType != 0 || batch.vertexCount <= 0)
-        continue; // shell eligibility: model parts only (load_shells rules)
-      float tintR = 0.8f, tintG = 0.8f, tintB = 0.8f;
-      if (!m_extrudersColorsParsed.isEmpty()) {
-        int colorIndex = batch.extruderId - 1;
-        if (colorIndex < 0 || colorIndex >= m_extrudersColorsParsed.size())
-          colorIndex = 0; // invalid extruder falls back to the first color
-        const QVector4D &color = m_extrudersColorsParsed.at(colorIndex);
-        tintR = color.x();
-        tintG = color.y();
-        tintB = color.z();
-      }
-      const int first = batch.firstVertex;
-      for (int i = 0; i < batch.vertexCount; ++i) {
-        const Vertex &v = built.at(first + i);
-        ghost.append(Vertex{v.x, v.y, v.z, tintR, tintG, tintB, kGhostAlpha});
-      }
-    }
-  }
-
-  if (ghost.isEmpty())
-  {
-    // reset_shell equivalent: no eligible shell volumes (empty plate or only
-    // modifier/negative volumes). Record the generation so empty scenes do
-    // not rebuild every frame and no stale shell geometry survives.
-    m_ghostShellModelGeneration = m_modelGeneration;
-    m_ghostShellBufferUploaded = true;
-    m_ghostShellVertexCount = 0;
-    return true;
-  }
-
-  const quint32 byteSize = quint32(ghost.size()) * sizeof(Vertex);
-  if (!ensureBuffer(m_ghostShellBuffer, byteSize, m_ghostShellBufferBytes,
-                    QRhiBuffer::VertexBuffer))
-    return false;
-  updates->uploadStaticBuffer(m_ghostShellBuffer.get(), 0, byteSize,
-                              ghost.constData());
-  m_ghostShellVertexCount = quint32(ghost.size());
-  m_ghostShellModelGeneration = m_modelGeneration;
-  m_ghostShellBufferUploaded = true;
   return true;
 }
 

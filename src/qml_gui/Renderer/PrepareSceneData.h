@@ -205,12 +205,13 @@ public:
     DirtyBedModel = 1u << 22,
     DirtyBedTypeParts = 1u << 23,
     DirtyPreviewSegment = 1u << 24,
-    DirtyGhostShell = 1u << 25,
-    DirtyToolMarker = 1u << 26,
-    DirtyPreviewCap = 1u << 27,         // Q3 seam arms this (was a boolean latch)
-    DirtyNavigator = 1u << 28,
-    DirtyCameraUniform = 1u << 29,      // derived from kCameraFeedMask by routing
-    DirtyBedBuffers = 1u << 30,         // PREVIEW-BED: bed vertex upload on the
+    DirtyToolMarker = 1u << 25,         // O1: DirtyGhostShell retired (the
+                                        // ghost shells draw from the model
+                                        // VB + the batch tint UBOs)
+    DirtyPreviewCap = 1u << 26,         // Q3 seam arms this (was a boolean latch)
+    DirtyNavigator = 1u << 27,
+    DirtyCameraUniform = 1u << 28,      // derived from kCameraFeedMask by routing
+    DirtyBedBuffers = 1u << 29,         // PREVIEW-BED: bed vertex upload on the
                                         // preview canvas (derived from the
                                         // DirtyBed/DirtyPlate payload by routing)
   };
@@ -241,7 +242,7 @@ public:
       | DirtyAdvancedCutMarker | DirtyMeasureOverlay | DirtyFlattenHover
       | DirtySequentialClearance | DirtyPlateIconAtlas | DirtyPlateIconQuads
       | DirtyBedTexture | DirtyBedModel | DirtyBedTypeParts
-      | DirtyPreviewSegment | DirtyGhostShell | DirtyToolMarker
+      | DirtyPreviewSegment | DirtyToolMarker
       | DirtyPreviewCap | DirtyNavigator | DirtyBedBuffers;
   // Channels routable per canvas family. Canvas values mirror
   // RhiViewport::CanvasType (equality is locked by static_assert in
@@ -256,7 +257,7 @@ public:
       | DirtySequentialClearance | DirtyPlateIconAtlas | DirtyPlateIconQuads
       | DirtyBedTexture | DirtyBedModel | DirtyBedTypeParts | DirtyNavigator;
   static constexpr quint32 kPreviewCanvasChannelMask =
-      DirtyPreviewSegment | DirtyGhostShell | DirtyToolMarker
+      DirtyPreviewSegment | DirtyToolMarker
       | DirtyPreviewCap | DirtyNavigator | DirtyBedBuffers
       | DirtyBedTexture | DirtyBedModel | DirtyBedTypeParts;
 

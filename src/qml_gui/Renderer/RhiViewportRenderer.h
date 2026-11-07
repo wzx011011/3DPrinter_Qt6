@@ -166,6 +166,14 @@ private:
   // binding; unused until the indexed pipeline switches on.
   bool ensureBatchMatrixSrb();
   bool uploadBatchMatrixUbo(QRhiResourceUpdateBatch *updates);
+  // O1 (TINT): per-batch pick/ghost color UBOs + the SRBs binding them.
+  // ensureBatchTintSrbs rebuilds the SRBs whenever any referenced UBO
+  // resized (a resized UBO invalidates the SRB -- the FIX5M-B3 lesson).
+  bool uploadBatchTintUbos(QRhiResourceUpdateBatch *updates);
+  bool ensureBatchTintSrbs();
+  bool ensureGhostTintPipeline();
+  bool ensureThumbnailTintPipeline();
+  bool ensureThumbnailP3fPipeline();
   // FIX5M-B3 (step 3): indexed model pipeline (volume-local vertices +
   // shared IB + per-batch BatchBlock offsets). Armed by OWZX_B3_INDEXED=1
   // AND a volume-local scene; otherwise the existing path runs untouched.
@@ -214,15 +222,6 @@ private:
   QVector<PreviewDrawRange> computePreviewDrawRanges() const;
   quint64 computePreviewRangeCacheKey() const;
 
-  // ── Phase 238 (PREV-01): ghost shells ──
-  // Semi-transparent object meshes drawn behind the toolpaths in the preview
-  // pass (upstream ALWAYS loads + renders shells in preview:
-  // GCodeViewer.cpp:3076 load_shells / :4023 render_shells, drawn before
-  // render_toolpaths). Reuses the prepare-pass mesh staging
-  // (m_prepareScene.modelVertices) with a ghost alpha override, uploaded to a
-  // dedicated buffer and drawn with m_translucentFillPipeline (blended, depth
-  // test but no depth write -- mirrors upstream glDepthMask(GL_FALSE)).
-  bool uploadGhostShellBuffer(QRhiResourceUpdateBatch *updates);
   // ── Phase 238 (PREV-02): tool marker ──
   // The 3D tool-position arrow (upstream GCodeViewer::SequentialView::Marker,
   // Marker::render GCodeViewer.cpp:306-330) rendered at markerX/Y/Z while
@@ -415,16 +414,40 @@ private:
   quint32 m_batchMatrixUboBytes = 0;
   int m_batchMatrixCount = -1;
   QRhiShaderResourceBindings *m_batchMatrixSrb = nullptr;
+  // O1 (TINT): per-batch uniform color UBOs + the SRBs that bind them. The
+  // pick thumbnail and the preview ghost shell draw the model VB per batch
+  // with a dynamic-offset tint instead of recolored vertex duplicates.
+  std::unique_ptr<QRhiBuffer> m_batchPickTintUbo;
+  quint32 m_batchPickTintUboBytes = 0;
+  std::unique_ptr<QRhiBuffer> m_batchGhostTintUbo;
+  quint32 m_batchGhostTintUboBytes = 0;
+  std::unique_ptr<QRhiShaderResourceBindings> m_batchPickTintSrb;
+  std::unique_ptr<QRhiShaderResourceBindings> m_batchGhostTintSrb;
+  // Sizes the tint SRBs were built against (a resized UBO invalidates the
+  // SRB that references it -- the FIX5M-B3 lesson).
+  quint32 m_batchTintSrbMatrixBytes = 0;
+  quint32 m_batchTintSrbPickBytes = 0;
+  quint32 m_batchTintSrbGhostBytes = 0;
+  std::unique_ptr<QRhiGraphicsPipeline> m_modelGhostTintPipeline;
   // FIX5M-B3 (step 3): shared index buffer + the indexed pipeline.
   std::unique_ptr<QRhiBuffer> m_modelIndexBuffer;
   quint32 m_modelIndexBufferBytes = 0;
   quint32 m_modelIndexCount = 0;
   QRhiGraphicsPipeline *m_modelP3IndexedPipeline = nullptr;
+  // The SRB each batch pipeline was created with. A UBO resize makes
+  // ensureBatchMatrixSrb/ensureBatchTintSrbs replace the SRB object; a
+  // pipeline still holding the replaced SRB reads a dead resource, so the
+  // ensure functions rebuild the pipeline when the captured pointer no
+  // longer matches (importing a 3-object scene after a 1-object scene is
+  // the trivial trigger).
+  QRhiShaderResourceBindings *m_modelP3IndexedPipelineSrb = nullptr;
+  QRhiShaderResourceBindings *m_modelGhostTintPipelineSrb = nullptr;
+  QRhiShaderResourceBindings *m_thumbnailTintPipelineSrb = nullptr;
+  QRhiShaderResourceBindings *m_thumbnailP3fPipelineSrb = nullptr;
   bool m_indexedPathArmed = false; // env switch, latched once
   // FIX5M-churn: identity of the blob the render scene was parsed from
   // (shared-pointer identity + plate context) so generation bumps from
   // non-mesh channels do not re-parse the same payload.
-  bool m_pickBufferRequested = false; // FIX5M: on-demand pick soup
   quint64 m_parsedMeshHash = 0;
   int m_parsedPlateContext = -1;
   quint64 m_uploadedMeshHash = 0;
@@ -822,17 +845,13 @@ private:
   QVector<float> m_previewNormals;       // CPU staging, 3 per preview vertex
   bool ensurePreviewLitPipeline();
 
-  // ── Phase 238 (PREV-01/02): preview ghost-shell + tool-marker GPU state ──
-  std::unique_ptr<QRhiBuffer> m_ghostShellBuffer;
+  // ── Phase 238 (PREV-02): preview tool-marker GPU state ──
+  // (The ghost shell no longer owns a vertex buffer: O1 (TINT) draws the
+  // model VB per batch with the ghost tint UBO -- see m_batchGhostTintUbo.)
   std::unique_ptr<QRhiBuffer> m_toolMarkerBuffer;
-  quint32 m_ghostShellBufferBytes = 0;
   quint32 m_toolMarkerBufferBytes = 0;
-  quint32 m_ghostShellVertexCount = 0;
   quint32 m_toolMarkerVertexCount = 0;
-  bool m_ghostShellBufferUploaded = false;
   bool m_toolMarkerBufferUploaded = false;
-  /// Model generation at the last ghost-shell upload (rebuild trigger).
-  qint64 m_ghostShellModelGeneration = 0;
   // Marker state mirrored from RhiViewport in synchronize() (PREV-02). The
   // last* fields detect position changes so the small marker buffer is only
   // rebuilt when the tool actually moves (playback) or toggles.
@@ -887,12 +906,11 @@ private:
   std::unique_ptr<QRhiBuffer> m_thumbnailUniformBuffer;
   std::unique_ptr<QRhiShaderResourceBindings> m_thumbnailSrb;
   quint32 m_thumbnailUniformBufferBytes = 0;
-  // G-04: picking variant vertex buffer -- the soup positions with one flat
-  // palette color per ModelBatch baked into the vertex colors, rendered by
-  // the shared unlit thumbnail pipeline (no extra shader/pipeline state).
-  std::unique_ptr<QRhiBuffer> m_pickVertexBuffer;
-  quint32 m_pickVertexBufferBytes = 0;
-  quint32 m_pickVertexCount = 0;
+  // O1 (TINT): the pick thumbnail draws the model VB per batch with the
+  // pick palette UBO (no recolored vertex duplicate).
+  std::unique_ptr<QRhiGraphicsPipeline> m_thumbnailTintPipeline;
+  std::unique_ptr<QRhiGraphicsPipeline> m_thumbnailP3fPipeline;
+  std::unique_ptr<QRhiShaderResourceBindings> m_thumbnailP3fSrb;
   // Request mirror (copied from the item in synchronize()).
   bool m_thumbnailRequestPending = false;
   int m_thumbnailPlateIndex = 0;

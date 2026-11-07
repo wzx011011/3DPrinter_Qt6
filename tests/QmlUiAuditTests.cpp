@@ -11509,6 +11509,7 @@ void QmlUiAuditTests::previewCompletionSourceAudit()
   const QString legend = readSource(QStringLiteral("src/qml_gui/components/Legend.qml"));
   const QString softwareVp = readSource(QStringLiteral("src/qml_gui/Renderer/SoftwareViewport.cpp"));
   const QString previewVmCpp = readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.cpp"));
+  const QString prepSceneCpp = readSource(QStringLiteral("src/qml_gui/Renderer/PrepareSceneData.cpp"));
   QVERIFY2(!rendererCpp.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
   QVERIFY2(!rendererH.isEmpty(), "Unable to read RhiViewportRenderer.h");
   QVERIFY2(!prepareSceneH.isEmpty(), "Unable to read PrepareSceneData.h");
@@ -11519,18 +11520,23 @@ void QmlUiAuditTests::previewCompletionSourceAudit()
   QVERIFY2(!legend.isEmpty(), "Unable to read Legend.qml");
   QVERIFY2(!softwareVp.isEmpty(), "Unable to read SoftwareViewport.cpp");
   QVERIFY2(!previewVmCpp.isEmpty(), "Unable to read PreviewViewModel.cpp");
+  QVERIFY2(!prepSceneCpp.isEmpty(), "Unable to read PrepareSceneData.cpp");
 
   // ── PREV-01: ghost shells rendered in the preview pass ────────────────
   // Upstream ALWAYS loads + renders shells in preview (GCodeViewer.cpp:3076
   // load_shells, render_shells :4023 drawn before render_toolpaths :1247).
-  QVERIFY2(rendererCpp.contains(QStringLiteral("uploadGhostShellBuffer")),
-           "PREV-01: RhiViewportRenderer must upload a ghost-shell buffer in the preview pass");
-  QVERIFY2(rendererCpp.contains(QStringLiteral("m_ghostShellBuffer.get()")),
-           "PREV-01: preview render pass must bind the ghost-shell vertex buffer");
-  QVERIFY2(rendererCpp.contains(QStringLiteral("m_translucentFillPipeline.get()")),
-           "PREV-01: ghost shells must draw with the translucent (alpha, no depth write) pipeline");
-  QVERIFY2(rendererH.contains(QStringLiteral("m_ghostShellBufferUploaded")),
-           "PREV-01: ghost-shell GPU state must track upload + model generation");
+  // O1 (TINT): the ghost shells draw the model VB per batch with the batch
+  // ghost-tint UBO (extruder colors) through a blended no-depth-write
+  // pipeline -- no recolored vertex duplicate.
+  QVERIFY2(rendererCpp.contains(QStringLiteral("ensureGhostTintPipeline")),
+           "PREV-01: RhiViewportRenderer must draw the ghost shells through the tint pipeline in the preview pass");
+  QVERIFY2(rendererCpp.contains(QStringLiteral("m_batchGhostTintSrb")),
+           "PREV-01: the ghost pass must bind the batch ghost-tint SRB (per-batch dynamic offset)");
+  QVERIFY2(rendererCpp.contains(QStringLiteral("m_modelGhostTintPipeline")),
+           "PREV-01: ghost shells draw with a blended, no-depth-write pipeline"
+           " (upstream glDepthMask(GL_FALSE))");
+  QVERIFY2(rendererH.contains(QStringLiteral("m_batchGhostTintUboBytes")),
+           "PREV-01: the ghost tint UBO must be tracked in the renderer state");
   // The Preview canvas must feed the mesh stream the ghost pass reads
   // (mirrors the upstream shells-always-loaded behavior).
   QVERIFY2(previewPage.contains(QStringLiteral("meshData: root.editorVm ? root.editorVm.meshData : null")),
@@ -11543,18 +11549,22 @@ void QmlUiAuditTests::previewCompletionSourceAudit()
   // tints each volume with its own extruder color
   // (update_colors_by_extruder, 3DScene.cpp:1216-1224, first-color fallback
   // :1220-1222). reset_shell (:1193-1198) empties the collection when the
-  // eligible set is empty (:3091-3095).
+  // eligible set is empty (:3091-3095). O1 (TINT): the per-volume extruder
+  // tint lives in PrepareSceneData::rebuildBatchTintColors (the batch ghost
+  // color channel), not a renderer vertex walk.
   QVERIFY2(rendererCpp.contains(QStringLiteral("m_prepareScene.modelBatches()")),
-           "GHOST-PER-VOLUME: the ghost build must iterate per-batch ModelBatch"
+           "GHOST-PER-VOLUME: the ghost draw must iterate per-batch ModelBatch"
            " ranges, not one merged vertex blob");
   QVERIFY2(rendererCpp.contains(QStringLiteral("batch.volumeType != 0")),
            "GHOST-PER-VOLUME: only model-part volumes may become shells"
            " (modifier/negative/blocker/enforcer are dropped, upstream"
            " GCodeViewer.cpp:3163-3171)");
-  QVERIFY2(rendererCpp.contains(QStringLiteral("batch.extruderId - 1")),
+  QVERIFY2(prepSceneCpp.contains(QStringLiteral("batch.extruderId - 1")),
            "GHOST-PER-VOLUME: each shell volume must tint with its own"
            " extruder color (upstream filament_colour[extruder-1],"
            " 3DScene.cpp:1216-1224)");
+  QVERIFY2(prepSceneCpp.contains(QStringLiteral("rebuildBatchTintColors")),
+           "GHOST-PER-VOLUME: the batch tint channels must rebuild with the batches");
   QVERIFY2(!rendererCpp.contains(QStringLiteral("m_extrudersColorsParsed.first()")),
            "GHOST-PER-VOLUME: the extruder-1-only merged tint must not return"
            " (first-color fallback is allowed only through the clamped index"

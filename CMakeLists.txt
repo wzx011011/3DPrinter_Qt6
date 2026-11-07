@@ -513,6 +513,9 @@ endif()
             src/qml_gui/Renderer/shaders/model_p3.frag
             src/qml_gui/Renderer/shaders/model_p3i.vert
             src/qml_gui/Renderer/shaders/model_p3i.frag
+            src/qml_gui/Renderer/shaders/model_tint.vert
+            src/qml_gui/Renderer/shaders/model_tint.frag
+            src/qml_gui/Renderer/shaders/model_p3f.frag
             src/qml_gui/Renderer/shaders/bold_line.vert
             src/qml_gui/Renderer/shaders/bold_line.frag
     )
