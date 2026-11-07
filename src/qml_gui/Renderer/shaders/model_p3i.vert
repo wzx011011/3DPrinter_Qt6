@@ -1,11 +1,14 @@
 #version 440
 
-// FIX5M-B3 (step 3): indexed pipeline variant of model_p3 -- identical
-// lighting contract (fragment-stage derivative normals, see model_p3.frag),
-// but the vertices are VOLUME-LOCAL: the per-batch world matrix comes from
-// the BatchBlock UBO selected with a dynamic offset per draw (upstream
-// GLVolume "matrix is the transform"). A drag updates one 64B uniform entry
-// instead of rewriting vertex data.
+// FIX5M-B3 (final): indexed pipeline with volume-local vertices. The
+// per-batch world matrix comes from the BatchBlock UBO (binding 1) selected
+// with a dynamic offset per draw (upstream GLVolume "matrix is the
+// transform"). A drag updates one 64B uniform entry instead of rewriting
+// vertex data. The fragment stage reconstructs the per-face normal from
+// screen-space derivatives (normalize(cross(dFdx, dFdy))), flat shading
+// identical to the CPU per-face normal bake. Two-sided lighting per the
+// model_lit tracked deviation (the CPU bake's Y/Z axis swap cannot
+// guarantee outward-facing normals).
 
 layout(location = 0) in vec3 position;
 layout(location = 1) in vec4 color;
