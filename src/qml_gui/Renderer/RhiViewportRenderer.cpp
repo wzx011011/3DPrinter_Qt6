@@ -486,7 +486,8 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
                                     batchPrintableFlags,
                                     extruderColors,
                                     batchWorldTransforms,
-                                    /*expandIndexedToSoup=*/true);
+                                    /*expandIndexedToSoup=*/!m_indexedPathArmed,
+                                    /*composeWorld=*/!m_indexedPathArmed);
   }
   // S3: transform-only revisions (no mesh-generation bump) flow through the
   // scene's per-batch diff recompose; the S2 registry arms DirtyMesh|DirtyGpu
@@ -1414,7 +1415,30 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // no-depth-test texture pass cannot paint over them (upstream
     // Bed3D::Axes::render runs inside the bed render with depth test).
     renderAxes(cb);
-    if (m_modelVertexBuffer && m_modelVertexCount > 0) {
+    if (m_modelVertexBuffer && m_modelVertexCount > 0
+             && indexedModelPathActive() && ensureModelP3IndexedPipeline()
+             && m_modelIndexBuffer && m_modelIndexCount > 0) {
+      // FIX5M-B3 (step 3b): volume-local unique-vertex VB + shared IB,
+      // one drawIndexed per batch, each selecting its world matrix
+      // from the BatchBlock UBO via a dynamic offset. A drag frame
+      // re-uploads only the tiny matrix array (zero vertex traffic).
+      setPipeline(cb, m_modelP3IndexedPipeline);
+      const QRhiCommandBuffer::VertexInput modelBinding(
+          m_modelVertexBuffer.get(), 0);
+      cb->setVertexInput(0, 1, &modelBinding,
+                         m_modelIndexBuffer.get(), 0,
+                         QRhiCommandBuffer::IndexUInt32);
+      const quint32 stride = rhi()->ubufAlignment();
+      for (const PrepareSceneData::ModelBatch &batch : m_prepareScene.modelBatches()) {
+        if (batch.translucent || batch.indexCount < 3
+            || qsizetype(batch.firstVertex) + batch.vertexCount > m_modelVertexCount)
+          continue;
+        const quint32 dyn = quint32(batch.blobIndex < 0 ? 0 : batch.blobIndex) * stride;
+        const QRhiCommandBuffer::DynamicOffset dynOffset(0, dyn);
+        cb->setShaderResources(m_batchMatrixSrb);
+        cb->drawIndexed(batch.indexCount, 1, batch.firstIndex);
+      }
+    } else if (m_modelVertexBuffer && m_modelVertexCount > 0) {
       // FIX5M (P3 derivative lighting): normals come from screen-space
       // derivatives in model_p3.frag, so the model pass needs no normal
       // buffer at all (-171MB GPU on a 5M-face scene, and the per-upload
@@ -3512,9 +3536,18 @@ bool RhiViewportRenderer::ensureBatchMatrixSrb()
   const int batchCount = int(m_prepareScene.batchWorldTransforms().size());
   const quint32 stride = rhi()->ubufAlignment();
   const quint32 bytes = quint32(qMax(batchCount, 1)) * stride;
+  const bool uboResized = !m_batchMatrixUbo || m_batchMatrixUboBytes != bytes;
   if (!ensureBuffer(m_batchMatrixUbo, bytes, m_batchMatrixUboBytes,
                     QRhiBuffer::UniformBuffer))
     return false;
+  // FIX5M-B3: a resized UBO invalidates the SRB that references it (the
+  // old buffer object was destroyed inside ensureBuffer) -- rebuild the
+  // SRB too, or the BatchBlock binding reads a dead resource and the
+  // sphere draws nowhere (the invisible-sphere bug).
+  if (uboResized && m_batchMatrixSrb) {
+    m_batchMatrixSrb->deleteLater();
+    m_batchMatrixSrb = nullptr;
+  }
 
   if (!m_batchMatrixSrb) {
     m_batchMatrixSrb = rhi()->newShaderResourceBindings();
@@ -4174,6 +4207,25 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
       updates->uploadStaticBuffer(m_modelTranslucentNormalBuffer.get(),
                                   0, normalBytes, normals.constData());
     }
+  }
+
+  // FIX5M-B3 (step 3b): indexed-path bookkeeping. The IB is the scene's
+  // index stream verbatim; the VB already uploaded above IS the unique-
+  // vertex stream when the scene is volume-local (no soup expansion ran
+  // -- W1 followed the switch). Only runs when the path is armed.
+  if (indexedModelPathActive()) {
+    const QList<quint32> &indices = m_prepareScene.modelIndices();
+    m_modelIndexCount = quint32(indices.size());
+    const quint32 indexBytes = m_modelIndexCount * sizeof(quint32);
+    if (indexBytes > 0) {
+      if (!ensureBuffer(m_modelIndexBuffer, indexBytes, m_modelIndexBufferBytes,
+                        QRhiBuffer::IndexBuffer))
+        return false;
+      updates->uploadStaticBuffer(m_modelIndexBuffer.get(), 0, indexBytes,
+                                  indices.constData());
+    }
+    if (!uploadBatchMatrixUbo(updates))
+      return false;
   }
 
   m_uploadedMeshHash = m_parsedMeshHash;

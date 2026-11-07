@@ -1013,9 +1013,6 @@ void PrepareSceneData::expandIndexedToSoupImpl()
     }
     expanded.append(verts[int(corner)]);
   }
-  fprintf(stderr, "[MEM] expandIndexedToSoupImpl: expanded=%lld verts (int64 MB: %lld)\n",
-          (long long)expanded.size(), (long long)(expanded.size() * sizeof(ModelVertex) / 1048576));
-  fflush(stderr);
   m_modelVertices = std::move(expanded);
 
   // Remap batches to corner ranges: batch k's corners occupy
@@ -1927,9 +1924,6 @@ void PrepareSceneData::setInstanceTransforms(
     m_batchWorldTransforms = batchWorldTransforms;
     anyChanged = true;
   }
-  fprintf(stderr, "[CH] setInstanceTransforms recompose=%d batches=%d\n",
-          int(anyChanged), batchCount);
-  fflush(stderr);
   if (!anyChanged)
     return;
 
