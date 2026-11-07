@@ -121,6 +121,11 @@ private slots:
   void volumeLocalParseKeepsVolumeFrameVertices();
   void volumeLocalSetInstanceTransformsUpdatesDerivedStateOnly();
   void volumeLocalContourWalkTransformsThroughBatchMatrix();
+  // O1 (TINT): per-batch pick (palette) + ghost (extruder tint) color
+  // channels -- the renderer draws the model VB with uniform per-batch
+  // tints instead of building recolored vertex duplicates.
+  void batchTintChannelsCoverEveryBatch();
+  void batchTintChannelsSurviveSoupExpansion();
   // P15.1/15.2 (COLOR): upstream volume coloring lock.
   void modelColorsFollowUpstreamVolumeSemantics();
   void modelBatchesRejectMalformedPayloads();
@@ -1597,6 +1602,108 @@ void PrepareSceneDataTests::volumeLocalContourWalkTransformsThroughBatchMatrix()
   // matrix path). Each crossing band is 6 vertices; non-empty == the walk
   // transformed + sliced correctly rather than crashing or skipping.
   QVERIFY(!scene.sinkingContourVertices().isEmpty());
+}
+
+// O1 (TINT): one tint entry per batch. Pick = the renderer palette hash
+// (2654435761u keyed by source object), opaque alpha. Ghost = the batch's
+// extruder color + the upstream load_shells 0.5 alpha (GCodeViewer.cpp
+// :2330-2337); modifier/negative batches carry a never-drawn sentinel
+// (negative alpha); invalid extruder ids clamp to the first color; a
+// missing extruder list falls back to the neutral gray.
+void PrepareSceneDataTests::batchTintChannelsCoverEveryBatch()
+{
+  PrepareSceneData scene;
+  const QList<float> tetra = {
+      0.0f, 0.0f, 0.0f,   10.0f, 0.0f, 0.0f,   0.0f, 10.0f, 0.0f,
+      0.0f, 0.0f, 10.0f};
+  const QList<quint32> tetraIdx = {0, 1, 2,  0, 1, 3,  0, 2, 3,  1, 2, 3};
+  const QByteArray mesh = packedIndexedMesh(QList<int>{7, 8, 9},
+                                            QList<QList<float>>{tetra, tetra, tetra},
+                                            QList<QList<quint32>>{tetraIdx, tetraIdx, tetraIdx});
+  const QMatrix4x4 identity;
+  const QVector4D red(1.0f, 0.0f, 0.0f, 1.0f);
+  const QVector4D green(0.0f, 1.0f, 0.0f, 1.0f);
+  scene.setModelMeshData(mesh,
+                         QList<int>{0, 1, 2},          // source object indices
+                         QList<int>{0, 0, 0},          // volume indices
+                         QList<int>{0, 0, 0},          // instance indices
+                         QList<int>{0, 1, 2},          // active sources
+                         QList<int>{0, 1, 0},          // volume types (batch 1 = modifier)
+                         QList<int>{2, 1, 9},          // extruder ids, 1-based (9 = invalid)
+                         QList<int>{1, 1, 1},          // printable flags
+                         QList<QVector4D>{red, green}, // extruder colors (0 = extruder 1)
+                         QList<QMatrix4x4>{identity, identity, identity},
+                         /*expandIndexedToSoup=*/false,
+                         /*composeWorld=*/false);
+  QCOMPARE(scene.modelBatches().size(), 3);
+
+  // Pick: the palette hash, alpha 1 (opaque pick pass).
+  QCOMPARE(scene.batchPickColors().size(), 3);
+  auto expectedPick = [](int sourceObjectIndex) {
+    const quint32 h = quint32(sourceObjectIndex) * 2654435761u;
+    return QVector4D(float((h >> 16) & 0xFF) / 255.0f,
+                     float((h >> 8) & 0xFF) / 255.0f,
+                     float(h & 0xFF) / 255.0f, 1.0f);
+  };
+  QCOMPARE(scene.batchPickColors().at(0), expectedPick(0));
+  QCOMPARE(scene.batchPickColors().at(1), expectedPick(1));
+  QCOMPARE(scene.batchPickColors().at(2), expectedPick(2));
+
+  // Ghost: extruder tint + 0.5; modifier sentinel; invalid id clamps to 0.
+  QCOMPARE(scene.batchGhostColors().size(), 3);
+  QCOMPARE(scene.batchGhostColors().at(0), QVector4D(green.x(), green.y(), green.z(), 0.5f));
+  QVERIFY(scene.batchGhostColors().at(1).w() < 0.0f); // modifier: never drawn
+  QCOMPARE(scene.batchGhostColors().at(2), QVector4D(red.x(), red.y(), red.z(), 0.5f));
+
+  // Missing extruder list (legacy call form): neutral gray fallback.
+  PrepareSceneData legacy;
+  const QByteArray mesh1 = packedIndexedMesh(QList<int>{7},
+                                             QList<QList<float>>{tetra},
+                                             QList<QList<quint32>>{tetraIdx});
+  legacy.setModelMeshData(mesh1,
+                          QList<int>{0}, QList<int>{0}, QList<int>{0},
+                          QList<int>{0},
+                          QList<int>{0}, QList<int>{1}, QList<int>{1},
+                          QList<QVector4D>(),
+                          QList<QMatrix4x4>{identity},
+                          /*expandIndexedToSoup=*/false,
+                          /*composeWorld=*/false);
+  QCOMPARE(legacy.batchGhostColors().size(), 1);
+  QCOMPARE(legacy.batchGhostColors().at(0), QVector4D(0.8f, 0.8f, 0.8f, 0.5f));
+}
+
+// The soup-expansion bridge (render side without the indexed path) remaps
+// batches to corner ranges; the tint channels must follow the remap so the
+// uniform-tint draws keep addressing the right batch.
+void PrepareSceneDataTests::batchTintChannelsSurviveSoupExpansion()
+{
+  PrepareSceneData scene;
+  const QList<float> tetra = {
+      0.0f, 0.0f, 0.0f,   10.0f, 0.0f, 0.0f,   0.0f, 10.0f, 0.0f,
+      0.0f, 0.0f, 10.0f};
+  const QList<quint32> tetraIdx = {0, 1, 2,  0, 1, 3,  0, 2, 3,  1, 2, 3};
+  const QByteArray mesh = packedIndexedMesh(QList<int>{7, 8},
+                                            QList<QList<float>>{tetra, tetra},
+                                            QList<QList<quint32>>{tetraIdx, tetraIdx});
+  const QMatrix4x4 identity;
+  const QVector4D red(1.0f, 0.0f, 0.0f, 1.0f);
+  scene.setModelMeshData(mesh,
+                         QList<int>{0, 1}, QList<int>{0, 0}, QList<int>{0, 0},
+                         QList<int>{0, 1},
+                         QList<int>{0, 0}, QList<int>{1, 2}, QList<int>{1, 1},
+                         QList<QVector4D>{red},
+                         QList<QMatrix4x4>{identity, identity},
+                         /*expandIndexedToSoup=*/true,
+                         /*composeWorld=*/true);
+  QCOMPARE(scene.modelBatches().size(), 2);
+  QVERIFY(scene.modelBatches().at(0).indexCount == 0); // expanded to soup
+  QCOMPARE(scene.batchPickColors().size(), 2);
+  QCOMPARE(scene.batchGhostColors().size(), 2);
+  const quint32 h0 = quint32(0) * 2654435761u;
+  QCOMPARE(scene.batchPickColors().at(0).w(), 1.0f);
+  QCOMPARE(scene.batchPickColors().at(0).x(), float((h0 >> 16) & 0xFF) / 255.0f);
+  QCOMPARE(scene.batchGhostColors().at(0), QVector4D(red.x(), red.y(), red.z(), 0.5f));
+  QCOMPARE(scene.batchGhostColors().at(1), QVector4D(red.x(), red.y(), red.z(), 0.5f));
 }
 
 QTEST_MAIN(PrepareSceneDataTests)

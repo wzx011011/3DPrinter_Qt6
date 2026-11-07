@@ -493,6 +493,15 @@ public:
   // S3: the per-batch world transforms the resident scene was last composed
   // with (index-aligned with modelBatches()).
   const QList<QMatrix4x4> &batchWorldTransforms() const { return m_batchWorldTransforms; }
+  // O1 (TINT): per-batch uniform color channels for the tint pipelines.
+  // batchPickColors -- the pick-thumbnail palette (opaque alpha); drawn by
+  // the thumbnail pick pass with a dynamic offset per batch, replacing the
+  // recolored vertex duplicate. batchGhostColors -- the preview ghost shell
+  // tint (extruder color + the upstream 0.5 alpha, negative alpha = the
+  // never-drawn modifier sentinel). Both are index-aligned with
+  // modelBatches() and rebuilt with the batches.
+  const QList<QVector4D> &batchPickColors() const { return m_batchPickColors; }
+  const QList<QVector4D> &batchGhostColors() const { return m_batchGhostColors; }
   void setSelectedSourceObjectIndex(int sourceObjectIndex);
   // P15.11 (MULTICENTER): ALL selected source object indices (upstream
   // Selection::get_bounding_box() unions every selected volume's bounds).
@@ -655,6 +664,9 @@ private:
   void rebuildPlateGeometry(int plateRow, int plateCol, float left, float top, bool selected);
   void clearModelGeometry();
   void updateModelBounds(const ModelVertex &vertex);
+  // O1 (TINT): fills the per-batch pick/ghost color channels from the
+  // resident batches (see the batchPickColors/batchGhostColors accessors).
+  void rebuildBatchTintColors();
   // PERF (scene_expand): the per-batch vertex walk specialized on the compose
   // mode so the hot loop carries no per-vertex compose branching (the S3
   // decomposed compose dispatched translate-only adds through two runtime
@@ -757,6 +769,12 @@ private:
   // generation" -- S3 acceptance wording).
   bool m_meshDecomposedFormat = false;
   QList<QMatrix4x4> m_batchWorldTransforms;
+  // O1 (TINT): per-batch pick/ghost tint channels (see the accessors above).
+  QList<QVector4D> m_batchPickColors;
+  QList<QVector4D> m_batchGhostColors;
+  // The extruder palette the resident parse colored batches with (stashed
+  // from setModelMeshData; the ghost tint channel resolves ids against it).
+  QList<QVector4D> m_extruderColorsForTints;
   qint64 m_instanceTransformGeneration = 0;
   int m_selectedSourceObjectIndex = -1;
   // P15.11 (MULTICENTER): every selected source object (sorted ascending).

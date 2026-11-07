@@ -378,6 +378,10 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
                                         bool expandIndexedToSoup,
                                         bool composeWorld)
 {
+  // O1 (TINT): the ghost tint channel resolves extruder ids against the
+  // palette the parse itself colors batches with, so stash it for the
+  // rebuild pass (parse receives it as a parameter only).
+  m_extruderColorsForTints = extruderColors;
   // Blob v2 magic ('MDS2'): decomposed volume-local geometry. A v1 blob's
   // first int32 is the batch count (>= 0), so a leading 0x3244534D can only
   // be the S3 magic (that count would exceed kMaxPackedObjects anyway).
@@ -685,6 +689,10 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
     // it always has. The picking scene skips this and stays indexed.
     if (expandIndexedToSoup && !m_modelIndices.isEmpty())
       expandIndexedToSoupImpl();
+    // O1 (TINT): per-batch pick/ghost tint channels follow the batches
+    // (after the soup expansion, so the channels address the remapped
+    // batches the renderer will draw).
+    rebuildBatchTintColors();
     // P15.5 (SINK): contour bands for sinking batches (bbox dips under the
     // bed plane without being fully below it — upstream is_sinking,
     // 3DScene.cpp:614-620 with SINKING_Z_THRESHOLD = -0.001,
@@ -696,6 +704,8 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
     m_sinkingContourVertices.clear();
     m_sinkingContourRanges.clear();
     m_anyVolumeOutside = false;
+    m_batchPickColors.clear();
+    m_batchGhostColors.clear();
   }
 
   if (!valid) {
@@ -1732,10 +1742,59 @@ void PrepareSceneData::clearModelGeometry()
   // batches; with the batches gone they are meaningless.
   m_meshDecomposedFormat = false;
   m_batchWorldTransforms.clear();
+  // O1 (TINT): derived tint channels follow the batches.
+  m_batchPickColors.clear();
+  m_batchGhostColors.clear();
   // P15.5 (SINK)/P15.3 (OUTOFBED): derived state follows the batches.
   m_sinkingContourVertices.clear();
   m_sinkingContourRanges.clear();
   m_anyVolumeOutside = false;
+}
+
+// O1 (TINT): per-batch uniform colors for the tint pipelines. The renderer
+// draws the model VB once per batch with a dynamic-offset tint instead of
+// building recolored vertex duplicates (the pick thumbnail + the preview
+// ghost shell were two full-size copies of the model).
+//
+// Pick: the renderer palette hash (2654435761u keyed by source object,
+// opaque alpha) -- the same colors the deleted pick-soup recolor walk used.
+// Ghost: the batch's extruder color + the upstream load_shells 0.5 alpha
+// (GCodeViewer.cpp:2330-2337); non-model batches (modifiers/negatives) get
+// a never-drawn sentinel (negative alpha). Invalid extruder ids clamp to
+// the first color; a missing extruder list falls back to the neutral gray
+// (GLVolume::NEUTRAL_COLOR).
+void PrepareSceneData::rebuildBatchTintColors()
+{
+  const int batchCount = int(m_modelBatches.size());
+  m_batchPickColors.resize(batchCount);
+  m_batchGhostColors.resize(batchCount);
+  for (int i = 0; i < batchCount; ++i) {
+    const ModelBatch &batch = m_modelBatches.at(i);
+
+    const quint32 h = quint32(batch.sourceObjectIndex) * 2654435761u;
+    m_batchPickColors[i] = QVector4D(
+        float((h >> 16) & 0xFF) / 255.0f,
+        float((h >> 8) & 0xFF) / 255.0f,
+        float(h & 0xFF) / 255.0f, 1.0f);
+
+    if (batch.volumeType != 0) {
+      m_batchGhostColors[i] = QVector4D(0.0f, 0.0f, 0.0f, -1.0f);
+      continue;
+    }
+    constexpr float kGhostAlpha = 0.5f;
+    constexpr float kNeutral[3] = {0.8f, 0.8f, 0.8f};
+    float tintR = kNeutral[0], tintG = kNeutral[1], tintB = kNeutral[2];
+    if (!m_extruderColorsForTints.isEmpty()) {
+      int colorIndex = batch.extruderId - 1;
+      if (colorIndex < 0 || colorIndex >= m_extruderColorsForTints.size())
+        colorIndex = 0; // invalid extruder falls back to the first color
+      const QVector4D &color = m_extruderColorsForTints.at(colorIndex);
+      tintR = color.x();
+      tintG = color.y();
+      tintB = color.z();
+    }
+    m_batchGhostColors[i] = QVector4D(tintR, tintG, tintB, kGhostAlpha);
+  }
 }
 
 // S3: contour bands rebuilt from the resident world-space batches. Shared by
