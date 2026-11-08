@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>OWzx Slicer · UI 对齐设计基准（上游视觉真值）</title>
+<!--
+  ============================================================================
+  OWzx Slicer UI 设计基准页 (design reference)
+  ----------------------------------------------------------------------------
+  真值来源: docs/visual-compare/upstream_prepare.png / upstream_preview.png
+            (上游运行截图 = 视觉真值, docs/ui-full-restoration-inventory.md)
+  所有颜色/尺寸均从截图逐像素采样得出, 不含自由设计。
+  本页工具:
+    O  叠加上游截图 (透明度滑杆)     D  差值模式 (像素对齐)
+    I  检查器 (悬停显示区域/尺寸/色值/上游源码/QML目标)
+    T  Token 对照表 (上游值 vs OWzx Theme.qml 现值)
+    1/2 切换 准备/预览 页面状态
+  ============================================================================
+-->
+<style>
+  /* ── 设计 token：全部来自上游截图像素采样 ─────────────────────────── */
+  :root {
+    --c-titlebar:      #262e30;  /* 标题栏底色 (采样 y=16) */
+    --c-nav:           #2d2d30;  /* 导航行底色 (采样 y=45) */
+    --c-body:          #2d2d31;  /* 侧栏主体 / 视口 / 卡片内 / 输入框内 */
+    --c-header:        #36363b;  /* 打印机/耗材丝/工艺 区头横带 */
+    --c-track:         #171717;  /* 侧栏滚动条槽 */
+    --c-thumb:         #959595;  /* 滚动条滑块 */
+    --teal-900:        #00675b;  /* 主强调: 激活页签填充 / 主按钮 / 下拉箭头盒 (Material Teal 900) */
+    --teal-500:        #009688;  /* 亮强调: 页签下划线 / 左缘手柄 (Material Teal 500) */
+    --teal-400:        #26a69a;  /* 耗材丝序号方块 (Material Teal 400) */
+    --text-hi:         #ffffff;  /* 区头标题 / 激活页签 / 输入值 */
+    --text:            #c8c9cb;  /* 正文 / 图标 */
+    --text-dim:        #909090;  /* 次级标签 / 单位 / 非激活页签 */
+    --border:          #505054;  /* 卡片 / 输入框描边 */
+    --sep:             #000000;  /* 1px 分隔线 (标题栏下缘 / 侧栏右缘) */
+    --btn-off-bg:      #8e8e83;  /* 禁用胶囊按钮底 */
+    --btn-off-text:    #56564f;  /* 禁用胶囊按钮文字 */
+    --fs-base:         12px;
+    --fs-title:        13px;
+    --fs-nav:          14px;
+    --fs-value:        13px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; }
+  body {
+    background:#141414; color:#cfcfcf;
+    font-family:"Segoe UI","Microsoft YaHei UI","Microsoft YaHei",sans-serif;
+    overflow:hidden; user-select:none;
+  }
+
+  /* ── 顶部工具条 ─────────────────────────────────────────────────── */
+  #bar {
+    height:42px; background:#1b1b1b; border-bottom:1px solid #2a2a2a;
+    display:flex; align-items:center; gap:10px; padding:0 14px; font-size:12px;
+    position:relative; z-index:50;
+  }
+  #bar .logo { font-weight:600; color:#eee; letter-spacing:.5px; margin-right:6px; }
+  #bar button {
+    background:#262626; color:#ccc; border:1px solid #3a3a3a; border-radius:4px;
+    padding:4px 10px; font-size:12px; cursor:pointer; font-family:inherit;
+  }
+  #bar button.on { background:var(--teal-500); border-color:var(--teal-500); color:#fff; }
+  #bar input[type=range] { width:110px; accent-color:var(--teal-500); }
+  #bar .hint { color:#777; margin-left:auto; }
+  #bar kbd { background:#2a2a2a; border:1px solid #444; border-radius:3px; padding:0 4px; font-size:11px; }
+
+  /* ── 舞台与缩放 ─────────────────────────────────────────────────── */
+  #stageWrap { position:absolute; top:42px; bottom:0; left:0; right:0; display:grid; place-items:center; }
+  #stage {
+    width:1366px; height:721px; position:relative; transform-origin:center center;
+    background:var(--c-body); outline:1px solid #000;
+    font-size:var(--fs-base); line-height:1;
+  }
+  #stage * { line-height:1; }
+
+  /* ── 叠加截图层 ─────────────────────────────────────────────────── */
+  #overlay {
+    position:absolute; inset:0; z-index:40; pointer-events:none; display:none;
+    object-fit:none; object-position:top left; width:1366px; height:721px;
+  }
+  #overlay.diff { mix-blend-mode:difference; }
+
+  /* ══ 窗口结构 ═══════════════════════════════════════════════════ */
+  .titlebar {
+    height:32px; background:var(--c-titlebar); position:relative;
+    display:flex; align-items:stretch;
+    border-bottom:1px solid var(--sep);
+  }
+  .tb-btn { display:flex; align-items:center; justify-content:center; gap:5px; color:var(--text); }
+  .tb-btn svg { width:15px; height:15px; }
+  .tb-menu { width:58px; }
+  .tb-icon { width:32px; }
+  .tb-sep { width:1px; background:#454548; margin:7px 4px; }
+  .tb-title {
+    position:absolute; left:210px; right:0; top:0; bottom:0;
+    display:flex; align-items:center; justify-content:center;
+    color:var(--text); font-size:var(--fs-base); pointer-events:none;
+  }
+  .tb-win { margin-left:auto; display:flex; }
+  .tb-win .tb-btn { width:50px; }
+  .tb-win .tb-btn svg { width:13px; height:13px; }
+
+  .navbar {
+    height:38px; background:var(--c-nav); display:flex; align-items:flex-start;
+  }
+  .nav-home { width:40px; height:36px; display:flex; align-items:center; justify-content:center; color:var(--text); }
+  .nav-home svg { width:20px; height:20px; }
+  .nav-tab {
+    height:36px; display:flex; align-items:center; justify-content:center; gap:8px;
+    padding:0 40px; color:var(--text); font-size:var(--fs-nav); cursor:default;
+  }
+  .nav-tab svg { width:19px; height:19px; }
+  .nav-tab.active { background:var(--teal-900); color:var(--text-hi); }
+  .nav-spring { flex:1; }
+
+  /* 分体胶囊按钮: [▾盒][文字胶囊] */
+  .split { display:flex; align-items:center; margin-left:8px; }
+  .split + .split { margin-left:15px; }
+  .split .chev {
+    width:25px; height:24px; border-radius:12px 0 0 12px;
+    background:var(--teal-900); display:flex; align-items:center; justify-content:center;
+  }
+  .split .chev svg { width:12px; height:12px; color:#fff; }
+  .split .pill {
+    height:24px; border-radius:0 12px 12px 0; background:var(--teal-900);
+    color:var(--text-hi); font-size:14px; display:flex; align-items:center;
+    padding:0 22px; white-space:nowrap;
+  }
+  .split.off .pill, .split.pill-off .pill { background:var(--btn-off-bg); color:var(--btn-off-text); }
+  .nav-endpad { width:30px; }
+
+  /* ══ 主内容 ═════════════════════════════════════════════════════ */
+  .content { position:absolute; top:71px; left:0; right:0; bottom:0; display:flex; }
+
+  /* ── 侧栏 ── */
+  .sidebar {
+    width:392px; height:100%; background:var(--c-body); position:relative;
+    border-right:1px solid var(--sep); display:flex; flex-direction:column;
+    padding-top:17px;
+  }
+  .side-dock-handle {
+    position:absolute; left:6px; top:320px; width:2px; height:18px;
+    background:var(--teal-500); z-index:5;
+  }
+  .sec-hdr {
+    height:30px; flex:none; background:var(--c-header); display:flex; align-items:center;
+    padding:0 10px 0 8px; gap:7px; color:var(--text-hi); font-size:var(--fs-title); font-weight:600;
+  }
+  .sec-hdr svg { width:16px; height:16px; color:var(--teal-400); flex:none; }
+  .sec-hdr .spring { flex:1; }
+  .sec-hdr .hicon { width:22px; height:22px; display:flex; align-items:center; justify-content:center; }
+  .sec-hdr .hicon svg { width:15px; height:15px; color:var(--text-dim); }
+  .sec-hdr .hicon.teal svg { color:var(--teal-400); }
+
+  /* 打印机卡片行 */
+  .printer-row { display:flex; gap:6px; padding:9px 8px; }
+  .card {
+    border:1px solid var(--border); border-radius:4px; background:var(--c-body);
+    display:flex; align-items:center;
+  }
+  .card.printer { flex:1.55; height:59px; padding:0 8px; gap:6px; min-width:0; }
+  .card.printer .photo {
+    width:52px; height:46px; border-radius:2px; flex:none;
+    background:linear-gradient(145deg,#3a3a3e 0%,#232326 55%,#2e2e33 100%);
+    display:flex; align-items:flex-end; justify-content:center; overflow:hidden;
+  }
+  .card.printer .photo::after {  /* 打印机剪影 (示意, 截图中为产品照片) */
+    content:""; width:34px; height:30px; margin-bottom:3px;
+    background:#0f0f10; border-radius:2px 2px 0 0;
+    box-shadow:inset 0 6px 0 #1c1c1f, inset 0 0 0 2px #26262a;
+  }
+  .card.printer .chev svg { width:12px; height:12px; color:var(--text-dim); }
+  .card.printer .pname { font-size:14px; color:var(--text-hi); white-space:nowrap; overflow:hidden; }
+  .card.nozzle { flex:.72; height:59px; flex-direction:column; justify-content:center; gap:3px; padding:0 6px; }
+  .card.nozzle .lab { font-size:11px; color:var(--text-dim); }
+  .card.nozzle .val { display:flex; align-items:center; gap:5px; font-size:15px; color:var(--text-hi); }
+  .card.nozzle .val svg { width:11px; height:11px; color:var(--text-dim); }
+  .card.hotend { flex:.5; height:59px; justify-content:center; }
+  .card.hotend .flame {
+    width:40px; height:40px; border-radius:4px; background:#3a2a24;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .card.hotend svg { width:24px; height:24px; color:#e53935; }
+
+  /* 耗材丝行 */
+  .fila-row { display:flex; align-items:center; gap:7px; padding:0 7px 0 13px; height:52px; }
+  .fila-badge {
+    width:24px; height:24px; border-radius:2px; background:var(--teal-400);
+    color:#fff; font-size:13px; font-weight:600;
+    display:flex; align-items:center; justify-content:center; flex:none;
+  }
+  .fila-input {
+    flex:1; height:29px; border:1px solid var(--border); border-radius:3px;
+    display:flex; align-items:center; gap:7px; padding:0 9px;
+    color:var(--text-hi); font-size:var(--fs-value); min-width:0;
+  }
+  .fila-input .t { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .fila-input svg { width:11px; height:11px; color:var(--text-dim); flex:none; }
+  .fila-edit {
+    width:28px; height:28px; margin-left:-2px; border:1px solid var(--border); border-radius:3px; flex:none;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .fila-edit svg { width:14px; height:14px; color:var(--text); }
+
+  /* 工艺区头: 含 全局/对象 分段 + 右侧图标群 */
+  .seg { display:flex; align-items:center; background:#2a2a2e; border-radius:11px; height:22px; padding:2px; }
+  .seg .on {
+    background:var(--teal-400); color:#fff; font-size:11px; font-weight:600;
+    border-radius:9px; padding:4px 9px;
+  }
+  .seg .offslot { color:var(--text-dim); font-size:11px; padding:4px 8px; }
+  .knob-toggle {
+    width:38px; height:19px; border-radius:10px; background:#004d40; position:relative;
+  }
+  .knob-toggle i { position:absolute; top:6px; width:4px; height:4px; border-radius:50%; background:#4db6ac; }
+  .knob-toggle i:nth-child(1){ left:5px; } .knob-toggle i:nth-child(2){ left:12px; }
+  .knob-toggle b {
+    position:absolute; right:2px; top:2px; width:15px; height:15px; border-radius:50%; background:#fff;
+  }
+
+  /* 预设输入行 */
+  .preset-row { display:flex; align-items:center; gap:8px; padding:12px 8px 7px 34px; }
+  .preset-input {
+    flex:1; height:25px; border:1px solid var(--border); border-radius:3px;
+    display:flex; align-items:center; gap:7px; padding:0 9px; min-width:0;
+  }
+  .preset-input svg { width:11px; height:11px; color:var(--text-dim); flex:none; }
+  .preset-input .t { font-size:var(--fs-value); color:var(--text-hi); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .preset-row .picon { width:24px; height:24px; display:flex; align-items:center; justify-content:center; flex:none; }
+  .preset-row .picon svg { width:14px; height:14px; color:var(--text); }
+
+  /* 参数页签 */
+  .ptabs { display:flex; align-items:flex-end; gap:26px; padding:10px 8px 0 16px; height:30px; }
+  .ptab { font-size:var(--fs-title); color:var(--text-dim); position:relative; height:20px; }
+  .ptab.active { color:var(--text-hi); font-weight:600; }
+  .ptab.active::after {
+    content:""; position:absolute; left:-2px; right:-2px; bottom:-4px;
+    height:2px; background:var(--teal-500);
+  }
+
+  /* 参数滚动区 */
+  .params { flex:1; position:relative; overflow:hidden; }
+  .params .scroll { position:absolute; inset:0 18px 0 0; overflow:hidden; }
+  .sb-track { position:absolute; top:0; right:0; bottom:0; width:18px; background:var(--c-track); }
+  .sb-thumb  { position:absolute; top:18px; right:0; width:18px; height:34px; background:var(--c-thumb); border-radius:0; }
+
+  .grp-hdr { display:flex; align-items:center; gap:10px; height:20px; margin:12px 8px 7px 18px; flex:none; }
+  .grp-hdr svg { width:17px; height:17px; color:var(--text); flex:none; }
+  .grp-hdr .gt { font-size:var(--fs-title); font-weight:600; color:var(--text-hi); }
+  .grp-hdr .rule { flex:1; height:1px; background:#4a4a4f; }
+
+  .prow { display:flex; align-items:center; height:30px; margin:0; padding:0 9px 0 50px; }
+  .prow.g2 { height:30px; margin:0; }
+  .prow .lab { width:150px; font-size:var(--fs-base); color:#b2b3b5; }
+  .prow .inp {
+    width:119px; height:25px; margin-left:auto; border:1px solid var(--border); border-radius:3px;
+    display:flex; align-items:center; padding:0 8px;
+  }
+  .prow .inp .v { font-size:var(--fs-value); color:var(--text-hi); }
+  .prow .inp .u { margin-left:auto; font-size:11px; color:var(--text-dim); }
+
+  /* ── 视口 ── */
+  .viewport { flex:1; position:relative; background:var(--c-body); }
+  .avatar {
+    position:absolute; right:16px; bottom:133px; width:46px; height:46px; border-radius:50%;
+    background:radial-gradient(circle at 50% 38%, #fce4d8 0 28%, #f3c2b8 55%, #c3e5ff 56%, #9fc8ee 100%);
+    border:2px solid #e8e8e8; cursor:default;
+  }
+
+  /* ── 检查器 ─────────────────────────────────────────────────────── */
+  #inspOutline { position:absolute; z-index:45; pointer-events:none; outline:1px solid #00e5ff; outline-offset:-1px; display:none; }
+  #inspCard {
+    position:absolute; z-index:46; display:none; pointer-events:none;
+    background:#0d0d0fee; border:1px solid #00e5ff88; border-radius:4px;
+    padding:7px 9px; font-size:11px; color:#bfeaff; max-width:340px;
+    font-family:Consolas,monospace;
+  }
+  #inspCard b { color:#fff; font-size:12px; font-family:"Segoe UI","Microsoft YaHei UI",sans-serif; }
+  #inspCard .dim { color:#7a99a8; }
+  body.inspecting [data-r]:hover { outline:1px solid #00e5ff66; outline-offset:-1px; }
+
+  /* ── Token 面板 ─────────────────────────────────────────────────── */
+  #tokens {
+    position:absolute; z-index:60; right:12px; top:52px; bottom:12px; width:520px;
+    background:#101014f2; border:1px solid #333; border-radius:6px; display:none;
+    flex-direction:column; font-size:12px;
+  }
+  #tokens header { padding:10px 14px; font-weight:600; color:#fff; border-bottom:1px solid #2a2a2a; display:flex; }
+  #tokens header span { margin-left:auto; color:#888; font-weight:400; font-size:11px; }
+  #tokens .body { overflow:auto; padding:6px 14px 14px; }
+  #tokens table { border-collapse:collapse; width:100%; }
+  #tokens th { text-align:left; color:#888; font-weight:400; padding:6px 6px 4px; border-bottom:1px solid #2a2a2a; position:sticky; top:0; background:#101014; }
+  #tokens td { padding:4px 6px; border-bottom:1px solid #1d1d22; color:#ccc; vertical-align:middle; }
+  #tokens .sw { display:inline-block; width:14px; height:14px; border-radius:3px; border:1px solid #555; vertical-align:-2px; margin-right:6px; }
+  #tokens code { font-family:Consolas,monospace; color:#9cdcfe; }
+  #tokens .delta { color:#e0a34a; }
+  #tokens .same { color:#6a9955; }
+</style>
+</head>
+<body>
+
+<div id="bar">
+  <span class="logo">OWzx · UI 对齐设计基准</span>
+  <button id="bOverlay">叠加截图 <kbd>O</kbd></button>
+  <input id="opac" type="range" min="0" max="100" value="50" title="叠加透明度">
+  <button id="bDiff">差值 <kbd>D</kbd></button>
+  <span style="width:14px"></span>
+  <button id="bInsp">检查器 <kbd>I</kbd></button>
+  <button id="bTokens">Token 对照 <kbd>T</kbd></button>
+  <span class="hint">
+    页面状态: <kbd>1</kbd> 准备 · <kbd>2</kbd> 预览 —— 真值: docs/visual-compare/upstream_*.png（1366×721 窗口区）
+  </span>
+</div>
+
+<div id="stageWrap"><div id="stage">
+
+  <!-- ═══ 标题栏 (upstream MainFrame.cpp 顶栏 / BBLTopbar.cpp → qt: BBLTopbar.qml) ═══ -->
+  <div class="titlebar" data-r="标题栏" data-up="BBLTopbar.cpp CenteredTitle" data-qt="src/qml_gui/BBLTopbar.qml">
+    <div class="tb-btn tb-menu" data-r="文件菜单">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8z"/><path d="M13 3v5h5"/></svg>
+      <span>文件</span>
+    </div>
+    <div class="tb-sep"></div>
+    <div class="tb-btn tb-icon" data-r="保存">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v5h7V3M8 21v-7h8v7"/></svg>
+    </div>
+    <div class="tb-btn tb-icon" data-r="撤销">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 5 3 10l5 5"/><path d="M3 10h11a6 6 0 0 1 0 12h-3"/></svg>
+    </div>
+    <div class="tb-btn tb-icon" data-r="重做">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m16 5 5 5-5 5"/><path d="M21 10H10a6 6 0 0 0 0 12h3"/></svg>
+    </div>
+    <div class="tb-btn tb-menu" data-r="校准快捷入口" style="width:64px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4z"/><path d="M17 14v6M14 17h6"/></svg>
+      <span>校准</span>
+    </div>
+    <div class="tb-title" data-r="项目标题(居中)"><span>*未命名</span></div>
+    <div class="tb-win">
+      <div class="tb-btn" data-r="最小化"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M4 12h16"/></svg></div>
+      <div class="tb-btn" data-r="最大化"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="5" width="14" height="14" rx="1"/></svg></div>
+      <div class="tb-btn" data-r="关闭"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="m6 6 12 12M18 6 6 18"/></svg></div>
+    </div>
+  </div>
+
+  <!-- ═══ 导航行 (upstream Mainframe notebook + side_tools → qt: BBLTopbar.qml workflowBar) ═══ -->
+  <div class="navbar" data-r="导航页签行" data-up="MainFrame.cpp notebook / BBLTopbar.cpp" data-qt="BBLTopbar.qml workflowBar">
+    <div class="nav-home" data-r="首页(图标)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 11 12 4l8 7v9h-5.5v-5h-5v5H4z"/></svg>
+    </div>
+    <div class="nav-tab active" id="tabPrepare" data-r="准备页签(激活=teal900填充)" data-up="MainFrame.cpp tp3DEditor">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/></svg>
+      <span>准备</span>
+    </div>
+    <div class="nav-tab" id="tabPreview" data-r="预览页签" data-up="MainFrame.cpp tpPreview">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m12 4 9 5-9 5-9-5z"/><path d="m3 13.5 9 5 9-5"/></svg>
+      <span>预览</span>
+    </div>
+    <div class="nav-tab" data-r="设备页签">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="7" rx="1"/><path d="M7 11v3h10v-3M8 21h8M12 14v7"/></svg>
+      <span>设备</span>
+    </div>
+    <div class="nav-tab" data-r="项目页签">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="18" rx="1"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+      <span>项目</span>
+    </div>
+    <div class="nav-spring"></div>
+    <!-- 切片单盘 (准备页可用/预览页禁用) upstream Plater::reslice → qt: BBLTopbar.qml prepareSliceButton -->
+    <div class="split" id="btnSlice" data-r="切片单盘(分体胶囊)" data-up="Plater.cpp reslice" data-qt="BBLTopbar.qml prepareSliceButton">
+      <div class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg></div>
+      <div class="pill">切片单盘</div>
+    </div>
+    <!-- 导出G-code (准备页禁用/预览页可用) -->
+    <div class="split off" id="btnExport" data-r="导出G-code文件(分体胶囊)" data-up="Plater.cpp export_gcode" data-qt="BBLTopbar.qml prepareExportGcodeButton">
+      <div class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg></div>
+      <div class="pill">导出G-code文件</div>
+    </div>
+    <div class="nav-endpad"></div>
+  </div>
+
+  <!-- ═══ 内容区 ═══ -->
+  <div class="content">
+
+    <!-- ── 侧栏 (upstream Sidebar.cpp + ParamsPanel.cpp → qt: panels/LeftSidebar.qml) ── -->
+    <div class="sidebar" data-r="设置侧栏(392px)" data-up="Sidebar.cpp / ParamsPanel.cpp" data-qt="src/qml_gui/panels/LeftSidebar.qml">
+      <div class="side-dock-handle" data-r="侧栏停靠手柄"></div>
+
+      <!-- 打印机 -->
+      <div class="sec-hdr" data-r="打印机区头" data-up="Sidebar.cpp PrinterCombo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="6" width="14" height="10" rx="1"/><path d="M8 16v3h8v-3M9 3h6v3H9z"/></svg>
+        <span>打印机</span><span class="spring"></span>
+        <span class="hicon teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 10.5a10 10 0 0 1 14 0M8 13.5a6 6 0 0 1 8 0M11 16.5a2 2 0 0 1 2 0"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/></svg></span>
+        <span class="hicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2" fill="#36363b"/><circle cx="15" cy="17" r="2" fill="#36363b"/></svg></span>
+      </div>
+      <div class="printer-row" data-r="打印机卡片行" data-up="Sidebar.cpp printer selection">
+        <div class="card printer">
+          <div class="photo"></div>
+          <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg></span>
+          <span class="pname">Creality K2 Plus</span>
+        </div>
+        <div class="card nozzle">
+          <span class="lab">喷嘴</span>
+          <span class="val"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>0.4</span>
+          <span class="lab">硬化钢</span>
+        </div>
+        <div class="card hotend">
+          <div class="flame"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3c1 3-3 4.5-3 8a3.5 3.5 0 0 0 7 .3C16 8 13 6.5 12 3z"/><path d="M9 15c-1.2 1-2 2.2-2 3.5h10c0-1.3-.8-2.5-2-3.5"/></svg></div>
+        </div>
+      </div>
+
+      <!-- 耗材丝 -->
+      <div class="sec-hdr" data-r="耗材丝区头" data-up="Sidebar.cpp FilamentCombo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4c-2 2.5-2 5.5 0 8M9 5.5c-1.4 1.7-1.4 3.3 0 5"/><circle cx="15" cy="9" r="4.5"/><circle cx="15" cy="9" r="1.2"/><path d="M15 13.5V20"/></svg>
+        <span>耗材丝</span><span class="spring"></span>
+        <span class="hicon teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4c-2 2.5-2 5.5 0 8"/><path d="M12 8h8M16 4v8"/></svg></span>
+        <span class="hicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="16" height="14" rx="1"/><path d="M8 5v14M12 5v14M16 5v14"/></svg></span>
+        <span class="hicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2" fill="#36363b"/><circle cx="15" cy="17" r="2" fill="#36363b"/></svg></span>
+      </div>
+      <div class="fila-row" data-r="耗材丝选择行" data-up="Sidebar.cpp filament combo">
+        <div class="fila-badge">1</div>
+        <div class="fila-input">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
+          <span class="t">Creality Generic PLA</span>
+        </div>
+        <div class="fila-edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m4 20 1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19z"/></svg></div>
+      </div>
+
+      <!-- 工艺 -->
+      <div class="sec-hdr" data-r="工艺区头(含全局/对象分段)" data-up="Sidebar.cpp process combo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m12 4 9 5-9 5-9-5z"/><path d="m3 13.5 9 5 9-5"/></svg>
+        <span>工艺</span>
+        <span class="seg" data-r="全局/对象分段" data-up="Sidebar.cpp process scope">
+          <span class="on">全局</span><span class="offslot">对象</span>
+        </span>
+        <span class="spring"></span>
+        <span class="hicon teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="12" rx="9" ry="4"/><ellipse cx="12" cy="12" rx="9" ry="4" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="9" ry="4" transform="rotate(-60 12 12)"/></svg></span>
+        <span class="hicon"><span class="knob-toggle"><i></i><i></i><b></b></span></span>
+        <span class="hicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="4.5" cy="18" r="1" fill="currentColor" stroke="none"/></svg></span>
+        <span class="hicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 8h7M3 16h7M17 5l3 3-3 3M20 8H9M7 13l-3 3 3 3M4 16h11"/></svg></span>
+      </div>
+      <div class="preset-row" data-r="工艺预设输入行" data-up="PresetComboBoxes.cpp">
+        <div class="preset-input">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
+          <span class="t">0.16mm Optimal @Creality K2 Plus...</span>
+        </div>
+        <span class="picon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v5h7V3"/></svg></span>
+        <span class="picon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10.5" cy="10.5" r="6"/><path d="m15.5 15.5 5 5"/></svg></span>
+      </div>
+
+      <!-- 参数页签 (upstream ParamsPanel.cpp Tab) -->
+      <div class="ptabs" data-r="参数页签(质量/强度/速度/支撑/材料/其他)" data-up="ParamsPanel.cpp tabs">
+        <span class="ptab active">质量</span><span class="ptab">强度</span><span class="ptab">速度</span><span class="ptab">支撑</span><span class="ptab">材料</span><span class="ptab">其他</span>
+      </div>
+
+      <!-- 参数滚动区 -->
+      <div class="params" data-r="参数滚动区" data-up="ParamsPanel.cpp + Tab.cpp" data-qt="panels/LeftSidebar.qml 参数树">
+        <div class="scroll">
+          <div class="grp-hdr" data-r="组头: 层高">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16M4 9h16M4 13h10"/></svg>
+            <span class="gt">层高</span><span class="rule"></span>
+          </div>
+          <div class="prow" data-r="行: 层高"><span class="lab">层高</span><span class="inp"><span class="v">0.16</span><span class="u">mm</span></span></div>
+          <div class="prow" data-r="行: 首层层高"><span class="lab">首层层高</span><span class="inp"><span class="v">0.2</span><span class="u">mm</span></span></div>
+
+          <div class="grp-hdr" data-r="组头: 线宽">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M3 10h18M3 14h18M3 18h18"/></svg>
+            <span class="gt">线宽</span><span class="rule"></span>
+          </div>
+          <div class="prow g2" data-r="行: 默认线宽"><span class="lab">默认</span><span class="inp"><span class="v">0.42</span><span class="u">mm 或 %</span></span></div>
+          <div class="prow g2" data-r="行: 首层线宽"><span class="lab">首层</span><span class="inp"><span class="v">0.5</span><span class="u">mm 或 %</span></span></div>
+          <div class="prow g2" data-r="行: 外墙线宽"><span class="lab">外墙</span><span class="inp"><span class="v">0.42</span><span class="u">mm 或 %</span></span></div>
+          <div class="prow g2" data-r="行: 内墙线宽"><span class="lab">内墙</span><span class="inp"><span class="v">0.45</span><span class="u">mm 或 %</span></span></div>
+          <div class="prow g2" data-r="行: 顶面线宽"><span class="lab">顶面</span><span class="inp"><span class="v">0.42</span><span class="u">mm 或 %</span></span></div>
+          <div class="prow g2" data-r="行: 稀疏填充线宽"><span class="lab">稀疏填充</span><span class="inp"><span class="v">0.45</span><span class="u">mm 或 %</span></span></div>
+          <div class="prow g2" data-r="行: 内部实心填充线宽"><span class="lab">内部实心填充</span><span class="inp"><span class="v">0.42</span><span class="u">mm 或 %</span></span></div>
+        </div>
+        <div class="sb-track" data-r="滚动条槽"><div class="sb-thumb" data-r="滚动条滑块"></div></div>
+      </div>
+    </div>
+
+    <!-- ── 视口 (upstream GLCanvas3D.cpp → qt: Renderer/) ── -->
+    <div class="viewport" data-r="3D视口(空场景)" data-up="GLCanvas3D.cpp / PartPlate.cpp" data-qt="src/qml_gui/Renderer/">
+      <div class="avatar" data-r="账号头像按钮" data-up="MainFrame.cpp avatar"></div>
+    </div>
+  </div>
+
+  <!-- 工具层 -->
+  <img id="overlay" src="../visual-compare/upstream_prepare.png" alt="">
+  <div id="inspOutline"></div>
+  <div id="inspCard"></div>
+</div></div>
+
+<!-- Token 对照面板 -->
+<div id="tokens">
+  <header>Token 对照 · 上游截图值 vs OWzx Theme.qml 现值 <span>Esc 关闭</span></header>
+  <div class="body"><table id="tokTable"></table></div>
+</div>
+
+<script>
+// ── 页面状态切换: 1=准备(切片可用,导出禁用) 2=预览(相反) ─ true 值均来自两张上游截图
+const stage = document.getElementById('stage');
+const overlay = document.getElementById('overlay');
+const state = { page:'prepare' };
+function setPage(p){
+  state.page = p;
+  document.getElementById('tabPrepare').classList.toggle('active', p==='prepare');
+  document.getElementById('tabPreview').classList.toggle('active', p==='preview');
+  // 上游像素证据: 箭头盒恒为 teal, 仅胶囊在 teal/灰 间切换
+  const sl=document.getElementById('btnSlice'), ex=document.getElementById('btnExport');
+  sl.classList.toggle('pill-off', p!=='prepare');
+  ex.classList.toggle('pill-off', p!=='preview');
+  overlay.src = p==='prepare' ? '../visual-compare/upstream_prepare.png' : '../visual-compare/upstream_preview.png';
+}
+const initialPage = new URLSearchParams(location.search).get('page');
+document.getElementById('tabPrepare').onclick = ()=>setPage('prepare');
+document.getElementById('tabPreview').onclick = ()=>setPage('preview');
+
+// ── 叠加 / 差值 ──
+let overlayOn=false, diffOn=false;
+function syncOverlay(){
+  overlay.style.display = overlayOn ? 'block' : 'none';
+  overlay.style.opacity = document.getElementById('opac').value/100;
+  overlay.classList.toggle('diff', diffOn);
+  document.getElementById('bOverlay').classList.toggle('on', overlayOn);
+  document.getElementById('bDiff').classList.toggle('on', diffOn);
+}
+document.getElementById('bOverlay').onclick = ()=>{ overlayOn=!overlayOn; syncOverlay(); };
+document.getElementById('bDiff').onclick   = ()=>{ diffOn=!diffOn; if(diffOn) overlayOn=true; syncOverlay(); };
+document.getElementById('opac').oninput    = syncOverlay;
+
+// ── 检查器 ──
+let inspecting=false;
+const io=document.getElementById('inspOutline'), ic=document.getElementById('inspCard');
+document.getElementById('bInsp').onclick = ()=>{ inspecting=!inspecting; document.body.classList.toggle('inspecting',inspecting); document.getElementById('bInsp').classList.toggle('on',inspecting); if(!inspecting){io.style.display=ic.style.display='none';} };
+stage.addEventListener('mousemove', e=>{
+  if(!inspecting) return;
+  const el = e.target.closest('[data-r]');
+  if(!el){ io.style.display=ic.style.display='none'; return; }
+  const r = el.getBoundingClientRect(), s = document.getElementById('stageWrap').getBoundingClientRect();
+  const st = getComputedStyle(el);
+  io.style.display='block';
+  io.style.left=(r.left-s.left)+'px'; io.style.top=(r.top-s.top)+'px';
+  io.style.width=r.width+'px'; io.style.height=r.height+'px';
+  ic.style.display='block';
+  ic.innerHTML = `<b>${el.dataset.r}</b><br>
+    <span class="dim">尺寸</span> ${Math.round(r.width)} × ${Math.round(r.height)}
+    <span class="dim">· 字号</span> ${st.fontSize}
+    <span class="dim">· 底色</span> ${st.backgroundColor}<br>
+    <span class="dim">上游</span> ${el.dataset.up||'—'}<br>
+    <span class="dim">Qt目标</span> ${el.dataset.qt||'—'}`;
+  let x=r.left-s.left+14, y=r.top-s.top+r.height+8;
+  if(y+90>721) y=r.top-s.top-90;
+  ic.style.left=Math.min(x,1020)+'px'; ic.style.top=y+'px';
+});
+
+// ── Token 对照表: 上游真值 ↔ OWzx Theme.qml ──
+const tokens = [
+  ['accent 主强调','var(--teal-900)','#00675b','激活页签填充/切片导出按钮/箭头盒','Theme.accent #18c75e','不同(品牌色)','delta'],
+  ['accent 亮强调','var(--teal-500)','#009688','页签下划线/侧栏停靠手柄','Theme.accentLight #1ed36b','不同','delta'],
+  ['accent 徽标','var(--teal-400)','#26a69a','耗材丝序号方块/区头图标','—(无对应)','缺失','delta'],
+  ['标题栏底','var(--c-titlebar)','#262e30','titlebar 背景','Theme.chromeSurface #10161e','不同(偏蓝)','delta'],
+  ['导航行底','var(--c-nav)','#2d2d30','navbar 背景','同上(现用 chromeSurface)','未分层','delta'],
+  ['主体底','var(--c-body)','#2d2d31','侧栏/视口/卡片/输入框内','Theme.bgPanel #161a23','不同','delta'],
+  ['区头横带','var(--c-header)','#36363b','打印机/耗材丝/工艺 区头','—','缺失','delta'],
+  ['滚动条槽','var(--c-track)','#171717','侧栏滚动条','Theme.scrollBarTrackColor #1c2230','接近','delta'],
+  ['滚动条滑块','var(--c-thumb)','#959595','侧栏滚动条','Theme.scrollBarColor #3a4258','更暗','delta'],
+  ['正文文字','var(--text)','#c8c9cb','图标/正文','Theme.chromeText #cdd7e6','接近','delta'],
+  ['次级文字','var(--text-dim)','#909090','单位/非激活页签/标签','Theme.textTertiary #7f90a6','色相不同','delta'],
+  ['激活文字','var(--text-hi)','#ffffff','区头标题/输入值/激活页签','Theme.textPrimary #e8edf6','接近','delta'],
+  ['控件描边','var(--border)','#505054','卡片/输入框','Theme.borderDefault #363d4e','更亮','delta'],
+  ['分隔线','var(--sep)','#000000','标题栏下缘/侧栏右缘 1px','Theme.chromeBorder #253043','不同','delta'],
+  ['禁用胶囊底','var(--btn-off-bg)','#8e8e83','禁用切片/导出按钮','Theme.borderInput #2e3848','差异大','delta'],
+  ['标题栏高','32px','—','titlebar 高度','Theme.titleBarHeight 40','偏高','delta'],
+  ['导航行高','38px','—','navbar 高度','BBLTopbar workflowBar 34','偏矮','delta'],
+  ['侧栏宽','392px','—','设置侧栏总宽(含18px滚动条)','Theme.sidebarWidthDefault 320','偏窄','delta'],
+  ['激活页签样式','整行 teal 填充','—','准备/预览激活态','Theme.accent 整行填充(绿)','样式同/色不同','delta'],
+  ['参数页签激活','白字+2px teal 下划线','—','质量/强度/…页签','对照 LeftSidebar.qml','待核对','delta'],
+];
+const tb=document.getElementById('tokTable');
+tb.innerHTML='<tr><th>Token</th><th>值</th><th>上游用途</th><th>OWzx 现状</th><th>差</th></tr>'+
+  tokens.map(t=>`<tr><td>${t[0]}<br><code>${t[1]}${t[1].startsWith('var')?' = '+t[2]:''}</code></td><td>${t[1].startsWith('var')?`<span class="sw" style="background:${t[2]}"></span><code>${t[2]}</code>`:t[2]}</td><td>${t[3]}</td><td>${t[4]}</td><td class="${t[6]==='delta'?'delta':'same'}">${t[5]}</td></tr>`).join('');
+document.getElementById('bTokens').onclick = ()=>{
+  const t=document.getElementById('tokens');
+  const on=t.style.display!=='flex'; t.style.display=on?'flex':'none';
+  document.getElementById('bTokens').classList.toggle('on',on);
+};
+
+// ── 快捷键 + 缩放 ──
+document.addEventListener('keydown', e=>{
+  if(e.key==='o'||e.key==='O'){ overlayOn=!overlayOn; syncOverlay(); }
+  if(e.key==='d'||e.key==='D'){ diffOn=!diffOn; if(diffOn) overlayOn=true; syncOverlay(); }
+  if(e.key==='i'||e.key==='I'){ document.getElementById('bInsp').click(); }
+  if(e.key==='t'||e.key==='T'){ document.getElementById('bTokens').click(); }
+  if(e.key==='1') setPage('prepare');
+  if(e.key==='2') setPage('preview');
+  if(e.key==='Escape'){ document.getElementById('tokens').style.display='none'; document.getElementById('bTokens').classList.remove('on'); }
+});
+function fit(){
+  const w=innerWidth, h=innerHeight-42;
+  const s=Math.min((w-30)/1366,(h-20)/721,1);
+  stage.style.transform=`scale(${s})`;
+}
+addEventListener('resize',fit); fit(); syncOverlay();
+if(initialPage==='preview') setPage('preview');
+
+// 截图模式: ?shot=1 -> 舞台锁定原点/1:1, 隐藏工具条 (供像素比对脚本使用)
+if(new URLSearchParams(location.search).get('shot')){
+  document.getElementById('bar').style.display='none';
+  const wrap=document.getElementById('stageWrap');
+  wrap.style.display='block'; wrap.style.top='0'; stage.style.transform='none';
+  document.body.style.overflow='hidden';
+}
+</script>
+</body>
+</html>
