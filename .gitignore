@@ -82,6 +82,10 @@ docs/*
 !docs/创想云模型库接入.md
 !docs/qt612-upgrade-notes.md
 !docs/perf-baseline.md
+# perf/waves archive: same-machine A/B report + wave design + UI compare
+!docs/perf-ab-report.md
+!docs/perf-wave2b-design.md
+!docs/ui-compare-report.md
 # gate allowlists (qmllint ratchet, style-literal ratchet) are build inputs
 !docs/qmllint-baseline/
 !docs/qmllint-baseline/*
