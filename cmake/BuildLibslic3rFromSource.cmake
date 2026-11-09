@@ -387,6 +387,21 @@ endif()
 # OpenVDBUtils is only included if openvdb_libs target exists
 # For now, we include it unconditionally but the upstream checks for the target
 # If OpenVDB is not available, these sources should be excluded
+# macOS (Homebrew): SLA hollowing (SLAPrintSteps -> sla::hollow_mesh ->
+# Hollowing.cpp -> mesh_to_grid/grid_to_mesh/redistance_grid) needs
+# OpenVDBUtils.cpp compiled and the OpenVDB dylib linked, so define the
+# openvdb_libs target both consumer gates below check for. Windows keeps its
+# deps-tree arrangement untouched.
+if(APPLE AND NOT TARGET openvdb_libs)
+    find_package(OpenVDB QUIET CONFIG)
+    if(OpenVDB_FOUND)
+        add_library(openvdb_libs INTERFACE)
+        target_link_libraries(openvdb_libs INTERFACE OpenVDB::openvdb)
+        message(STATUS "OpenVDB (Homebrew ${OpenVDB_VERSION}) found - openvdb_libs enabled")
+    else()
+        message(STATUS "OpenVDB (Homebrew) not found - SLA hollowing symbols will be unresolved")
+    endif()
+endif()
 set(OpenVDBUtils_SOURCES "")
 if(TARGET openvdb_libs)
     message(STATUS "OpenVDB detected - including OpenVDBUtils sources")
@@ -494,7 +509,8 @@ if(NOT libnoise_FOUND)
     set(_libnoise_lib_candidates "")
     foreach(_libnoise_root IN ITEMS "${DEPS_PREFIX}" "${VCPKG_INSTALLED_DIR}")
         if(_libnoise_root)
-            foreach(_libnoise_name IN ITEMS libnoise.lib noise.lib libnoise_static.lib noise_static.lib)
+            foreach(_libnoise_name IN ITEMS libnoise.lib noise.lib libnoise_static.lib noise_static.lib
+                                             libnoise.a noise.a libnoise.dylib)
                 if(EXISTS "${_libnoise_root}/lib/${_libnoise_name}")
                     list(APPEND _libnoise_lib_candidates "${_libnoise_root}/lib/${_libnoise_name}")
                     break()
@@ -521,7 +537,19 @@ endif()
 # GMP/MPFR for CGAL
 set(GMP_INCLUDE_DIR "${DEPS_PREFIX}/include" CACHE PATH "")
 set(MPFR_INCLUDE_DIR "${DEPS_PREFIX}/include" CACHE PATH "")
-if(UNIX)
+if(APPLE)
+    # macOS (Homebrew): gmp/mpfr live in their own opt prefixes, not in the
+    # OCCT-only DEPS_PREFIX. find_library prefers the dylib; the .a archives
+    # in the same dir are the fallback.
+    find_library(GMP_LIB NAMES gmp HINTS /opt/homebrew/opt/gmp/lib /usr/local/opt/gmp/lib)
+    find_library(MPFR_LIB NAMES mpfr HINTS /opt/homebrew/opt/mpfr/lib /usr/local/opt/mpfr/lib)
+    find_path(GMP_INC_DIR gmp.h HINTS /opt/homebrew/opt/gmp/include /usr/local/opt/gmp/include)
+    find_path(MPFR_INC_DIR mpfr.h HINTS /opt/homebrew/opt/mpfr/include /usr/local/opt/mpfr/include)
+    set(GMP_LIBRARIES "${GMP_LIB}" CACHE FILEPATH "")
+    set(MPFR_LIBRARIES "${MPFR_LIB}" CACHE FILEPATH "")
+    set(GMP_INCLUDE_DIR "${GMP_INC_DIR}" CACHE PATH "")
+    set(MPFR_INCLUDE_DIR "${MPFR_INC_DIR}" CACHE PATH "")
+elseif(UNIX)
     # The deps superbuild installs the static Linux names on UNIX
     # (libgmp.a / libmpfr.a); the .lib suffixed names are the Windows
     # import-library convention.
@@ -534,11 +562,19 @@ endif()
 set(CGAL_DO_NOT_WARN_ABOUT_CMAKE_BUILD_TYPE ON CACHE BOOL "" FORCE)
 find_package(CGAL REQUIRED CONFIG)
 
-find_package(OpenCV QUIET COMPONENTS core)
+set(OWZX_OPENCV_COMPONENTS core)
+if(APPLE)
+    # TexturePainting/TextureToColor also call cv::imdecode (imgcodecs) and
+    # cv::cvtColor (imgproc); Homebrew OpenCV ships those as separate dylibs,
+    # so they must be requested explicitly. (The Windows deps OpenCV is the
+    # all-in-one world lib, where "core" already pulls everything in.)
+    list(APPEND OWZX_OPENCV_COMPONENTS imgcodecs imgproc)
+endif()
+find_package(OpenCV QUIET COMPONENTS ${OWZX_OPENCV_COMPONENTS})
 if(NOT OpenCV_FOUND AND UNIX)
     # Ubuntu's opencv4 config lives under the multiarch lib dir; help CMake
     # find it when CMAKE_PREFIX_PATH only points at the deps prefix.
-    find_package(OpenCV QUIET COMPONENTS core
+    find_package(OpenCV QUIET COMPONENTS ${OWZX_OPENCV_COMPONENTS}
         PATHS /usr/lib/x86_64-linux-gnu/cmake/opencv4 /usr/local/lib/cmake/opencv4)
 endif()
 
@@ -619,6 +655,14 @@ list(APPEND LIBSLIC3R_CGAL_SOURCES
 )
 
 add_library(libslic3r_cgal_from_source STATIC ${LIBSLIC3R_CGAL_SOURCES})
+
+# Boost.Log's ABI namespace differs between its static (v2s_mt_posix) and
+# shared (v2_mt_posix) builds; without this the archive objects reference
+# the static ABI while consumers link the Homebrew shared lib.
+target_compile_definitions(libslic3r_cgal_from_source PRIVATE
+    BOOST_LOG_DYN_LINK
+    BOOST_LOG_SETUP_DYN_LINK
+)
 
 # Debug info for crash address resolution
 if(MSVC)
@@ -804,6 +848,13 @@ set(OCCT_LIBS
     TKBRep       TKGeomBase   TKG3d        TKG2d        TKMath
     TKernel
 )
+if(APPLE)
+    # OCCT 7.8+ (Homebrew ships 7.9.x) renamed/merged toolkits:
+    # TKXDESTEP -> TKDESTEP; TKSTEP/TKSTEP209/TKSTEPAttr/TKSTEPBase were
+    # folded into TKDESTEP. Remap so the dylib names resolve.
+    list(REMOVE_ITEM OCCT_LIBS TKXDESTEP TKSTEP TKSTEP209 TKSTEPAttr TKSTEPBase)
+    list(INSERT OCCT_LIBS 0 TKDESTEP)
+endif()
 if(UNIX)
     # The deps superbuild installs OCCT into lib/ on UNIX (no occt/ subdir),
     # and its headers into include/opencascade (Windows: lib/occt, inc/occt).
@@ -899,9 +950,12 @@ endif()
 
 # ─── 7.5 OCCT (OpenCASCADE) libraries ────────────────────────────────────────
 # Link OCCT libraries with full paths for STEP/SVG import. Linux installs
-# lib<name>.a, Windows <name>.lib.
+# lib<name>.a, Windows <name>.lib. macOS (Homebrew opencascade): shared
+# lib<name>.dylib — no static archives ship in the bottle.
 foreach(_occt_lib ${OCCT_LIBS})
-    if(UNIX)
+    if(APPLE)
+        target_link_libraries(libslic3r_from_source PUBLIC "${OCCT_LIB_DIR}/lib${_occt_lib}.dylib")
+    elseif(UNIX)
         target_link_libraries(libslic3r_from_source PUBLIC "${OCCT_LIB_DIR}/lib${_occt_lib}.a")
     else()
         target_link_libraries(libslic3r_from_source PUBLIC "${OCCT_LIB_DIR}/${_occt_lib}.lib")
@@ -912,11 +966,13 @@ endforeach()
 if(WIN32)
     target_link_libraries(libslic3r_from_source PUBLIC Psapi.lib bcrypt.lib Crypt32.lib)
 endif()
-if(UNIX)
+if(UNIX AND NOT APPLE)
     # OCCT's TKService (Font_FontMgr) references fontconfig. GNU ld resolves
     # DSO symbols in a single left-to-right pass, so the DSO must appear
     # AFTER the static archive that needs it — attach it here (this target
     # precedes the OCCT archives on every consumer's link line).
+    # (APPLE: OCCT links as Homebrew dylibs whose fontconfig/freetype deps
+    # resolve via install names — no bare -l flags are wanted here.)
     target_link_libraries(libslic3r_from_source PUBLIC fontconfig freetype)
 endif()
 

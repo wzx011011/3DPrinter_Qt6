@@ -116,3 +116,6 @@ nul
 # 生成的压测产物与 ASan 构建（>100MB，禁止入库）
 --out/
 build-asan/
+
+# macOS 本地构建目录（Apple Silicon 移植，Ninja/Release）
+build-mac/

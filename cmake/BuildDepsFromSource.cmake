@@ -161,6 +161,13 @@ target_link_libraries(admesh_from_source
     PUBLIC Eigen3::Eigen
     PRIVATE Boost::locale
 )
+# Boost.Log's ABI namespace differs between its static (v2s_mt_posix) and
+# shared (v2_mt_posix) builds; without this the archive objects reference
+# the static ABI while consumers link the Homebrew shared lib.
+target_compile_definitions(admesh_from_source PRIVATE
+    BOOST_LOG_DYN_LINK
+    BOOST_LOG_SETUP_DYN_LINK
+)
 if(MSVC)
     target_compile_definitions(admesh_from_source PRIVATE
         _CRT_SECURE_NO_WARNINGS
@@ -317,6 +324,21 @@ endif()
 # assimp-vc142-mt.lib, while a fresh superbuild (CI, assimp v5.4.3 on the
 # VS2022 toolset) produces assimp-vc143-mt.lib. Link-failure evidence: CI run
 # 39180909374 (LNK2019 x8 from AssimpImport.cpp). Glob either.
+if(APPLE)
+    # macOS (Homebrew): shared dylib + headers in the default prefix. Reuse
+    # the same IMPORTED target name so consumers are platform-agnostic.
+    find_library(_owzx_assimp_dylib NAMES assimp
+        PATHS /opt/homebrew/lib /usr/local/lib
+        NO_DEFAULT_PATH)
+    if(_owzx_assimp_dylib)
+        add_library(assimp_from_source SHARED IMPORTED GLOBAL)
+        set_target_properties(assimp_from_source PROPERTIES
+            IMPORTED_LOCATION "${_owzx_assimp_dylib}"
+        )
+    else()
+        message(WARNING "assimp dylib not found (brew install assimp is required for AssimpImport)")
+    endif()
+else()
 file(GLOB _owzx_assimp_libs
      "${DEPS_PREFIX}/lib/assimp-vc*.lib"
      "${DEPS_PREFIX}/lib/assimp.lib"
@@ -329,6 +351,7 @@ if(_owzx_assimp_libs)
     )
 else()
     message(WARNING "assimp lib not found in ${DEPS_PREFIX}/lib (looked for assimp-vc*.lib / assimp.lib / libassimp.a)")
+endif()
 endif()
 
 # cr_tpms_library (closed source)

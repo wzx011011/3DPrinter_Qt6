@@ -354,17 +354,24 @@ endif()
         src/core/viewmodels/AiViewModel.h
         src/core/viewmodels/AiViewModel.cpp
     )
-    # 链接 libcurl 静态库（DEPS_PREFIX/lib/libcurl.lib）
-    # CURL_STATICLIB 必须定义，否则 curl.h 用 __declspec(dllimport) 声明符号
-    # （静态库不提供 __imp_ 存根 → 链接错误 __imp_curl_easy_*）
-    find_library(CURL_LIB NAMES libcurl curl
-                 PATHS "${DEPS_PREFIX}/lib" NO_DEFAULT_PATH)
-    if(CURL_LIB)
-        target_compile_definitions(owzx_app_core PUBLIC CURL_STATICLIB)
-        target_link_libraries(owzx_app_core PUBLIC ${CURL_LIB})
-        target_include_directories(owzx_app_core PUBLIC "${DEPS_PREFIX}/include")
+    if(APPLE)
+        # macOS ships libcurl as an SDK tbd (linked via -lcurl); the static
+        # libcurl.lib convention below is Windows/deps-specific. curl.h comes
+        # from the SDK's default header path.
+        target_link_libraries(owzx_app_core PUBLIC curl)
     else()
-        message(WARNING "libcurl not found in DEPS_PREFIX, FTP upload disabled")
+        # 链接 libcurl 静态库（DEPS_PREFIX/lib/libcurl.lib）
+        # CURL_STATICLIB 必须定义，否则 curl.h 用 __declspec(dllimport) 声明符号
+        # （静态库不提供 __imp_ 存根 → 链接错误 __imp_curl_easy_*）
+        find_library(CURL_LIB NAMES libcurl curl
+                     PATHS "${DEPS_PREFIX}/lib" NO_DEFAULT_PATH)
+        if(CURL_LIB)
+            target_compile_definitions(owzx_app_core PUBLIC CURL_STATICLIB)
+            target_link_libraries(owzx_app_core PUBLIC ${CURL_LIB})
+            target_include_directories(owzx_app_core PUBLIC "${DEPS_PREFIX}/include")
+        else()
+            message(WARNING "libcurl not found in DEPS_PREFIX, FTP upload disabled")
+        endif()
     endif()
     # O3: vendored meshoptimizer (MIT, vendor/meshoptimizer/LICENSE.md)
     # -- per-batch vertex-cache index reordering in the v3 parse
