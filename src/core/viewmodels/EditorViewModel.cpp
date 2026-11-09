@@ -6936,9 +6936,14 @@ int EditorViewModel::settingsTargetVolumeIndex() const
 
 QByteArray EditorViewModel::meshData() const
 {
-  fprintf(stderr, "[FIX5M] vm meshData getter: %lld bytes rev=%d\n",
-          (long long)m_cachedMeshData.size(), m_meshDataRevision);
-  fflush(stderr);
+  // FIX-5M probe: the unconditional fprintf+fflush ran on every QML property
+  // read (a syscall burst mid-orbit at binding re-eval frequency); gate the
+  // probe behind OWZX_FIX5M_LOG so production frames stay clean.
+  if (qEnvironmentVariableIsSet("OWZX_FIX5M_LOG")) {
+    fprintf(stderr, "[FIX5M] vm meshData getter: %lld bytes rev=%d\n",
+            (long long)m_cachedMeshData.size(), m_meshDataRevision);
+    fflush(stderr);
+  }
   return m_cachedMeshData;
 }
 

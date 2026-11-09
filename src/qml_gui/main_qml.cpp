@@ -427,6 +427,16 @@ int main(int argc, char *argv[])
   if (qEnvironmentVariableIsSet("OWZX_D3D12_DEBUG"))
     qputenv("QSG_RHI_DEBUG", "1");
 
+  // OWZX-PERF (2026-11-09): Qt picks the gui-thread ("basic") scene-graph
+  // render loop on this macOS setup, serializing QML bindings, input delivery
+  // and viewport rendering on one thread — measurable frame pacing loss
+  // against OrcaSlicer's dedicated paint loop at multi-million-vertex scenes.
+  // OWZX_THREADED_LOOP=1 opts into the threaded scene graph loop (QQuickRhiItem
+  // renders on the render thread there); opt-in so Windows behavior and the
+  // canonical gate stay untouched until the ablation numbers are in.
+  if (qEnvironmentVariable("OWZX_THREADED_LOOP") == "1")
+    qputenv("QSG_RENDER_LOOP", "threaded");
+
   // RhiBackendSelector owns D3D11-first / D3D12 explicit opt-in policy.
   // D3D12 is NOT the default because it crashes at QQuickWindow swapchain
   // init on AMD hardware (v5.7 Phase 211 finding on an APU; re-confirmed on

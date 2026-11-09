@@ -25,6 +25,63 @@
 #include <rhi/qshader.h>
 
 class RhiViewport;
+
+// OWZX-BENCH (2026-11-09): per-frame render timing for the OWZX_FRAME_STATS=1
+// benchmark mode. Written at the tail of RhiViewportRenderer::render(), read
+// by the RhiViewport stats timer (gui-thread render loop, so no locking).
+struct OwzxFrameStats
+{
+  mutable int frames = 0;
+  mutable double renderSumMs = 0.0;
+  mutable double maxMs = 0.0;
+  // Fixed-bucket histogram (0.5 ms buckets, capped at 64 ms) — enough for
+  // p50/p95 from the timer without storing per-frame samples.
+  mutable int buckets[129] = {};
+  double p50() const
+  {
+    if (frames == 0) return 0.0;
+    const int target = frames / 2;
+    int acc = 0;
+    for (int i = 0; i < 129; ++i) {
+      acc += buckets[i];
+      if (acc >= target) return i * 0.5 + 0.25;
+    }
+    return maxMs;
+  }
+  double p95() const
+  {
+    if (frames == 0) return 0.0;
+    const int target = (frames * 19 + 19) / 20; // ceil(0.95*N)
+    int acc = 0;
+    for (int i = 0; i < 129; ++i) {
+      acc += buckets[i];
+      if (acc >= target) return i * 0.5 + 0.25;
+    }
+    return maxMs;
+  }
+  void add(double ms)
+  {
+    ++frames;
+    renderSumMs += ms;
+    if (ms > maxMs) maxMs = ms;
+    int idx = int(ms * 2.0);
+    if (idx > 128) idx = 128;
+    ++buckets[idx];
+  }
+  void reset() const
+  {
+    frames = 0;
+    renderSumMs = 0.0;
+    maxMs = 0.0;
+    for (int &b : buckets) b = 0;
+  }
+};
+inline OwzxFrameStats &owzxFrameStats()
+{
+  static OwzxFrameStats s;
+  return s;
+}
+
 class RhiViewportRenderer : public QQuickRhiItemRenderer
 {
 public:
@@ -893,6 +950,8 @@ private:
 
   // ── Phase 27: Preview performance instrumentation (PERF-01) ──
   QElapsedTimer m_previewFrameTimer;
+  // OWZX-BENCH: whole-render wall timer for the OWZX_FRAME_STATS histogram.
+  QElapsedTimer m_renderStatsTimer;
   qint64 m_previewLastUploadMs = -1;
   qint64 m_previewLastFrameMs = -1;
   qint64 m_previewFirstFrameMs = -1;

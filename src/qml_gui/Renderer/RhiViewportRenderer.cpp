@@ -47,6 +47,24 @@ bool rhiPreviewPerfEnabled()
   static const bool enabled = qEnvironmentVariableIsSet("OWZX_RHI_PREVIEW_PERF");
   return enabled;
 }
+// OWZX-PERF (2026-11-09): value compare for the assemble transform lists.
+// QVariant equality has no registered operator== for QVector3D wrappers, so
+// QVariantList != reported unequal for value-identical lists and reset the
+// model upload flag at frame rate. Component-exact compare: both sides come
+// from the same deterministic getter, so identical state yields identical
+// floats.
+bool assembleVecListEqual(const QVariantList &a, const QVariantList &b)
+{
+  if (a.size() != b.size())
+    return false;
+  for (int i = 0; i < a.size(); ++i) {
+    const QVector3D va = a.at(i).value<QVector3D>();
+    const QVector3D vb = b.at(i).value<QVector3D>();
+    if (va != vb)
+      return false;
+  }
+  return true;
+}
 } // namespace
 
 // Phase 209 (MIT-02 / Seam B): POD mirror of the GLSL std140 CameraBlock
@@ -177,8 +195,18 @@ void RhiViewportRenderer::initialize(QRhiCommandBuffer *cb)
           rhi() ? rhi()->backendName() : "(null)");
   QRhiRenderPassDescriptor *currentRenderPass = renderTarget()
       ? renderTarget()->renderPassDescriptor() : nullptr;
-  if (m_renderPassDescriptor != nullptr
-      && currentRenderPass != m_renderPassDescriptor)
+  // OWZX-PERF (2026-11-09): QQuickRhiItem calls initialize() on EVERY frame
+  // with the macOS Metal backend (the swapchain re-initializes per frame
+  // there; on Windows D3D it fires only on real swapchain events, which is
+  // why the upstream dev never saw this). The flag wipe below therefore ran
+  // 60x/second on macOS: every frame re-uploaded the full model staging
+  // (15M-corner rebuild, 400MB+) — the multi-hundred-ms jank frames on the
+  // 5M-sphere scene. The wipe is only CORRECT when the render pass actually
+  // changed (a real swapchain rebuild — exactly what the descriptor compare
+  // above already detects), so gate it on that.
+  const bool renderPassChanged = m_renderPassDescriptor != nullptr
+      && currentRenderPass != m_renderPassDescriptor;
+  if (renderPassChanged)
   {
     // QRhi graphics pipelines are render-pass compatible objects. A swapchain
     // rebuild may replace the descriptor even when the QRhi and buffers survive,
@@ -203,6 +231,9 @@ void RhiViewportRenderer::initialize(QRhiCommandBuffer *cb)
   // and bind stale or invalid memory. Re-uploading once per rebuild is cheap
   // and backend-agnostic (D3D11/Vulkan/Metal tolerate it as a no-op cost).
   // This mirrors what releaseResources() does for the full-destroy path.
+  // (OWZX-PERF: now gated on renderPassChanged — see the comment at the top
+  // of this function; unconditional here meant 60x/second on macOS Metal.)
+  if (renderPassChanged) {
   m_modelVertexBufferUploaded = false;
   m_highlightVertexBufferUploaded = false;
   m_cameraUniformBufferUploaded = false;
@@ -235,6 +266,7 @@ void RhiViewportRenderer::initialize(QRhiCommandBuffer *cb)
   // the render phase), so m_canvasType is already mirrored here.
   m_prepareScene.markDirty(PrepareSceneData::seedMaskForCanvas(m_canvasType));
   rhiTrace("seamC-initialize-reset");
+  } // renderPassChanged gate (OWZX-PERF)
 }
 
 void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
@@ -331,7 +363,13 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   // zipping m_assembleOffsets with the parallel meshBatchSourceObjectIndices
   // list. Skip zero offsets (they translate nothing). Used by buildModelVertices
   // on the CanvasAssembleView path.
-  if (m_assembleOffsets != viewport->m_assembleOffsets)
+  // OWZX-PERF (2026-11-09): QVariant's operator== has no registered equality
+  // for QVector3D elements, so list compare fell back to unequal for
+  // value-identical lists — the ViewModel getter builds a fresh list per
+  // binding evaluation, and the mismatch reset the model upload flag at frame
+  // rate (a full 15M-corner rebuild every frame on the assemble canvas).
+  // Compare element values directly instead.
+  if (!assembleVecListEqual(m_assembleOffsets, viewport->m_assembleOffsets))
   {
     m_assembleOffsets = viewport->m_assembleOffsets;
     m_modelVertexBufferUploaded = false;
@@ -339,12 +377,12 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   // Phase 141 (DEBT-04): mirror the parallel rotation/scale lists. Any change to
   // any of the three lists forces a vertex re-upload so the composed transform is
   // reflected in the live CanvasAssembleView render (v4.8 tech-debt closure).
-  if (m_assembleRotations != viewport->m_assembleRotations)
+  if (!assembleVecListEqual(m_assembleRotations, viewport->m_assembleRotations))
   {
     m_assembleRotations = viewport->m_assembleRotations;
     m_modelVertexBufferUploaded = false;
   }
-  if (m_assembleScales != viewport->m_assembleScales)
+  if (!assembleVecListEqual(m_assembleScales, viewport->m_assembleScales))
   {
     m_assembleScales = viewport->m_assembleScales;
     m_modelVertexBufferUploaded = false;
@@ -445,7 +483,18 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   if (m_parsedMeshHash == viewport->m_meshDataHash
       && m_parsedPlateContext == viewport->m_currentPlateIndex) {
     m_modelGeneration = viewport->m_modelGeneration;
-  } else if (m_modelGeneration != viewport->m_modelGeneration) {
+  } else if (m_modelGeneration != viewport->m_modelGeneration
+             || m_parsedMeshHash != viewport->m_meshDataHash) {
+    // OWZX-PERF (2026-11-09): the generation-only condition left a race
+    // window. The first genChange sync can land while the QML side still
+    // holds the EMPTY pre-delivery blob (hash 0) — the renderer then parsed
+    // an empty scene and pinned m_parsedMeshHash=0, and the real 90MB blob
+    // arriving later never re-triggered a parse (generation already synced).
+    // Every following upload failed at the camera-UBO gate with nothing to
+    // commit, and the content-hash "changed" verdict stayed true forever:
+    // the full 15M-vertex staging was rebuilt at frame rate (the 64-120 ms
+    // jank frames). Parsing on content-hash change makes the late delivery
+    // self-heal with exactly one extra parse.
     m_parsedMeshHash = viewport->m_meshDataHash;
     m_parsedPlateContext = viewport->m_currentPlateIndex;
     m_modelGeneration = viewport->m_modelGeneration;
@@ -1208,6 +1257,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
   if (cb == nullptr || rhi() == nullptr || renderTarget() == nullptr) {
     return;
   }
+  m_renderStatsTimer.start();
   rhiTrace("render-enter");
 
   // Phase 95 (THUMBCAP-01/03): poll the async thumbnail readback at the START
@@ -1797,6 +1847,10 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     }
   }
   rhiTrace("render-exit");
+  // OWZX-BENCH: record the whole-render wall time (OWZX_FRAME_STATS=1 read
+  // this via RhiViewport::frameStats()).
+  owzxFrameStats().add(m_renderStatsTimer.nsecsElapsed() / 1.0e6);
+  m_renderStatsTimer.restart();
 }
 
 void RhiViewportRenderer::releaseRenderPassDependentResources()
@@ -2460,8 +2514,17 @@ bool RhiViewportRenderer::cameraLookingDown() const
 bool RhiViewportRenderer::ensurePipelines()
 {
   rhiTrace("ensurePipelines-enter");
+  // OWZX-PERF (2026-11-09): the camera UBO must gate this early return
+  // alongside the pipelines. releaseRenderPassDependentResources() (swapchain
+  // rebuild on macOS: first show, occlusion, resize) resets m_srb AND
+  // m_cameraUniformBuffer while the four pipelines survive -- with the UBO
+  // gone, uploadBatchMatrixUbo failed every frame, uploadModelBuffer never
+  // committed its content hashes, and the whole 15M-vertex model staging was
+  // rebuilt at 60 Hz (the multi-hundred-ms jank frames on the 5M-sphere
+  // scene). The !m_cameraUniformBuffer fallthrough re-creates the UBO and
+  // the null-tested m_srb below; existing pipelines are untouched.
   if (m_fillPipeline && m_linePipeline && m_translucentFillPipeline
-      && m_translucentLinePipeline)
+      && m_translucentLinePipeline && m_cameraUniformBuffer != nullptr)
     return true;
   if (m_pipelineFailed || rhi() == nullptr || renderTarget() == nullptr)
     return false;
@@ -3679,19 +3742,20 @@ bool RhiViewportRenderer::ensureBatchMatrixSrb()
   // beyond the channel) so the per-batch dynamic offsets of the tint draws
   // (which run on world-baked soup scenes with an empty channel too) stay
   // in range and read identity.
-  const int slotCount = qMax(int(m_prepareScene.batchWorldTransforms().size()),
-                             int(m_prepareScene.modelBatches().size()));
-  if (m_batchMatrixSrb && m_batchMatrixCount == slotCount)
+  const int slotCountSrb = qMax(int(m_prepareScene.batchWorldTransforms().size()),
+                                int(m_prepareScene.modelBatches().size()));
+  if (m_batchMatrixSrb && m_batchMatrixCount == slotCountSrb)
     return true;
-  if (m_pipelineFailed || rhi() == nullptr || m_cameraUniformBuffer == nullptr)
+  if (m_pipelineFailed || rhi() == nullptr || m_cameraUniformBuffer == nullptr) {
     return false;
+  }
 
   // Some RHI backends report ubufAlignment() == 1 (macOS GL); sizing the
       // per-slot UBOs from it would allocate below the 64-byte matrix
       // payload and overflow every upload. Clamp to 64 -- a multiple of
       // every alignment <= 64, so the dynamic-offset invariant holds.
       const quint32 stride = qMax(quint32(rhi()->ubufAlignment()), quint32(64));
-  const quint32 bytes = quint32(qMax(slotCount, 1)) * stride;
+  const quint32 bytes = quint32(qMax(slotCountSrb, 1)) * stride;
   const bool uboResized = !m_batchMatrixUbo || m_batchMatrixUboBytes != bytes;
   if (!ensureBuffer(m_batchMatrixUbo, bytes, m_batchMatrixUboBytes,
                     QRhiBuffer::UniformBuffer))
@@ -3724,7 +3788,7 @@ bool RhiViewportRenderer::ensureBatchMatrixSrb()
       return false;
     }
   }
-  m_batchMatrixCount = slotCount;
+  m_batchMatrixCount = slotCountSrb;
   return true;
 }
 
@@ -4725,8 +4789,9 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
   // O1 (TINT): the per-batch matrix + tint arrays serve both modes (the
   // tint draws run on soup scenes too -- identity matrices there), so
   // they upload unconditionally.
-  if (!uploadBatchMatrixUbo(updates) || !uploadBatchTintUbos(updates))
+  if (!uploadBatchMatrixUbo(updates) || !uploadBatchTintUbos(updates)) {
     return false;
+  }
 
   m_uploadedMeshHash = m_parsedMeshHash;
   m_uploadedPlateContext = m_parsedPlateContext;

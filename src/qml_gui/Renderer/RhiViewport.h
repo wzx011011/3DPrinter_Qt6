@@ -22,6 +22,7 @@ class QTimer;
 #include "ViewportContextHit.h"
 
 class RhiViewportRenderer;
+struct OwzxFrameStats;
 
 // ── S6: ThemeTokens — the C++ half of the design-token single source ───────
 // Theme.qml stays the QML-facing facade, but every theme-conditional color
@@ -914,6 +915,10 @@ public:
   }
   QVariantList navigatorLabels() const;
   int navigatorLabelCount() const { return int(navigatorLabels().size()); }
+  // OWZX-BENCH (2026-11-09): OWZX_FRAME_STATS=1 per-frame render timing.
+  // OwzxFrameStats is a global-scope struct from RhiViewportRenderer.h; the
+  // definition lives in RhiViewport.cpp.
+  const struct OwzxFrameStats &frameStats() const;
   // ── PLATEICONS-GL (see the plateIconStates Q_PROPERTY above) ─────────────
   QVariantList plateIconStates() const { return m_plateIconStates; }
   void setPlateIconStates(const QVariantList &states);
@@ -1258,6 +1263,11 @@ private:
   // consumes left presses/drags before any scene interaction, mirrors the
   // upstream 40-frame snap interpolation, and exposes label anchors.
   NavigatorCube::RectF navigatorRect() const;
+  // OWZX-PERF: projection workhorse behind navigatorLabels(); the memoized
+  // public getter calls this only when the content stamp changes.
+  QVariantList buildNavigatorLabels(const NavigatorCube::RectF &rect) const;
+  mutable QVariantList m_navLabelsCache;
+  mutable quint64 m_navLabelsStamp = 0;
   bool startNavigatorPress(const QPointF &position);
   void navigatorDragMove(const QPointF &position);
   void finishNavigatorPress();

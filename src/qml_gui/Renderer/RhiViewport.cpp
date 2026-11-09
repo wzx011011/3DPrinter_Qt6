@@ -1,5 +1,10 @@
 #include "RhiViewport.h"
 #include "RhiViewportRenderer.h"
+
+const struct OwzxFrameStats &RhiViewport::frameStats() const
+{
+  return owzxFrameStats();
+}
 #include "core/model/PartPlateList.h"
 #include "core/rendering/GizmoCenter.h"
 #include "core/rendering/GizmoMath.h"
@@ -54,7 +59,12 @@ RhiViewport::RhiViewport(QQuickItem *parent)
   // depth-stencil buffer creation (QQuickRhiItem has no public depth buffer
   // API; this is the only known trigger). Remove if depth test proves
   // unworkable or MSAA visual/perf cost is unacceptable.
-  setSampleCount(4);
+  // MSAA 4x helps edge quality but multiplies the per-frame bandwidth budget;
+  // at multi-million-vertex scenes it is the difference between 120 Hz and
+  // jank on some GPUs. OWZX_MSAA=<n> overrides (benchmark ablation / quality
+  // tradeoff); default keeps the established 4x look.
+  const int msaaEnv = qEnvironmentVariable("OWZX_MSAA").toInt();
+  setSampleCount(msaaEnv >= 1 ? msaaEnv : 4);
   // Default: all 20 canonical libvgcode extrusion roles visible so renderer-side
   // filtering is a no-op until QML binds Plan 03's UI (matches upstream defaults).
   m_roleVisibility.reserve(20);
@@ -63,6 +73,31 @@ RhiViewport::RhiViewport(QQuickItem *parent)
   // P14 (CAM-PARITY): seed the camera scene box from the member defaults so
   // the zoom bounds and target validation hold before QML binds the bed.
   updateSceneExtent();
+  // OWZX-BENCH (2026-11-09): env-gated performance tools, no-op unless the
+  // variables are set. OWZX_AUTO_ORBIT=1 drives the orbit path at ~60 Hz so
+  // frame pacing can be measured without synthetic OS input (TCC blocks
+  // CGEvent posting from this environment). OWZX_FRAME_STATS=1 logs per-frame
+  // render timings and a p50/p95 summary on shutdown.
+  if (qEnvironmentVariableIsSet("OWZX_AUTO_ORBIT")) {
+    auto *orbitTimer = new QTimer(this);
+    connect(orbitTimer, &QTimer::timeout, this, [this]() {
+      applyCameraOrbit(2.0f, 1.0f);
+    });
+    orbitTimer->start(16);
+  }
+  if (qEnvironmentVariableIsSet("OWZX_FRAME_STATS")) {
+    auto *statsTimer = new QTimer(this);
+    statsTimer->setInterval(1000);
+    connect(statsTimer, &QTimer::timeout, this, [this]() {
+      const auto &s = frameStats();
+      if (s.frames > 0)
+        qDebug() << "[FRAME-STATS]" << "frames" << s.frames
+                 << "p50_ms" << s.p50() << "p95_ms" << s.p95()
+                 << "max_ms" << s.maxMs << "render_ms_sum" << s.renderSumMs;
+      s.reset();
+    });
+    statsTimer->start(1000);
+  }
   // S6: follow the process-wide theme flag (seeded by the merged chain's
   // single dispatch point, BackendContext::applyTheme, before QML loads).
   // A flip re-rasters the icon atlas with the other SVG variant set + label
@@ -1274,6 +1309,44 @@ NavigatorCube::RectF RhiViewport::navigatorRect() const
                               size, size};
 }
 
+// OWZX-PERF (2026-11-09): the navigator label list was rebuilt on every
+// property read — six Repeater delegates each call navigatorLabels() per
+// frame mid-orbit, so the C++ projection ran 6x per frame and each call
+// allocated a fresh QVariantList across the QML boundary. Memoize on a stamp
+// of everything the projection depends on (view matrix, item size, offset,
+// enabled flag); the six per-frame reads now share one build.
+namespace {
+quint64 navigatorLabelStamp(const RhiViewport &v, const QMatrix4x4 &view,
+                            const NavigatorCube::RectF &rect, bool enabled)
+{
+  quint64 h = 1469598103934665603ull;
+  auto mix = [&h](quint64 k) {
+    h ^= k;
+    h *= 1099511628211ull;
+  };
+  const float *m = view.constData();
+  for (int i = 0; i < 16; ++i)
+    mix(quint64(reinterpret_cast<const uint32_t *>(m)[i]));
+  mix(quint64(qHash(rect.x)) ^ (quint64(qHash(rect.y)) << 1));
+  mix(quint64(qHash(rect.w)) ^ (quint64(qHash(rect.h)) << 1));
+  mix(quint64(qHash(v.height())) ^ (quint64(enabled) << 32));
+  return h;
+}
+} // namespace
+
+QVariantList RhiViewport::navigatorLabels() const
+{
+  const NavigatorCube::RectF rect = navigatorRect();
+  const quint64 stamp =
+      navigatorLabelStamp(*this, m_camera.viewMatrix(), rect, m_navigatorEnabled);
+  if (m_navLabelsStamp == stamp)
+    return m_navLabelsCache;
+  QVariantList labels = buildNavigatorLabels(rect);
+  m_navLabelsCache = std::move(labels);
+  m_navLabelsStamp = stamp;
+  return m_navLabelsCache;
+}
+
 QString RhiViewport::navigatorFaceName(const QVector3D &normal)
 {
   // ImGuizmo face labels (ImGuizmo.cpp:5686-5691 upstream in
@@ -1289,14 +1362,13 @@ QString RhiViewport::navigatorFaceName(const QVector3D &normal)
   return QString();
 }
 
-QVariantList RhiViewport::navigatorLabels() const
+QVariantList RhiViewport::buildNavigatorLabels(const NavigatorCube::RectF &rect) const
 {
   QVariantList labels;
   if (!m_navigatorEnabled)
     return labels;
   const NavigatorCube::CameraBasis basis =
       NavigatorCube::cameraBasis(m_camera.viewMatrix());
-  const NavigatorCube::RectF rect = navigatorRect();
   const QVector3D origin(-0.5f, -0.5f, -0.5f);
   // vp-6 (AXISLABELS): uppercase slic3r axis names matching the transform
   // widgets (upstream strcpy AxisLabels "Y"/"Z"/"X", GLCanvas3D.cpp:6144-6146).
