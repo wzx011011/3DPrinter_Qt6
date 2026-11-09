@@ -25,23 +25,25 @@ Item {
 
     Repeater {
         id: labelRepeater
-        // Read the viewport size before the anchors so this binding also
-        // depends on the QQuickItem width/height notify. The item is bound
-        // before layout settles (height is still the pre-layout value), and
-        // the C++ geometryChange re-emit path proved unreliable on
-        // QQuickRhiItem; the size notify is the dependable refresh trigger.
-        model: {
-            if (!root.viewport)
-                return []
-            const w = root.viewport.width
-            const h = root.viewport.height
-            return root.viewport.navigatorLabels
-        }
+        // Key the delegate objects on the label COUNT (stable during orbit)
+        // and read the per-index geometry live below. Binding this Repeater's
+        // model to the full QVariantList re-assigned the delegate model on
+        // every navigatorLabelsChanged emission (60 Hz mid-orbit), which
+        // crashed QQuickRepeater::disconnectModel (null ConnectionData) on
+        // Qt 6.12. Count-keyed delegates persist; only their geometry rebinds.
+        model: root.viewport ? root.viewport.navigatorLabelCount : 0
 
         delegate: Text {
             // Qt6: explicit required injection avoids the QVariantMap
             // modelData scope ambiguity that silently yields NaN coordinates.
-            required property var modelData
+            required property int index
+            property var md: {
+                const v = root.viewport
+                if (!v)
+                    return null
+                const d = v.navigatorLabels
+                return index < d.length ? d[index] : null
+            }
             property string faceText: {
                 const map = {
                     front: qsTr("Front"),
@@ -51,12 +53,13 @@ Item {
                     left: qsTr("Left"),
                     right: qsTr("Right")
                 }
-                return map[modelData.text] || modelData.text
+                return md ? (map[md.text] || md.text) : ""
             }
 
-            x: modelData.x - width / 2
-            y: modelData.y - height / 2
-            text: modelData.kind === "axis" ? modelData.text : faceText
+            visible: md !== null
+            x: md ? md.x - width / 2 : 0
+            y: md ? md.y - height / 2 : 0
+            text: md ? (md.kind === "axis" ? md.text : faceText) : ""
             // Upstream TEXT color dark theme 224/255 (GLCanvas3D.cpp:5685);
             // face labels render on every visible face (ImGuizmo.cpp:2955).
             // No Text.Outline: upstream draws these labels as single

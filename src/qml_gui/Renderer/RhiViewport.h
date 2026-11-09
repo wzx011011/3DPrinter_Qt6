@@ -496,6 +496,11 @@ class RhiViewport : public QQuickRhiItem
   // (ImGuizmo.cpp:3037 / :2942). Entries carry kind ("axis"/"face"), text,
   // and item-pixel x/y; text stays untranslated ids so QML owns qsTr().
   Q_PROPERTY(QVariantList navigatorLabels READ navigatorLabels NOTIFY navigatorLabelsChanged)
+  // Label count only: lets QML Repeaters key their delegate objects on the
+  // (rarely-changing) count instead of rebinding the full QVariantList every
+  // frame — rebinding at orbit frequency tears the delegate model down at
+  // 60 Hz and crashed QQuickRepeater::disconnectModel on Qt 6.12.
+  Q_PROPERTY(int navigatorLabelCount READ navigatorLabelCount NOTIFY navigatorLabelsChanged)
   // ── PLATEICONS-GL (2026-10-10): bed-surface plate icons ──────────────────
   // The per-plate icon column (delete/orient/arrange/lock/settings/
   // move-front), the rename pencil, the index badge, and the plate-name
@@ -908,6 +913,7 @@ public:
     update();
   }
   QVariantList navigatorLabels() const;
+  int navigatorLabelCount() const { return int(navigatorLabels().size()); }
   // ── PLATEICONS-GL (see the plateIconStates Q_PROPERTY above) ─────────────
   QVariantList plateIconStates() const { return m_plateIconStates; }
   void setPlateIconStates(const QVariantList &states);

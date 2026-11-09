@@ -1417,7 +1417,11 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       cb->setVertexInput(0, 1, &modelBinding,
                          m_modelIndexBuffer.get(), 0,
                          QRhiCommandBuffer::IndexUInt32);
-      const quint32 stride = rhi()->ubufAlignment();
+      // Some RHI backends report ubufAlignment() == 1 (macOS GL); sizing the
+      // per-slot UBOs from it would allocate below the 64-byte matrix
+      // payload and overflow every upload. Clamp to 64 -- a multiple of
+      // every alignment <= 64, so the dynamic-offset invariant holds.
+      const quint32 stride = qMax(quint32(rhi()->ubufAlignment()), quint32(64));
       for (const PrepareSceneData::ModelBatch &batch : m_prepareScene.modelBatches()) {
         if (batch.translucent || batch.indexCount < 3
             || qsizetype(batch.firstVertex) + batch.vertexCount > m_modelVertexCount)
@@ -1628,7 +1632,11 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       } else {
         cb->setVertexInput(0, 1, &ghostBinding);
       }
-      const quint32 stride = rhi()->ubufAlignment();
+      // Some RHI backends report ubufAlignment() == 1 (macOS GL); sizing the
+      // per-slot UBOs from it would allocate below the 64-byte matrix
+      // payload and overflow every upload. Clamp to 64 -- a multiple of
+      // every alignment <= 64, so the dynamic-offset invariant holds.
+      const quint32 stride = qMax(quint32(rhi()->ubufAlignment()), quint32(64));
       const bool rangesValid = m_batchOpaqueFirstVertex.size()
           == m_prepareScene.modelBatches().size();
       int ghostSlot = 0;
@@ -2280,7 +2288,11 @@ void RhiViewportRenderer::renderThumbnailPass(QRhiCommandBuffer *cb)
       } else {
         cb->setVertexInput(0, 1, &pickBinding);
       }
-      const quint32 stride = rhi()->ubufAlignment();
+      // Some RHI backends report ubufAlignment() == 1 (macOS GL); sizing the
+      // per-slot UBOs from it would allocate below the 64-byte matrix
+      // payload and overflow every upload. Clamp to 64 -- a multiple of
+      // every alignment <= 64, so the dynamic-offset invariant holds.
+      const quint32 stride = qMax(quint32(rhi()->ubufAlignment()), quint32(64));
       const bool pickRangesValid = m_batchOpaqueFirstVertex.size()
           == m_prepareScene.modelBatches().size();
       int pickSlot = 0;
@@ -2317,7 +2329,11 @@ void RhiViewportRenderer::renderThumbnailPass(QRhiCommandBuffer *cb)
       const QRhiCommandBuffer::VertexInput modelBinding(m_modelVertexBuffer.get(), 0);
       cb->setVertexInput(0, 1, &modelBinding, m_modelIndexBuffer.get(), 0,
                          QRhiCommandBuffer::IndexUInt32);
-      const quint32 stride = rhi()->ubufAlignment();
+      // Some RHI backends report ubufAlignment() == 1 (macOS GL); sizing the
+      // per-slot UBOs from it would allocate below the 64-byte matrix
+      // payload and overflow every upload. Clamp to 64 -- a multiple of
+      // every alignment <= 64, so the dynamic-offset invariant holds.
+      const quint32 stride = qMax(quint32(rhi()->ubufAlignment()), quint32(64));
       for (const PrepareSceneData::ModelBatch &batch : m_prepareScene.modelBatches()) {
         if (batch.translucent || batch.indexCount < 3
             || qsizetype(batch.firstVertex) + batch.vertexCount > m_modelVertexCount)
@@ -3670,7 +3686,11 @@ bool RhiViewportRenderer::ensureBatchMatrixSrb()
   if (m_pipelineFailed || rhi() == nullptr || m_cameraUniformBuffer == nullptr)
     return false;
 
-  const quint32 stride = rhi()->ubufAlignment();
+  // Some RHI backends report ubufAlignment() == 1 (macOS GL); sizing the
+      // per-slot UBOs from it would allocate below the 64-byte matrix
+      // payload and overflow every upload. Clamp to 64 -- a multiple of
+      // every alignment <= 64, so the dynamic-offset invariant holds.
+      const quint32 stride = qMax(quint32(rhi()->ubufAlignment()), quint32(64));
   const quint32 bytes = quint32(qMax(slotCount, 1)) * stride;
   const bool uboResized = !m_batchMatrixUbo || m_batchMatrixUboBytes != bytes;
   if (!ensureBuffer(m_batchMatrixUbo, bytes, m_batchMatrixUboBytes,
@@ -3723,7 +3743,11 @@ bool RhiViewportRenderer::uploadBatchMatrixUbo(QRhiResourceUpdateBatch *updates)
   const int batchCount = int(m_prepareScene.modelBatches().size());
   const int channelCount = int(channel.size());
   const int slotCount = qMax(qMax(channelCount, batchCount), 1);
-  const quint32 stride = rhi()->ubufAlignment();
+  // Some RHI backends report ubufAlignment() == 1 (macOS GL); sizing the
+      // per-slot UBOs from it would allocate below the 64-byte matrix
+      // payload and overflow every upload. Clamp to 64 -- a multiple of
+      // every alignment <= 64, so the dynamic-offset invariant holds.
+      const quint32 stride = qMax(quint32(rhi()->ubufAlignment()), quint32(64));
   const quint32 bytes = quint32(slotCount) * stride;
   const bool volumeLocal = m_prepareScene.meshVolumeLocal();
   QByteArray blob;
@@ -3746,7 +3770,11 @@ bool RhiViewportRenderer::uploadBatchTintUbos(QRhiResourceUpdateBatch *updates)
     return false;
   const int batchCount = int(m_prepareScene.modelBatches().size());
   const int slotCount = qMax(batchCount, 1);
-  const quint32 stride = rhi()->ubufAlignment();
+  // Some RHI backends report ubufAlignment() == 1 (macOS GL); sizing the
+      // per-slot UBOs from it would allocate below the 64-byte matrix
+      // payload and overflow every upload. Clamp to 64 -- a multiple of
+      // every alignment <= 64, so the dynamic-offset invariant holds.
+      const quint32 stride = qMax(quint32(rhi()->ubufAlignment()), quint32(64));
   const quint32 bytes = quint32(slotCount) * stride;
 
   auto uploadOne = [&](std::unique_ptr<QRhiBuffer> &ubo, quint32 &uboBytes,
@@ -3794,7 +3822,11 @@ bool RhiViewportRenderer::ensureBatchTintSrbs()
       && (!sceneCameraReady || m_batchGhostTintSrb))
     return true;
 
-  const quint32 stride = rhi()->ubufAlignment();
+  // Some RHI backends report ubufAlignment() == 1 (macOS GL); sizing the
+      // per-slot UBOs from it would allocate below the 64-byte matrix
+      // payload and overflow every upload. Clamp to 64 -- a multiple of
+      // every alignment <= 64, so the dynamic-offset invariant holds.
+      const quint32 stride = qMax(quint32(rhi()->ubufAlignment()), quint32(64));
   auto buildSrb = [&](std::unique_ptr<QRhiShaderResourceBindings> &srb,
                       QRhiBuffer *cameraUbo, QRhiBuffer *tintUbo,
                       bool withTint) -> bool {
