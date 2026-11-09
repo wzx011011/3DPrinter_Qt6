@@ -1257,8 +1257,25 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
   if (cb == nullptr || rhi() == nullptr || renderTarget() == nullptr) {
     return;
   }
+  // OWZX-PERF (2026-11-10): skip canvases that have no live viewport or are
+  // not visible. The three page canvases (Prepare/Preview/Assemble) all bind
+  // the same mesh stream, and QSG kept calling render() on the two hidden
+  // ones (~40 fps each on macOS) — tripling the per-frame vertex/upload work.
+  // Invisible items also never ran synchronize(), so a null m_viewportItem
+  // identifies them just as reliably as the visibility flag. Everything
+  // re-runs through the normal dirty-flag path when the page becomes visible
+  // again (GPU buffers persist; only genuinely changed content re-uploads).
+  const QPointer<RhiViewport> visibleGate = m_viewportItem;
+  if (visibleGate.isNull() || !visibleGate->isVisible()) {
+    return;
+  }
   m_renderStatsTimer.start();
   rhiTrace("render-enter");
+  if (qEnvironmentVariableIsSet("OWZX_UPLOAD_TRACE")) {{
+    const QPointer<RhiViewport> vp = m_viewportItem;
+    qDebug() << "[VIS] this" << (void*)this << "canvas" << int(m_canvasType)
+             << "itemVisible" << (vp ? vp->isVisible() : -1);
+  }}
 
   // Phase 95 (THUMBCAP-01/03): poll the async thumbnail readback at the START
   // of render(), before the on-screen pass. readBackTexture completes on a

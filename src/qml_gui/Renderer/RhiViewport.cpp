@@ -86,6 +86,17 @@ RhiViewport::RhiViewport(QQuickItem *parent)
     orbitTimer->start(16);
   }
   if (qEnvironmentVariableIsSet("OWZX_FRAME_STATS")) {
+    // OWZX-BENCH: one-shot framebuffer proof — capture the rendered frame
+    // through the real readback path and dump it for pixel analysis when
+    // OWZX_THUMB_DUMP is set.
+    if (qEnvironmentVariableIsSet("OWZX_THUMB_DUMP")) {
+      auto *capTimer = new QTimer(this);
+      capTimer->setSingleShot(true);
+      connect(capTimer, &QTimer::timeout, this, [this]() {
+        requestThumbnailCapture(0, 256, 0);
+      });
+      capTimer->start(6000);
+    }
     auto *statsTimer = new QTimer(this);
     statsTimer->setInterval(1000);
     connect(statsTimer, &QTimer::timeout, this, [this]() {
@@ -1245,6 +1256,14 @@ void RhiViewport::requestThumbnailCapture(int plateIndex, int size, int variant)
 
 void RhiViewport::deliverThumbnail(const QImage &image, int plateIndex, int variant)
 {
+  if (qEnvironmentVariableIsSet("OWZX_THUMB_DUMP")) {
+    const QString dumpPath = QStringLiteral("/tmp/owzx_thumb.ppm");
+    if (image.save(dumpPath))
+      qInfo("[THUMB-DUMP] saved %dx%d to %s", image.width(), image.height(),
+            qPrintable(dumpPath));
+    else
+      qWarning("[THUMB-DUMP] save FAILED");
+  }
   // Phase 95 (THUMBCAP-03): GUI-thread delivery slot targeted by the
   // renderer's queued QMetaObject::invokeMethod. Encodes the captured QImage
   // to the base64 PNG m_lastThumbnailData format (preserving the exact format
