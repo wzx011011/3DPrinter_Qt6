@@ -169,6 +169,10 @@ constexpr const char *kOwzxPrintWidthDefaults[][2] = {
     {"initial_layer_line_width", "0.5"},
     {"top_surface_line_width", "0.42"},
     {"sparse_infill_line_width", "0.45"},
+    // OWzx product decision (user, 2026-11-10): 2 walls is the shipping
+    // standard (upstream BBL default) — vendor quality profiles carry 3,
+    // which densified extrusion paths 40%+.
+    {"wall_loops", "2"},
 };
 constexpr bool kOwzxArcFittingDefault = true;
 } // namespace
@@ -182,11 +186,12 @@ void PresetService::applyOwzxPrintDefaults()
         metaIt->category != PrintCat)
       continue;
     auto &vals = it.value();
-    // Widths: UNCONDITIONAL override. The vendor trees ship quality profiles
-    // with explicit 0.2 mm walls on 0.4 nozzles — half the ecosystem norm —
-    // which is exactly the slice-density gap this layer exists to close;
-    // insert-if-absent respected them and changed nothing. Users can still
-    // adjust widths per-preset in the UI after load.
+    // Widths + wall count: UNCONDITIONAL override. The vendor trees ship
+    // quality profiles with explicit 0.2 mm walls on 0.4 nozzles and
+    // 3-wall walls — half the ecosystem width norm and 40%+ denser
+    // extrusion paths — which is exactly the slice-density gap this layer
+    // exists to close; insert-if-absent respected them and changed
+    // nothing. Users can still adjust per-preset in the UI after load.
     for (const auto *defPair : kOwzxPrintWidthDefaults)
     {
       vals.insert(QLatin1String(defPair[0]), QLatin1String(defPair[1]));
@@ -604,7 +609,7 @@ void PresetService::initBuiltinDefaults()
     QHash<QString, QVariant> vals;
     vals[QStringLiteral("layer_height")] = 0.20;
     vals[QStringLiteral("initial_layer_print_height")] = 0.20;
-    vals[QStringLiteral("wall_loops")] = 3;
+    vals[QStringLiteral("wall_loops")] = 2;
     vals[QStringLiteral("top_shell_layers")] = 4;
     vals[QStringLiteral("bottom_shell_layers")] = 4;
     // OWzx (2026-11-10, quality parity with upstream profiles): the bare
@@ -642,7 +647,7 @@ void PresetService::initBuiltinDefaults()
     QHash<QString, QVariant> vals;
     vals[QStringLiteral("layer_height")] = 0.16;
     vals[QStringLiteral("initial_layer_print_height")] = 0.16;
-    vals[QStringLiteral("wall_loops")] = 3;
+    vals[QStringLiteral("wall_loops")] = 2;
     vals[QStringLiteral("top_shell_layers")] = 5;
     vals[QStringLiteral("bottom_shell_layers")] = 5;
     // OWzx (2026-11-10, quality parity with upstream profiles): the bare
