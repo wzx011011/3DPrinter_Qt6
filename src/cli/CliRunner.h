@@ -82,4 +82,6 @@ private:
     /// values; SliceService's injectPresetConfig deserializes them through
     /// set_deserialize_strict).
     QHash<QString, QString> configOverrides_;
+    // OWzx: 3mf project_settings parameters consumed at load, merged at slice time.
+    QVariantMap projectParameterOverlay_;
 };

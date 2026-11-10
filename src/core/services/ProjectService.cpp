@@ -11641,8 +11641,30 @@ static QVariantMap readProjectPresetSelection(const QString &archivePath)
     const QJsonValue v = it.value();
     if (v.isString())
     {
-      if (!v.toString().isEmpty())
-        selection.insert(key, v.toString());
+      const QString s = v.toString();
+      if (s.isEmpty())
+        continue;
+      // OWzx: Orca's project_settings write bools as "enabled"/"disabled"
+      // (and occasionally true/false spellings), but ConfigOptionBool::
+      // deserialize only accepts "1"/"0" — anything else throws and the
+      // key silently drops (enable_arc_fitting = enabled sliced as 0).
+      // Exact-match normalize the whole value only; a gcode template is
+      // never exactly one of these literals.
+      static const QHash<QString, QString> boolLiterals = {
+          {QStringLiteral("enabled"), QStringLiteral("1")},
+          {QStringLiteral("disabled"), QStringLiteral("0")},
+          {QStringLiteral("true"), QStringLiteral("1")},
+          {QStringLiteral("false"), QStringLiteral("0")},
+          {QStringLiteral("yes"), QStringLiteral("1")},
+          {QStringLiteral("no"), QStringLiteral("0")},
+          {QStringLiteral("on"), QStringLiteral("1")},
+          {QStringLiteral("off"), QStringLiteral("0")},
+      };
+      const auto litIt = boolLiterals.constFind(s);
+      if (litIt != boolLiterals.constEnd())
+        selection.insert(key, litIt.value());
+      else
+        selection.insert(key, s);
     }
     else if (v.isDouble())
     {

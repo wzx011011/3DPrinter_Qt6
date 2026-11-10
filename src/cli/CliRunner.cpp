@@ -386,6 +386,12 @@ int CliRunner::run()
     if (loadResult != CLI_SUCCESS)
         return loadResult;
 
+    // OWzx (2026-11-10): consume the 3mf project_settings parameters right
+    // after load (GUI parity — applyProjectConfig consumes the same map via
+    // BackendContext). Merged into the slice config in runSlice below;
+    // explicit --load-settings / --key still win on top.
+    projectParameterOverlay_ = projectService_->takeProjectPresetSelection();
+
     // Phase 241 (CLI-01): pre-slice transforms run after loading, before
     // slicing/exporting (upstream order: load -> transforms -> slice/export).
     int transformResult = applyTransforms();
@@ -788,8 +794,23 @@ int CliRunner::runSlice(QHash<int, QString> *slicedGcodes)
             return CLI_CONFIG_FILE_ERROR;
         }
     }
-    const QHash<QString, QVariant> mergedConfig =
+    QHash<QString, QVariant> mergedConfig =
         buildMergedPresetConfig(presetService_, settingsOverlay, configOverrides_);
+    // OWzx: a loaded 3mf's own saved parameters override the preset tiers
+    // (upstream semantics — project settings are the loaded state), while
+    // explicit --load-settings/--key layers remain on top of them.
+    if (!loadSettingsPath_.isEmpty() || configOverrides_.isEmpty()) {
+        // No explicit CLI layers: project parameters apply unconditionally.
+        for (auto it = projectParameterOverlay_.constBegin();
+             it != projectParameterOverlay_.constEnd(); ++it)
+            mergedConfig[it.key()] = it.value();
+    } else {
+        // Explicit CLI layers present: they win; project fills the rest.
+        for (auto it = projectParameterOverlay_.constBegin();
+             it != projectParameterOverlay_.constEnd(); ++it)
+            if (!mergedConfig.contains(it.key()))
+                mergedConfig[it.key()] = it.value();
+    }
     if (!quiet_) {
         if (!loadSettingsPath_.isEmpty())
             out << "Settings overlay: " << loadSettingsPath_ << "\n";
