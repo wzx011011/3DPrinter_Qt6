@@ -6,6 +6,9 @@
 #include "core/rendering/GizmoMath.h" // S4: gizmoWorldScale single source
 
 #include <QDebug>
+#ifdef Q_OS_MACOS
+#include <malloc/malloc.h>
+#endif
 #include <QFile>
 #include <QHash>
 #include <QPainter>
@@ -4814,6 +4817,14 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
   m_uploadedPlateContext = m_parsedPlateContext;
   m_uploadedRecomposeGeneration = recomposeGeneration;
   m_modelVertexBufferUploaded = true;
+#ifdef Q_OS_MACOS
+  // OWzx-PERF (2026-11-10): the staging build (15M corners, ~400MB+) died
+  // at this function's exit, but macOS keeps those pages in the allocator's
+  // free lists — the load-time churn inflated the footprint (vmmap showed
+  // ~430MB in Small-empty regions after one load). Hand the freed pages
+  // back; runs only on genuine content commits, never per frame.
+  malloc_zone_pressure_relief(malloc_default_zone(), 0);
+#endif
   return true;
 }
 

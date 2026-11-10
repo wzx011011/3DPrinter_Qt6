@@ -1,4 +1,8 @@
 #include "RhiViewport.h"
+
+#ifdef Q_OS_MACOS
+#include <malloc/malloc.h>
+#endif
 #include "RhiViewportRenderer.h"
 
 const struct OwzxFrameStats &RhiViewport::frameStats() const
@@ -3278,6 +3282,12 @@ void RhiViewport::updatePickingScene()
   m_pickModelGeneration = m_modelGeneration;
   m_pickSceneGeneration = m_sceneGeneration;
   m_pickInstanceTransformGeneration = m_instanceTransformGeneration;
+#ifdef Q_OS_MACOS
+  // OWzx-PERF: the pick-scene parse/build churn (second 15M-corner expand +
+  // BVH) freed hundreds of MB seconds ago; hand those pages back to the OS
+  // instead of letting the allocator hold them (vmmap Small-empty regions).
+  malloc_zone_pressure_relief(malloc_default_zone(), 0);
+#endif
 }
 
 int RhiViewport::pickSourceObjectAt(const QPointF &position)
