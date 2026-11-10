@@ -395,12 +395,22 @@ endif()
     find_path(FFMPEG_INCLUDE_DIR NAMES libavformat/avformat.h
               PATHS "${DEPS_PREFIX}/include" "${VCPKG_INSTALLED_DIR}/include"
               NO_DEFAULT_PATH)
+    if(APPLE AND NOT FFMPEG_INCLUDE_DIR)
+      # macOS (Homebrew): ffmpeg lives in the default prefix, outside the
+      # deps/VCPKG roots above — retry the standard search paths before
+      # declaring it absent (CameraStream/RTSP was otherwise a guaranteed
+      # degradation on every Homebrew build).
+      find_path(FFMPEG_INCLUDE_DIR NAMES libavformat/avformat.h)
+    endif()
     set(OWZX_FFMPEG_LIBS "")
     set(OWZX_FFMPEG_AVAILABLE TRUE)
     foreach(ffmpeg_lib IN LISTS OWZX_FFMPEG_COMPONENTS)
         find_library(FFMPEG_${ffmpeg_lib}_LIB NAMES ${ffmpeg_lib}
                      PATHS "${DEPS_PREFIX}/lib" "${VCPKG_INSTALLED_DIR}/lib"
                      NO_DEFAULT_PATH)
+        if(APPLE AND NOT FFMPEG_${ffmpeg_lib}_LIB)
+          find_library(FFMPEG_${ffmpeg_lib}_LIB NAMES ${ffmpeg_lib})
+        endif()
         if(FFMPEG_${ffmpeg_lib}_LIB)
             list(APPEND OWZX_FFMPEG_LIBS ${FFMPEG_${ffmpeg_lib}_LIB})
         else()

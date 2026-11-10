@@ -345,6 +345,12 @@ int main(int argc, char *argv[])
   // event dispatcher on this app (2026-09-12 freeze investigation).
   if (!qEnvironmentVariableIsSet("OWZX_DISABLE_WEBENGINE")) {
     QLibrary webEngineQuick(QStringLiteral("Qt6WebEngineQuick"));
+#ifdef Q_OS_MACOS
+    // Homebrew's qtwebengine ships unversioned framework names
+    // (QtWebEngineQuick.framework), so the "6"-prefixed dylib name misses.
+    if (!webEngineQuick.load())
+      webEngineQuick.setFileName(QStringLiteral("QtWebEngineQuick"));
+#endif
     if (webEngineQuick.load()) {
       using WebEngineInit = void (*)();
       // MSVC-decorated name of QtWebEngineQuick::initialize() — an undocumented
