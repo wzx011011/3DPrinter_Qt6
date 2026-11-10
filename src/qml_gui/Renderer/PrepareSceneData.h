@@ -542,6 +542,12 @@ public:
   quint32 peekDirtyFlags() const;
   quint32 takeDirtyFlags();
   void clearDirtyFlags();
+  // OWzx (2026-11-10, memory lever 2): drop the expanded model payload when
+  // the owning canvas's generations move past this scene's build generation.
+  // updatePickingScene() re-parses from the same mesh blob on the next
+  // access, so this only discards data the rebuild would replace anyway
+  // (~420MB expanded vertices + ~60MB indices + the BVH on a 5M scene).
+  void releaseModelPayload();
   void clearDirtyFlags(quint32 mask);
 
   float bedWidth() const;

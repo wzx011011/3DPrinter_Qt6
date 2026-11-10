@@ -187,6 +187,12 @@ void RhiViewport::setMeshData(const QByteArray &data)
   m_meshDataHash = hash;
   ++m_sceneGeneration;
   ++m_modelGeneration;
+  // OWzx (2026-11-10, memory lever 2): the pick scene's expanded payload
+  // just went stale — release it now instead of keeping ~480MB (5M sphere:
+  // 420MB vertices + 60MB indices + BVH) until the next pick.
+  // updatePickingScene() re-parses lazily on the first pick attempt
+  // (generation gate), so this only discards data the rebuild replaces.
+  m_pickScene.releaseModelPayload();
   fprintf(stderr, "[FIX5M] setMeshData accepted: bytes=%lld rev=%d\n",
           (long long)data.size(), m_deliveredMeshDataRevision);
   fflush(stderr);

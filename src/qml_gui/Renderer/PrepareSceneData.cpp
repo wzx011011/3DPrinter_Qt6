@@ -1159,6 +1159,19 @@ void PrepareSceneData::clearDirtyFlags()
   m_dirtyFlags = DirtyNone;
 }
 
+// OWzx (2026-11-10, memory lever 2): see the declaration in the header.
+// Follows the existing m_pickingRaycaster.reset() pattern in the parse
+// paths; pickingRaycaster() lazily rebuilds the BVH from the current
+// vertices/indices/batches on the next access.
+void PrepareSceneData::releaseModelPayload()
+{
+  m_modelVertices.clear();
+  m_modelIndices.clear();
+  m_modelBatches.clear();
+  m_batchVertexRevisions.clear();
+  m_pickingRaycaster.reset();
+}
+
 // S2: masked settle — clear exactly the bits whose channel uploads succeeded
 // this frame; failed channels (and untouched payload bits) stay pending and
 // re-route on the next frame.
