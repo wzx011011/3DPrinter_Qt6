@@ -2287,6 +2287,29 @@ QVariantMap ConfigViewModel::projectPresetConfigOverlay() const
   overlay.insert(QStringLiteral("print_settings_id"), currentPrintPreset_);
   overlay.insert(QStringLiteral("filament_settings_id"), slotList);
   overlay.insert(QStringLiteral("filament_colour"), slotFilamentColours());
+  // OWzx (2026-11-10, project round-trip): carry the FULL effective
+  // parameter set (printer+filament+print tiers, project-imported
+  // parameters, ecosystem layer) so a saved project reloads with its
+  // slicing state — before this, project_settings.config carried only the
+  // selection ids and a reload came back at preset defaults. Orca's own
+  // project_settings.config carries the merged set (~767 keys) and its
+  // loader accepts plain string values, so scalars are written as strings;
+  // bools must be "1"/"0" (ConfigOptionBool::deserialize rejects
+  // "true"/"false"); lists keep QStringList (written as ConfigOptionStrings
+  // vectors, matching Orca's per-extruder arrays). Selection ids above are
+  // not present in globalOptionValues_ and stay authoritative.
+  for (auto it = globalOptionValues_.constBegin();
+       it != globalOptionValues_.constEnd(); ++it)
+  {
+    const QVariant v = it.value();
+    if (v.userType() == QMetaType::Bool)
+      overlay.insert(it.key(), v.toBool() ? QStringLiteral("1")
+                                          : QStringLiteral("0"));
+    else if (v.userType() == QMetaType::QStringList)
+      overlay.insert(it.key(), v.toStringList());
+    else if (!v.toString().isEmpty() && it.key() != QStringLiteral("printable_area"))
+      overlay.insert(it.key(), v.toString());
+  }
   return overlay;
 }
 

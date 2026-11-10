@@ -84,4 +84,7 @@ private:
     QHash<QString, QString> configOverrides_;
     // OWzx: 3mf project_settings parameters consumed at load, merged at slice time.
     QVariantMap projectParameterOverlay_;
+    // OWzx: effective slice config from the last runSlice (presets + project
+    // parameters + overlays) — written into --export-3mf project_settings.
+    QVariantMap m_lastMergedSliceConfig;
 };

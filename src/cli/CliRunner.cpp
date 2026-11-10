@@ -685,6 +685,29 @@ int CliRunner::runExports(const QHash<int, QString> &slicedGcodes)
     // --export-3mf: full project 3MF (upstream export_3mf, PrintConfig.cpp:
     // 7001-7005).
     if (!export3mfPath_.isEmpty()) {
+        // OWzx (2026-11-10, project round-trip): write the effective slice
+        // config into Metadata/project_settings.config — before this the
+        // exported 3mf carried only printable_area and a reload came back
+        // at preset defaults. Bools as "1"/"0" (ConfigOptionBool
+        // deserialize), lists as QStringList (ConfigOptionStrings), scalars
+        // as strings (Orca's own project_settings JSON format). The plate
+        // bed fallback in the writer keeps printable_area ownership.
+        QVariantMap overlay;
+        for (auto it = m_lastMergedSliceConfig.constBegin();
+             it != m_lastMergedSliceConfig.constEnd(); ++it)
+        {
+            const QVariant v = it.value();
+            if (it.key() == QLatin1String("printable_area"))
+                continue;
+            if (v.userType() == QMetaType::Bool)
+                overlay.insert(it.key(), v.toBool() ? QStringLiteral("1")
+                                                    : QStringLiteral("0"));
+            else if (v.userType() == QMetaType::QStringList)
+                overlay.insert(it.key(), v.toStringList());
+            else if (!v.toString().isEmpty())
+                overlay.insert(it.key(), v.toString());
+        }
+        projectService_->setProjectConfigOverlay(overlay);
         QString target = export3mfPath_;
         if (QFileInfo(target).isRelative())
             target = outDir + QStringLiteral("/") + target;
@@ -811,6 +834,11 @@ int CliRunner::runSlice(QHash<int, QString> *slicedGcodes)
             if (!mergedConfig.contains(it.key()))
                 mergedConfig[it.key()] = it.value();
     }
+    // OWzx: keep the EFFECTIVE set (after project-parameter merge) for
+    // --export-3mf project_settings — snapshotting before the merge would
+    // write vendor-tier leftovers (arc=0, layer_height=0.08) into the file.
+    for (auto it = mergedConfig.constBegin(); it != mergedConfig.constEnd(); ++it)
+        m_lastMergedSliceConfig.insert(it.key(), it.value());
     if (!quiet_) {
         if (!loadSettingsPath_.isEmpty())
             out << "Settings overlay: " << loadSettingsPath_ << "\n";
