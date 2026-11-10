@@ -11620,6 +11620,49 @@ static QVariantMap readProjectPresetSelection(const QString &archivePath)
     if (!list.isEmpty())
       selection.insert(QLatin1String(key), list);
   }
+  // OWzx (2026-11-10, project-parameter ingestion): Orca 2.5 exports
+  // project_settings.config as a JSON object carrying the FULL effective
+  // parameter set (~700 keys: arc fitting, line widths, layer height, ...).
+  // Only the preset-id keys were read before, so loading an Orca 3mf sliced
+  // with engine factory defaults instead of the project's saved parameters —
+  // the 5M-sphere A1 project sliced at 121 MB / 4.45M moves / zero arcs
+  // instead of Orca's 9 MB / 298k / 21k. Import every remaining key so
+  // applyProjectConfig can lay the project parameters over the presets.
+  // Raw strings pass through set_deserialize_strict untouched: the engine's
+  // bool reader accepts the "enabled"/"disabled" literals Orca writes, and
+  // percents ("50%") deserialize natively. Single-element arrays (Orca's
+  // per-extrusion representation of global keys) flatten to scalars;
+  // multi-element arrays keep QStringList (injectPresetConfig handles it).
+  for (auto it = root.constBegin(); it != root.constEnd(); ++it)
+  {
+    const QString key = it.key();
+    if (selection.contains(key))
+      continue;
+    const QJsonValue v = it.value();
+    if (v.isString())
+    {
+      if (!v.toString().isEmpty())
+        selection.insert(key, v.toString());
+    }
+    else if (v.isDouble())
+    {
+      selection.insert(key, v.toDouble());
+    }
+    else if (v.isBool())
+    {
+      selection.insert(key, v.toBool());
+    }
+    else if (v.isArray())
+    {
+      QStringList list;
+      for (const QJsonValue &item : v.toArray())
+        list.append(item.toString());
+      if (list.size() == 1)
+        selection.insert(key, list.front());
+      else if (!list.isEmpty())
+        selection.insert(key, list);
+    }
+  }
   return selection;
 }
 

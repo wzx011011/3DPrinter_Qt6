@@ -330,6 +330,9 @@ private:
 #ifdef HAS_LIBSLIC3R
   /// 从上游 print_config_def schema 提取所有默认值到 __upstream_defaults__
   void loadUpstreamSchemaDefaults();
+  // OWzx slice-density parity: lay ecosystem line widths + arc fitting over
+  // every print preset that lacks explicit values (insert-if-absent).
+  void applyOwzxPrintDefaults();
   /// 加载单个预设 JSON 文件并解析继承链
   QHash<QString, QVariant> loadPresetJson(const QString &filePath, int category);
   /// 递归解析继承链，返回合并后的完整配置

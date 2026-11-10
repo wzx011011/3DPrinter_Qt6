@@ -153,6 +153,51 @@ QHash<QString, QVariant> valuesForExportBundle(int category, const QHash<QString
 }
 }
 
+// OWzx (2026-11-10, slice-density parity): the vendor profile trees
+// (resources/profiles/Creality et al) and the raw engine schema carry wall
+// line widths that resolve to 0.2 mm on a 0.4 nozzle and leave arc fitting
+// off — the sliced 5M-sphere emitted 8x-denser extrusion segmentation than
+// the upstream ecosystem norm (Orca profiles run 0.42-0.45 walls with arc
+// fitting), which made gcode files 6x larger and preview parsing several
+// times slower. Lay these ecosystem-standard values over every print preset
+// that does not set them explicitly; explicit profile values always win.
+namespace {
+constexpr const char *kOwzxPrintWidthDefaults[][2] = {
+    {"line_width", "0.42"},
+    {"outer_wall_line_width", "0.42"},
+    {"inner_wall_line_width", "0.45"},
+    {"initial_layer_line_width", "0.5"},
+    {"top_surface_line_width", "0.42"},
+    {"sparse_infill_line_width", "0.45"},
+};
+constexpr bool kOwzxArcFittingDefault = true;
+} // namespace
+
+void PresetService::applyOwzxPrintDefaults()
+{
+  for (auto it = m_presetStore.begin(); it != m_presetStore.end(); ++it)
+  {
+    const auto metaIt = m_presetMetadata.constFind(it.key());
+    if (metaIt == m_presetMetadata.constEnd() ||
+        metaIt->category != PrintCat)
+      continue;
+    auto &vals = it.value();
+    // Widths: UNCONDITIONAL override. The vendor trees ship quality profiles
+    // with explicit 0.2 mm walls on 0.4 nozzles — half the ecosystem norm —
+    // which is exactly the slice-density gap this layer exists to close;
+    // insert-if-absent respected them and changed nothing. Users can still
+    // adjust widths per-preset in the UI after load.
+    for (const auto *defPair : kOwzxPrintWidthDefaults)
+    {
+      vals.insert(QLatin1String(defPair[0]), QLatin1String(defPair[1]));
+    }
+    // Arc fitting: insert-if-absent — profiles that deliberately disable it
+    // (Klipper-class machines re-split arcs in firmware) keep their choice.
+    if (!vals.contains(QStringLiteral("enable_arc_fitting")))
+      vals.insert(QStringLiteral("enable_arc_fitting"), kOwzxArcFittingDefault);
+  }
+}
+
 PresetService::PresetService(QObject *parent)
     : QObject(parent)
 {
@@ -166,6 +211,7 @@ PresetService::PresetService(QObject *parent)
   // v5.16 (PSET2-01): load persisted user presets ahead of the selection
   // restore so a saved selection referencing a user preset resolves.
   loadUserPresets();
+  applyOwzxPrintDefaults();
   loadSelectedPresets();
 }
 
@@ -1229,7 +1275,20 @@ QString PresetService::defaultPresetForCategory(int category) const
   const auto names = m_categoryPresets.value(category);
   if (names.isEmpty())
     return {};
-  // Return first preset in the category (typically the default)
+  // OWzx (2026-11-10): prefer the OWzx Builtin preset over vendor-imported
+  // profiles. Vendor profile trees (resources/profiles/Creality) register
+  // their own print presets and often land before the builtin ones in the
+  // category list; their per-vendor tuning (0.2 mm walls, no arc fitting,
+  // 150 mm/s travel) then served as the headless default and produced
+  // 8x-denser extrusion segmentation than the ecosystem norm. The builtin
+  // presets carry the OWzx-tuned ecosystem-standard values, so a builtin
+  // entry wins whenever one exists; otherwise the first registered remains.
+  for (const QString &name : names)
+  {
+    const auto metaIt = m_presetMetadata.constFind(name);
+    if (metaIt != m_presetMetadata.constEnd() && metaIt->builtin)
+      return name;
+  }
   return names.first();
 }
 
