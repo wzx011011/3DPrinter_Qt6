@@ -561,6 +561,21 @@ void PresetService::initBuiltinDefaults()
     vals[QStringLiteral("wall_loops")] = 3;
     vals[QStringLiteral("top_shell_layers")] = 4;
     vals[QStringLiteral("bottom_shell_layers")] = 4;
+    // OWzx (2026-11-10, quality parity with upstream profiles): the bare
+    // defaults resolved wall line widths to 0.2 mm on a 0.4 nozzle (half the
+    // ecosystem's 0.42-0.45), doubling+ the extrusion-segment count -- the
+    // sliced sphere emitted 2.27M G1 moves vs upstream Orca's 277k on the
+    // same model, and the missing arc fitting left the file without a single
+    // G2/G3 (60 MB vs 9 MB). Explicit ecosystem-standard widths + arc fitting
+    // collapse curved perimeters back into arcs: preview parse and file size
+    // track the move count 1:1.
+    vals[QStringLiteral("line_width")] = 0.42;
+    vals[QStringLiteral("outer_wall_line_width")] = 0.42;
+    vals[QStringLiteral("inner_wall_line_width")] = 0.45;
+    vals[QStringLiteral("initial_layer_line_width")] = 0.5;
+    vals[QStringLiteral("top_surface_line_width")] = 0.42;
+    vals[QStringLiteral("sparse_infill_line_width")] = 0.45;
+    vals[QStringLiteral("enable_arc_fitting")] = true;
     vals[QStringLiteral("sparse_infill_density")] = 15;
     vals[QStringLiteral("sparse_infill_pattern")] = 0;
     vals[QStringLiteral("enable_support")] = false;
@@ -584,6 +599,21 @@ void PresetService::initBuiltinDefaults()
     vals[QStringLiteral("wall_loops")] = 3;
     vals[QStringLiteral("top_shell_layers")] = 5;
     vals[QStringLiteral("bottom_shell_layers")] = 5;
+    // OWzx (2026-11-10, quality parity with upstream profiles): the bare
+    // defaults resolved wall line widths to 0.2 mm on a 0.4 nozzle (half the
+    // ecosystem's 0.42-0.45), doubling+ the extrusion-segment count -- the
+    // sliced sphere emitted 2.27M G1 moves vs upstream Orca's 277k on the
+    // same model, and the missing arc fitting left the file without a single
+    // G2/G3 (60 MB vs 9 MB). Explicit ecosystem-standard widths + arc fitting
+    // collapse curved perimeters back into arcs: preview parse and file size
+    // track the move count 1:1.
+    vals[QStringLiteral("line_width")] = 0.42;
+    vals[QStringLiteral("outer_wall_line_width")] = 0.42;
+    vals[QStringLiteral("inner_wall_line_width")] = 0.45;
+    vals[QStringLiteral("initial_layer_line_width")] = 0.5;
+    vals[QStringLiteral("top_surface_line_width")] = 0.42;
+    vals[QStringLiteral("sparse_infill_line_width")] = 0.45;
+    vals[QStringLiteral("enable_arc_fitting")] = true;
     vals[QStringLiteral("sparse_infill_density")] = 15;
     vals[QStringLiteral("sparse_infill_pattern")] = 0;
     vals[QStringLiteral("enable_support")] = false;
@@ -607,6 +637,21 @@ void PresetService::initBuiltinDefaults()
     vals[QStringLiteral("wall_loops")] = 2;
     vals[QStringLiteral("top_shell_layers")] = 3;
     vals[QStringLiteral("bottom_shell_layers")] = 3;
+    // OWzx (2026-11-10, quality parity with upstream profiles): the bare
+    // defaults resolved wall line widths to 0.2 mm on a 0.4 nozzle (half the
+    // ecosystem's 0.42-0.45), doubling+ the extrusion-segment count -- the
+    // sliced sphere emitted 2.27M G1 moves vs upstream Orca's 277k on the
+    // same model, and the missing arc fitting left the file without a single
+    // G2/G3 (60 MB vs 9 MB). Explicit ecosystem-standard widths + arc fitting
+    // collapse curved perimeters back into arcs: preview parse and file size
+    // track the move count 1:1.
+    vals[QStringLiteral("line_width")] = 0.42;
+    vals[QStringLiteral("outer_wall_line_width")] = 0.42;
+    vals[QStringLiteral("inner_wall_line_width")] = 0.45;
+    vals[QStringLiteral("initial_layer_line_width")] = 0.5;
+    vals[QStringLiteral("top_surface_line_width")] = 0.42;
+    vals[QStringLiteral("sparse_infill_line_width")] = 0.45;
+    vals[QStringLiteral("enable_arc_fitting")] = true;
     vals[QStringLiteral("sparse_infill_density")] = 10;
     vals[QStringLiteral("sparse_infill_pattern")] = 0;
     vals[QStringLiteral("enable_support")] = false;
