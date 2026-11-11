@@ -1957,12 +1957,6 @@ namespace
   static QStringList auditProcessManifest()
   {
     const auto &lookup = processPageGroupLookup();
-    if (qEnvironmentVariableIsSet("OWZX_AUDIT_TRACE")) {
-      qInfo() << "[AUDIT] lookup.size" << lookup.size()
-              << "has_adaptive" << lookup.contains(QStringLiteral("adaptive_infill_gradient"))
-              << "has_arc" << lookup.contains(QStringLiteral("enable_arc_fitting"))
-              << "print_options.size" << int(Slic3r::Preset::print_options().size());
-    }
     const auto &nonUiKeys = processNonUiPresetKeys();
     QSet<QString> upstreamKeys;
     QStringList errors;

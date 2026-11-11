@@ -258,6 +258,11 @@ file(GLOB LIBSLIC3R_GCODE_SOURCES CONFIGURE_DEPENDS
     "${LIBSLIC3R_SRC_DIR}/GCode/*.hpp"
 )
 
+# OWzx (2026-11-11, E2E segfault hunt): debug info for GCode.cpp so lldb
+# symbolicates the persistent-reuse export_layer_filaments crash to a line.
+set_source_files_properties("${LIBSLIC3R_SRC_DIR}/GCode.cpp"
+    PROPERTIES COMPILE_OPTIONS "-g")
+
 # Geometry subdirectory (geometry utilities)
 file(GLOB LIBSLIC3R_GEOMETRY_SOURCES CONFIGURE_DEPENDS
     "${LIBSLIC3R_SRC_DIR}/Geometry/*.cpp"
