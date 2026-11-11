@@ -1,0 +1,34 @@
+From: OWzx <owzx@local>
+Subject: [PATCH 0020] fix(engine): bind GCode::m_print before the do_export early return
+
+fix(engine): bind GCode::m_print before the do_export early return
+
+Print::export_gcode unconditionally calls export_layer_filaments(result)
+after do_export, and export_layer_filaments dereferences m_print
+(assigned only in _do_export). On a persistent-print reuse reslice the
+psGCodeExport step is already done and the target file exists, so
+do_export early-returns WITHOUT running _do_export -- m_print stays null
+and export_layer_filaments segfaults at
+m_print->get_slice_used_mixed_filaments() (vector<unsigned int>
+copy-assign reading a null FullPrintConfig at +0x4cc0). Bind m_print
+before the early return; the early return itself stays (it keeps the
+valid first-pass gcode file).
+diff --git a/src/libslic3r/GCode.cpp b/src/libslic3r/GCode.cpp
+--- a/src/libslic3r/GCode.cpp
++++ b/src/libslic3r/GCode.cpp
+@@ -2852,6 +2852,15 @@ void GCode::do_export(Print* print, const char* path, GCodeProcessorRes
+ void GCode::do_export(Print* print, const char* path, GCodeProcessorResult* result, ThumbnailsGeneratorCallback thumbnail_cb)
+ {
++    // OWzx (2026-11-11): bind m_print BEFORE the done-step early return.
++    // Print::export_gcode unconditionally calls export_layer_filaments(result)
++    // after do_export, and that function dereferences m_print (assigned only
++    // in _do_export). On a persistent-print reuse reslice the psGCodeExport
++    // step is already done and the target file exists, so the early return
++    // below skipped _do_export, left m_print null, and
++    // m_print->get_slice_used_mixed_filaments() segfaulted on the E2E
++    // persistent-reuse reslice.
++    m_print = print;
+     PROFILE_CLEAR();
+ 
+     // BBS
+     m_curr_print = print;
