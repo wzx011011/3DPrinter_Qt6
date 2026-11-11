@@ -126,7 +126,15 @@ private slots:
     QCOMPARE(headers.value("__CXY_APP_CH_").toString(), QStringLiteral("creality"));
     QCOMPARE(headers.value("__CXY_PLATFORM_").toString(), QStringLiteral("11"));
     QCOMPARE(headers.value("__CXY_TIMEZONE_").toString(), QStringLiteral("28800"));
+    // OWzx: OS_VER reflects the host platform (macos/windows/linux) — the
+    // original assertion hardcoded the Linux value.
+#if defined(Q_OS_MACOS)
+    QCOMPARE(headers.value("__CXY_OS_VER_").toString(), QStringLiteral("macos"));
+#elif defined(Q_OS_WIN)
+    QCOMPARE(headers.value("__CXY_OS_VER_").toString(), QStringLiteral("windows"));
+#else
     QCOMPARE(headers.value("__CXY_OS_VER_").toString(), QStringLiteral("linux"));
+#endif
   }
 
   void modelLibraryHeadersShape()
