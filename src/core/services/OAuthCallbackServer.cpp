@@ -28,8 +28,21 @@ const char kNotFoundHead[] =
 } // namespace
 
 OAuthCallbackServer::OAuthCallbackServer(QObject *parent)
-    : QObject(parent), server_(new QTcpServer(this))
+    : QObject(parent)
 {
+    ensureServer();
+}
+
+// OWzx: fresh QTcpServer per listen session. Qt 6.12/macOS: close() inside
+// the newConnection/readyRead activation flips isListening() but LEAVES THE
+// LISTEN FD ACCEPTING (a loopback connect still reached ConnectedState one
+// second after close()) — destroying the QTcpServer object runs its engine
+// destructor, which actually closes the native socket.
+void OAuthCallbackServer::ensureServer()
+{
+    if (server_)
+        return;
+    server_ = new QTcpServer(this);
     connect(server_, &QTcpServer::newConnection, this,
             &OAuthCallbackServer::handleConnection);
 }
@@ -38,6 +51,7 @@ OAuthCallbackServer::~OAuthCallbackServer() = default;
 
 bool OAuthCallbackServer::start(int port)
 {
+    ensureServer();
     if (server_->isListening())
         return true;
     const bool ok = server_->listen(QHostAddress::LocalHost, quint16(port));
@@ -49,15 +63,25 @@ bool OAuthCallbackServer::start(int port)
 
 void OAuthCallbackServer::stop()
 {
-    if (!server_->isListening())
+    if (!server_)
         return;
-    server_->close();
+    // OWzx: destroy the whole QTcpServer WITHOUT aborting the accepted
+    // child sockets — their queued responses (the 302 bounce) must flush
+    // first; each socket closes itself via disconnectFromHost ->
+    // deleteLater. Destroying the QTcpServer is the point: Qt 6.12/macOS
+    // close() inside the newConnection/readyRead activation flips
+    // isListening() but leaves the listen fd accepting (verified: a
+    // loopback connect reached ConnectedState one second after close()).
+    // The engine destructor actually closes the native socket. The next
+    // start() builds a fresh object.
+    server_->deleteLater();
+    server_ = nullptr;
     emit listeningChanged();
 }
 
 bool OAuthCallbackServer::listening() const
 {
-    return server_->isListening();
+    return server_ && server_->isListening();
 }
 
 void OAuthCallbackServer::setSuccessRedirectUrl(const QString &url)
@@ -72,6 +96,13 @@ void OAuthCallbackServer::setFailureRedirectUrl(const QString &url)
 
 void OAuthCallbackServer::handleConnection()
 {
+    if (codeCaptured_) {
+        // Capture-once: the port may still be answering at the TCP layer
+        // after stop() on macOS — refuse everything from here on.
+        while (QTcpSocket *stale = server_->nextPendingConnection())
+            stale->abort();
+        return;
+    }
     while (QTcpSocket *socket = server_->nextPendingConnection()) {
         connect(socket, &QTcpSocket::disconnected, socket, &QTcpSocket::deleteLater);
         // The request is complete when the blank line terminates the headers;
@@ -112,6 +143,7 @@ void OAuthCallbackServer::handleConnection()
             socket->write("\r\n\r\n", 4);
             socket->disconnectFromHost();
             if (!code.isEmpty()) {
+                codeCaptured_ = true;
                 // C12: one code per login attempt. The callback protocol
                 // carries no OAuth `state` (the public oauth page only
                 // echoes back_url), so the listener stops at the first code

@@ -30,6 +30,12 @@ public:
   explicit OAuthCallbackServer(QObject *parent = nullptr);
   ~OAuthCallbackServer() override;
 
+private:
+  // OWzx: fresh QTcpServer per listen session (see the note on stop()).
+  void ensureServer();
+
+public:
+
   /// Bind the loopback listener. Fails (false + errorOccurred) when the
   /// port is taken by another instance.
   bool start(int port);
@@ -51,6 +57,12 @@ signals:
 private:
   void handleConnection();
 
+  /// OWzx: capture-once contract. macOS/Qt can keep completing loopback
+  /// handshakes on the port even after QTcpServer::close() (observed in
+  /// CrealityCloudServiceTests: listening()==false yet a second connect
+  /// reached ConnectedState). Once the code is captured, every further
+  /// connection is aborted at the application layer regardless.
+  bool codeCaptured_ = false;
   QTcpServer *server_ = nullptr;
   QString successRedirectUrl_ = QStringLiteral("https://www.crealitycloud.cn/oauth?result=success");
   QString failureRedirectUrl_ = QStringLiteral("https://www.crealitycloud.cn/oauth?result=fail");
