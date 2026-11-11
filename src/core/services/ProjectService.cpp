@@ -4096,6 +4096,23 @@ std::string defaultEmbossFontPath()
   if (QFileInfo::exists(QStringLiteral("C:/Windows/Fonts/msyh.ttc")))
     return "C:/Windows/Fonts/msyh.ttc";
   return "C:/Windows/Fonts/arial.ttf";
+#elif defined(__APPLE__)
+  // macOS (EMB-01 port): the default text is CJK ("浮雕文字"), so probe
+  // CJK-capable system fonts FIRST — Latin-only fonts (Arial) return empty
+  // contours through stb_truetype and the emboss renders nothing.
+  // PingFang.ttc is stock on every macOS since 10.11; STHeiti / Hiragino
+  // Sans GB / Songti are older or Supplemental fallbacks.
+  if (QFileInfo::exists(QStringLiteral("/System/Library/Fonts/PingFang.ttc")))
+    return "/System/Library/Fonts/PingFang.ttc";
+  if (QFileInfo::exists(QStringLiteral("/System/Library/Fonts/STHeiti Medium.ttc")))
+    return "/System/Library/Fonts/STHeiti Medium.ttc";
+  if (QFileInfo::exists(QStringLiteral("/System/Library/Fonts/Hiragino Sans GB.ttc")))
+    return "/System/Library/Fonts/Hiragino Sans GB.ttc";
+  if (QFileInfo::exists(QStringLiteral("/System/Library/Fonts/Supplemental/Songti.ttc")))
+    return "/System/Library/Fonts/Supplemental/Songti.ttc";
+  if (QFileInfo::exists(QStringLiteral("/System/Library/Fonts/Supplemental/Arial.ttf")))
+    return "/System/Library/Fonts/Supplemental/Arial.ttf";
+  return {};
 #else
   return "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
 #endif
