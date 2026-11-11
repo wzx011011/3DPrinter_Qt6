@@ -367,6 +367,7 @@ void applySmartFillToSelector(Slic3r::TriangleSelector &selector,
                                       /*clp=*/clippingPlane,
                                       /*seed_fill_angle=*/seedFillAngle,
                                       /*highlight_by_angle_deg=*/highlightByAngleDeg,
+                                      /*up_direction=*/Slic3r::Vec3f::UnitZ(),
                                       /*force_reselection=*/true);
 }
 

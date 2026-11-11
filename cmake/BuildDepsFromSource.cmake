@@ -134,6 +134,13 @@ add_library(clipper2_from_source STATIC ${CLIPPER2_SOURCES})
 target_include_directories(clipper2_from_source SYSTEM
     PUBLIC "${UPSTREAM_DEPS}/clipper2/Clipper2Lib/include"
 )
+# OWzx (Orca 2.5): the vendored Clipper2 grew oneAPI scalable_allocator
+# usage (#include <oneapi/tbb/scalable_allocator.h>) — pull the TBB
+# include dirs + tbbmalloc so the vendored build sees them on Homebrew
+# layouts where the deps roots don't carry TBB.
+if(NOT WIN32)
+    target_link_libraries(clipper2_from_source PRIVATE tbb_libs)
+endif()
 target_compile_definitions(clipper2_from_source PRIVATE CLIPPER2UtilsNamespace=clipper2utils)
 
 # ═══════════════════════════════════════════════════════════════════════════════

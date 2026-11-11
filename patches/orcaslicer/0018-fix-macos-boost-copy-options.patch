@@ -1,0 +1,21 @@
+From: OWzx <owzx@local>
+Subject: [PATCH 0018] fix(macos): boost copy_options overwrite_existing (v2.5.0 rebase)
+
+fix(macos): boost copy_options overwrite_existing (v2.5.0 rebase)
+---
+diff --git a/src/libslic3r/utils.cpp b/src/libslic3r/utils.cpp
+index 4ba6d9d9..ccd42cf8 100644
+--- a/src/libslic3r/utils.cpp
++++ b/src/libslic3r/utils.cpp
+@@ -1098,7 +1098,10 @@ CopyFileResult copy_file_inner(const std::string& from, const std::string& to, s
+ 	// That may happen when copying on some exotic file system, for example Linux on Chrome.
+ 	copy_file_linux(source, target, ec);
+ #else // __linux__
+-	boost::filesystem::copy_file(source, target, boost::filesystem::copy_option::overwrite_if_exists, ec);
++	// owzx-fix (BOOST-192): copy_option::overwrite_if_exists was removed in
++	// newer boost; copy_options::overwrite_existing (>= 1.74) is the
++	// replacement and exists in the Windows deps boost 1.84 as well.
++	boost::filesystem::copy_file(source, target, boost::filesystem::copy_options::overwrite_existing, ec);
+ #endif // __linux__
+ 	if (ec) {
+ 		error_message = ec.message();

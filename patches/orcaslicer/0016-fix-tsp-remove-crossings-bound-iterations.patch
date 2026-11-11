@@ -1,22 +1,26 @@
+From: OWzx <owzx@local>
+Subject: [PATCH 0016] perf(tsp): bound crossing-scan iterations (v2.5.0 rebase)
+
+perf(tsp): bound crossing-scan iterations (v2.5.0 rebase)
+---
 diff --git a/src/libslic3r/GCode/OrderingStrategies.cpp b/src/libslic3r/GCode/OrderingStrategies.cpp
-index 2ba9ae54..3cf15481 100644
+index 4ac7ce6c..70b17ae4 100644
 --- a/src/libslic3r/GCode/OrderingStrategies.cpp
 +++ b/src/libslic3r/GCode/OrderingStrategies.cpp
-@@ -135,8 +135,15 @@ bool tsp_remove_crossings(std::vector<size_t>& path, const Points& centers)
-     };
+@@ -195,7 +195,15 @@ bool tsp_remove_crossings(std::vector<size_t>& path, const Points& centers)
  
      // Process crossings one at a time: find first, reverse it, restart scan.
--    // Cap iterations to prevent infinite loops on collinear/overlapping segments.
--    int max_iters = static_cast<int>(pn * pn);
-+    // Cap iterations to prevent infinite loops on collinear/overlapping segments.
+     // Cap iterations to prevent infinite loops on collinear/overlapping segments.
+-    const int max_iters = static_cast<int>(pn * pn);
 +    // owzx-fix (TSP-CAP): each iteration is an O(pn^2) crossing scan, so the
 +    // upstream pn*pn cap is O(pn^4) work -- degenerate inputs spun for hours
-+    // (2583-point multicolor path). Keep upstream's cap while the total scan
-+    // work stays under ~5e7 pair checks; beyond that allow at least 128
-+    // reversals. Paths up to ~84 points are bit-identical to upstream.
++    // (2583-point multicolor path). Keep the cap while total scan work stays
++    // under ~5e7 pair checks; beyond that allow at least 128 reversals. Paths
++    // up to ~84 points are bit-identical to upstream.
 +    const long long pn2 = static_cast<long long>(pn) * static_cast<long long>(pn);
-+    const long long budget = std::max<long long>(128, 50000000LL / std::max<long long>(pn2, 1));
-+    int max_iters = static_cast<int>(std::min<long long>(pn2, budget));
++    const long long budget =
++        std::max<long long>(128, 50000000LL / std::max<long long>(pn2, 1));
++    const int max_iters = static_cast<int>(std::min<long long>(pn2, budget));
      bool improved = false;
-     while (max_iters-- > 0) {
-         auto [ci, cj] = find_crossing();
+     // Reversing between two segments that only touch or overlap along a line need not remove the intersection, so on
+     // islands laid out on a regular grid (a tiled texture, an array of parts) the loop can cycle through the same

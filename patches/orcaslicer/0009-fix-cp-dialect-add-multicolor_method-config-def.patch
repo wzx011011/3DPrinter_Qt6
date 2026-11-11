@@ -1,15 +1,20 @@
+From: OWzx <owzx@local>
+Subject: [PATCH 0009] fix(cp-dialect): add multicolor_method config def (v2.5.0 rebase)
+
+fix(cp-dialect): add multicolor_method config def (v2.5.0 rebase)
+---
 diff --git a/src/libslic3r/PrintConfig.cpp b/src/libslic3r/PrintConfig.cpp
-index 4c27995b..45cc2135 100644
+index e79e9360..226d3f89 100644
 --- a/src/libslic3r/PrintConfig.cpp
 +++ b/src/libslic3r/PrintConfig.cpp
-@@ -2238,6 +2238,18 @@ void PrintConfigDef::init_fff_params()
-     def->mode = comAdvanced;
-     def->set_default_value(new ConfigOptionFloat(10));
+@@ -6041,6 +6041,17 @@ void PrintConfigDef::init_fff_params()
+     def->set_default_value(new ConfigOptionString());
+     def->cli = ConfigOptionDef::nocli;
  
 +    // owzx-fix (CP-DIALECT): CrealityPrint presets/models carry a
 +    // "multicolor_method" machine key and guard their toolchange G-code
-+    // with "{if multicolor_method}". Needs BOTH a schema def (below, coBool
-+    // — the {if} condition requires a boolean) and a static FullPrintConfig
++    // with "{if multicolor_method}". Needs BOTH a schema def (coBool —
++    // the {if} condition requires a boolean) and a static FullPrintConfig
 +    // member (PrintConfig.hpp); a defs-map entry alone never reaches the
 +    // placeholder parser's config instance.
 +    def = this->add("multicolor_method", coBool);
@@ -17,18 +22,17 @@ index 4c27995b..45cc2135 100644
 +    def->tooltip = L("CrealityPrint dialect: whether the machine performs multicolor toolchanges. Consumed by custom G-code templates ({if multicolor_method}).");
 +    def->mode = comAdvanced;
 +    def->set_default_value(new ConfigOptionBool(false));
-+
-     def = this->add("machine_end_gcode", coString);
-     def->label = L("End G-code");
-     def->tooltip = L("Add end G-Code when finishing the entire print.");
+     def = this->add("print_settings_id", coString);
+     def->set_default_value(new ConfigOptionString());
+     //BBS: open this option to command line
 diff --git a/src/libslic3r/PrintConfig.hpp b/src/libslic3r/PrintConfig.hpp
-index f7cbe8b2..47668789 100644
+index 9196a3bb..52de4e68 100644
 --- a/src/libslic3r/PrintConfig.hpp
 +++ b/src/libslic3r/PrintConfig.hpp
-@@ -1509,6 +1509,9 @@ PRINT_CONFIG_CLASS_DEFINE(
+@@ -1711,6 +1711,9 @@ PRINT_CONFIG_CLASS_DEFINE(
      ((ConfigOptionFloats,              deretraction_speed))
      //BBS
-     ((ConfigOptionBool,                enable_arc_fitting))
+     ((ConfigOptionEnum<ArcFittingMode>, enable_arc_fitting))
 +    // owzx-fix (CP-DIALECT): static member so FullPrintConfig carries the
 +    // key and "{if multicolor_method}" resolves as a boolean condition.
 +    ((ConfigOptionBool,                multicolor_method))

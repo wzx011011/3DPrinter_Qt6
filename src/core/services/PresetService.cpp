@@ -174,7 +174,7 @@ constexpr const char *kOwzxPrintWidthDefaults[][2] = {
     // which densified extrusion paths 40%+.
     {"wall_loops", "2"},
 };
-constexpr bool kOwzxArcFittingDefault = true;
+
 } // namespace
 
 void PresetService::applyOwzxPrintDefaults()
@@ -198,8 +198,12 @@ void PresetService::applyOwzxPrintDefaults()
     }
     // Arc fitting: insert-if-absent — profiles that deliberately disable it
     // (Klipper-class machines re-split arcs in firmware) keep their choice.
+    // Orca 2.5 made this an enum (ArcFittingMode): "disabled"/"enabled"/
+    // "sparse_infill" — the ecosystem layer writes the enum string, not the
+    // legacy bool.
     if (!vals.contains(QStringLiteral("enable_arc_fitting")))
-      vals.insert(QStringLiteral("enable_arc_fitting"), kOwzxArcFittingDefault);
+      vals.insert(QStringLiteral("enable_arc_fitting"),
+                  QStringLiteral("enabled"));
   }
 }
 

@@ -1,0 +1,29 @@
+From: OWzx <owzx@local>
+Subject: [PATCH 0019] fix(macos): suspend Qt emit macro across FillCornerSmoothing
+
+fix(macos): suspend Qt emit macro across FillCornerSmoothing
+---
+diff --git a/src/libslic3r/Fill/FillCornerSmoothing.hpp b/src/libslic3r/Fill/FillCornerSmoothing.hpp
+index 195283e6..cfbbca95 100644
+--- a/src/libslic3r/Fill/FillCornerSmoothing.hpp
++++ b/src/libslic3r/Fill/FillCornerSmoothing.hpp
+@@ -1,5 +1,13 @@
+ #pragma once
+ 
++// OWzx (2026-11-10): Qt hosts define `emit` as an empty macro; this header
++// names a parameter `emit` (fill_corner_smoother's emit callback), which
++// the macro turns into an unparseable expression when Qt headers are
++// included earlier in the TU. Suspend the macro across this header and
++// restore the caller's state afterwards.
++#pragma push_macro("emit")
++#undef emit
++
+ #include <algorithm>
+ #include <array>
+ #include <cmath>
+@@ -135,3 +143,5 @@ void smooth_polygons_corners(Polygons &polygons, const CornerSmoothing &smoothin
+                              const CornerFilter &corner_filter = {});
+ 
+ } // namespace Slic3r
++
++#pragma pop_macro("emit")

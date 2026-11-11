@@ -345,6 +345,15 @@ list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "/Triangulation\\.")
 list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "/TexturePainting\\.")
 list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "SLA/SupportTreeIGL\\.")
 list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "Arachne/utils/ExtrusionJunction\\.cpp$")
+# OWzx (Orca 2.5): TextureBake subdirectory is new in 2.5 (texture baking
+# pipeline; boost-log/filesystem deps only) — the per-directory globs above
+# predate it.
+file(GLOB LIBSLIC3R_TEXTUREBAKE_SOURCES CONFIGURE_DEPENDS
+    "${LIBSLIC3R_SRC_DIR}/TextureBake/*.cpp"
+    "${LIBSLIC3R_SRC_DIR}/TextureBake/*.hpp"
+)
+list(APPEND ALL_LIBSLIC3R_SOURCES ${LIBSLIC3R_TEXTUREBAKE_SOURCES})
+
 list(APPEND ALL_LIBSLIC3R_SOURCES
     "${LIBSLIC3R_GEN_DIR}/libslic3r_version.h"
     "${LIBSLIC3R_GEN_DIR}/buildinfo.h"

@@ -201,7 +201,7 @@ HullCache captureHullCache(ProjectService *projectService, const ConfigValues &c
       const Slic3r::Polygon hullNoOffset = modelObject->convex_hull_2d(trafo);
       // GLCanvas3D.cpp:5244-5249: clipper may return an empty offset
       // (STUDIO-2452); fall back to the unshrunk hull like upstream.
-      const auto offsetResult = Slic3r::offset(hullNoOffset, shrinkFactor, Slic3r::ClipperLib::jtRound, miterLimit);
+      const auto offsetResult = Slic3r::offset(hullNoOffset, shrinkFactor, Slic3r::jtRound, miterLimit);
       const Slic3r::Polygon &hull2d = !offsetResult.empty() ? offsetResult.front() : hullNoOffset;
       hullOut.xs.reserve(hull2d.points.size());
       hullOut.ys.reserve(hull2d.points.size());

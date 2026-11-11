@@ -1,5 +1,18 @@
 #include "SliceService.h"
 
+#ifdef HAS_LIBSLIC3R
+// OWzx (Orca 2.5): include libslic3r headers BEFORE Qt — Qt's `emit` macro
+// (defined by the Q* headers above) collides with the parameter named
+// `emit` in the new Fill/FillCornerSmoothing.hpp (Arrange.hpp include
+// chain), turning the call into an unparseable expression.
+#include <libslic3r/Model.hpp>
+#include <libslic3r/Print.hpp>
+#include <libslic3r/PrintConfig.hpp>
+#include <libslic3r/Preset.hpp>
+#include <libslic3r/GCode/GCodeProcessor.hpp>
+#include <libslic3r/Utils.hpp>
+#endif
+
 #include "core/services/ProjectService.h"
 #include "core/services/AppSettingsService.h"
 
@@ -21,14 +34,6 @@
 #include <mutex>
 #include <stdexcept>
 
-#ifdef HAS_LIBSLIC3R
-#include <libslic3r/Model.hpp>
-#include <libslic3r/Print.hpp>
-#include <libslic3r/PrintConfig.hpp>
-#include <libslic3r/Preset.hpp>
-#include <libslic3r/GCode/GCodeProcessor.hpp>
-#include <libslic3r/Utils.hpp>
-#endif
 
 namespace
 {
@@ -1495,7 +1500,6 @@ void SliceService::startSlice(const QString &projectName)
         persistentSlot->calibParamsApplied = true;
       }
 
-
       if (cancelFlag && cancelFlag->load())
       {
         print.cancel();
@@ -1550,7 +1554,6 @@ void SliceService::startSlice(const QString &projectName)
 
       // v2.8 review W2: reset calibConfig (avoid sticking after calibration slice).
       if (receiver) receiver->calibConfig_.mode = 0;
-
 
       // P1 (preview direct hand-off): the GCodeProcessorResult is constructed
       // INSIDE a shared_ptr and print.export_gcode fills it in place -- the
@@ -2721,12 +2724,10 @@ void SliceService::removePlateResult(int plateIndex)
   }
 }
 
-
 void SliceService::setBedShape(const QVector<QPointF> &pointsMm)
 {
   bedShape_ = pointsMm;
 }
-
 
 void SliceService::setCalibParams(int mode, double start, double end, double step,
                                   bool printNumbers, int testModel)
