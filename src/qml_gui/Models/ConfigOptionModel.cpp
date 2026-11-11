@@ -1705,9 +1705,9 @@ namespace
             {QStringLiteral("Overhangs"), processKeys({"detect_overhang_wall", "make_overhang_printable", "make_overhang_printable_angle", "make_overhang_printable_hole_size", "extra_perimeters_on_overhangs", "overhang_reverse", "overhang_reverse_internal_only", "overhang_reverse_threshold"})},
         }},
         {QStringLiteral("Strength"), {
-            {QStringLiteral("Walls"), processKeys({"wall_loops", "alternate_extra_wall", "detect_thin_wall"})},
+            {QStringLiteral("Walls"), processKeys({"wall_loops", "alternate_extra_wall", "unsupported_wall_last", "detect_thin_wall"})},
             {QStringLiteral("Top/bottom shells"), processKeys({"top_shell_layers", "top_shell_thickness", "top_surface_density", "top_surface_pattern", "top_surface_fill_order", "top_layer_direction", "top_surface_expansion", "top_surface_expansion_margin", "top_surface_expansion_direction", "bottom_shell_layers", "bottom_shell_thickness", "bottom_surface_density", "bottom_surface_pattern", "bottom_surface_fill_order", "bottom_layer_direction", "center_of_surface_pattern", "top_bottom_infill_wall_overlap"})},
-            {QStringLiteral("Infill"), processKeys({"sparse_infill_density", "fill_multiline", "sparse_infill_pattern", "gyroid_optimized", "sparse_infill_smooth_factor", "infill_direction", "sparse_infill_rotate_template", "skin_infill_density", "skeleton_infill_density", "infill_lock_depth", "skin_infill_depth", "skin_infill_line_width", "skeleton_infill_line_width", "symmetric_infill_y_axis", "infill_shift_step", "lateral_lattice_angle_1", "lateral_lattice_angle_2", "infill_overhang_angle", "lightning_overhang_angle", "lightning_prune_angle", "lightning_straightening_angle", "infill_anchor_max", "infill_anchor", "internal_solid_infill_pattern", "solid_infill_direction", "solid_infill_rotate_template", "gap_fill_target", "filter_out_gap_fill", "separated_infills", "infill_wall_overlap"})},
+            {QStringLiteral("Infill"), processKeys({"adaptive_infill_gradient", "adaptive_infill_interior_density", "adaptive_infill_mode", "infill_complete_top", "sparse_infill_density", "fill_multiline", "sparse_infill_pattern", "gyroid_optimized", "sparse_infill_smooth_factor", "infill_direction", "sparse_infill_rotate_template", "skin_infill_density", "skeleton_infill_density", "infill_lock_depth", "skin_infill_depth", "skin_infill_line_width", "skeleton_infill_line_width", "symmetric_infill_y_axis", "infill_shift_step", "lateral_lattice_angle_1", "lateral_lattice_angle_2", "infill_overhang_angle", "lightning_overhang_angle", "lightning_prune_angle", "lightning_straightening_angle", "infill_anchor_max", "infill_anchor", "internal_solid_infill_pattern", "solid_infill_direction", "solid_infill_rotate_template", "gap_fill_target", "filter_out_gap_fill", "separated_infills", "infill_wall_overlap"})},
             {QStringLiteral("Advanced"), processKeys({"align_infill_direction_to_model", "extra_solid_infills", "bridge_angle", "internal_bridge_angle", "relative_bridge_angle", "minimum_sparse_infill_area", "infill_combination", "infill_combination_max_layer_height", "detect_narrow_internal_solid_infill", "ensure_vertical_shell_thickness"})},
         }},
         {QStringLiteral("Speed"), {
@@ -1733,14 +1733,14 @@ namespace
             {QStringLiteral("Filament for Features"), processKeys({"outer_wall_filament_id", "inner_wall_filament_id", "sparse_infill_filament_id", "internal_solid_filament_id", "top_surface_filament_id", "bottom_surface_filament_id", "wipe_tower_filament"})},
             {QStringLiteral("Ooze prevention"), processKeys({"ooze_prevention", "standby_temperature_delta", "preheat_time", "preheat_steps"})},
             {QStringLiteral("Flush options"), processKeys({"flush_into_infill", "flush_into_objects", "flush_into_support"})},
-            {QStringLiteral("Advanced"), processKeys({"interlocking_beam", "toolchange_ordering", "interface_shells", "mmu_segmented_region_max_width", "mmu_segmented_region_interlocking_depth", "interlocking_beam_width", "interlocking_orientation", "interlocking_beam_layer_count", "interlocking_depth", "interlocking_boundary_avoidance"})},
+            {QStringLiteral("Advanced"), processKeys({"wipe_tower_sparse_layers_combination", "interlocking_beam", "toolchange_ordering", "toolchange_cyclic_first_layer", "toolchange_cyclic_order", "bottom_color_penetration_layers", "top_color_penetration_layers", "interface_shells", "mmu_segmented_region_max_width", "mmu_segmented_region_interlocking_depth", "interlocking_beam_width", "interlocking_orientation", "interlocking_beam_layer_count", "interlocking_depth", "interlocking_boundary_avoidance"})},
         }},
         {QStringLiteral("Others"), {
             {QStringLiteral("Skirt"), processKeys({"skirt_loops", "skirt_type", "min_skirt_length", "skirt_distance", "skirt_start_angle", "skirt_speed", "skirt_height", "draft_shield", "single_loop_draft_shield"})},
-            {QStringLiteral("Brim"), processKeys({"brim_type", "brim_width", "brim_object_gap", "brim_flow_ratio", "brim_use_efc_outline", "combine_brims", "brim_ears_max_angle", "brim_ears_detection_length", "brim_ears_outer_only"})},
-            {QStringLiteral("Special mode"), processKeys({"slicing_mode", "print_sequence", "print_order", "spiral_mode", "spiral_mode_smooth", "spiral_mode_max_xy_smoothing", "spiral_starting_flow_ratio", "spiral_finishing_flow_ratio", "timelapse_type", "enable_wrapping_detection"})},
+            {QStringLiteral("Brim"), processKeys({"brim_type", "brim_width", "extra_brim_width", "leading_brim_length", "brim_object_gap", "brim_flow_ratio", "brim_use_efc_outline", "combine_brims", "brim_ears_max_angle", "brim_ears_detection_length", "brim_ears_outer_only"})},
+            {QStringLiteral("Special mode"), processKeys({"slicing_mode", "print_sequence", "print_order", "spiral_mode", "spiral_mode_smooth", "spiral_mode_max_xy_smoothing", "spiral_starting_flow_ratio", "spiral_finishing_flow_ratio", "timelapse_type", "enable_wrapping_detection", "wipe_inward", "wipe_inward_distance"})},
             {QStringLiteral("Fuzzy skin"), processKeys({"fuzzy_skin", "fuzzy_skin_mode", "fuzzy_skin_noise_type", "fuzzy_skin_point_distance", "fuzzy_skin_thickness", "fuzzy_skin_scale", "fuzzy_skin_octaves", "fuzzy_skin_persistence", "fuzzy_skin_ripples_per_layer", "fuzzy_skin_ripple_offset", "fuzzy_skin_layers_between_ripple_offset", "fuzzy_skin_first_layer"})},
-            {QStringLiteral("G-code output"), processKeys({"reduce_infill_retraction", "gcode_add_line_number", "gcode_comments", "gcode_label_objects", "exclude_object", "filename_format"})},
+            {QStringLiteral("G-code output"), processKeys({"reduce_infill_retraction", "gcode_add_line_number", "gcode_comments", "gcode_label_objects", "exclude_object", "exclude_object_tolerance", "high_precision_gcode", "filename_format"})},
             {QStringLiteral("Change extrusion role G-code"), processKeys({"process_change_extrusion_role_gcode"})},
             {QStringLiteral("Post-processing Scripts"), processKeys({"post_process"})},
             // Upstream 0a3724ed2f: shared "plugin_config_overrides" was removed in
@@ -1944,6 +1944,12 @@ namespace
         QStringLiteral("plugins"),
         QStringLiteral("slicing_pipeline_plugin"),
         QStringLiteral("calib_flowrate_topinfill_special_order"),
+        // Orca 2.5 additions: belt-printer and IMEX machine keys without a
+        // Qt editor row (belt/imex hardware OWzx does not target yet).
+        QStringLiteral("belt_purge_tower_object"),
+        QStringLiteral("belt_purge_tower_width"),
+        QStringLiteral("imex_head_filament_map"),
+        QStringLiteral("imex_parallel_mode"),
     };
     return keys;
   }
@@ -1951,6 +1957,12 @@ namespace
   static QStringList auditProcessManifest()
   {
     const auto &lookup = processPageGroupLookup();
+    if (qEnvironmentVariableIsSet("OWZX_AUDIT_TRACE")) {
+      qInfo() << "[AUDIT] lookup.size" << lookup.size()
+              << "has_adaptive" << lookup.contains(QStringLiteral("adaptive_infill_gradient"))
+              << "has_arc" << lookup.contains(QStringLiteral("enable_arc_fitting"))
+              << "print_options.size" << int(Slic3r::Preset::print_options().size());
+    }
     const auto &nonUiKeys = processNonUiPresetKeys();
     QSet<QString> upstreamKeys;
     QStringList errors;

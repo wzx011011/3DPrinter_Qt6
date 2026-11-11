@@ -46,6 +46,11 @@ QString safeComponent(const QString &raw, const QString &fallback)
         else
             out.append(c);
     }
+    // Interior ".." must also die: "..\..\m" becomes ".._.._m" after the
+    // reserved-char pass, and the leading-dot strip cannot reach the middle
+    // run. Collapse every dot-dot run anywhere in the component.
+    while (out.contains(QLatin1String("..")))
+        out.replace(QLatin1String(".."), QLatin1String("_"));
     while (!out.isEmpty() && (out.front() == QLatin1Char('.') || out.front().isSpace()))
         out.remove(0, 1);
     while (!out.isEmpty() && (out.back() == QLatin1Char('.') || out.back().isSpace()))

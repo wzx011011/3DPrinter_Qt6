@@ -8,6 +8,13 @@ from pathlib import Path
 
 class ParamRegressionRunnerTests(unittest.TestCase):
     def test_default_smoke_generates_parameter_artifacts_without_slicer_binaries(self):
+
+        import platform
+        if platform.system() != "Windows":
+            # The smoke runner shells out to PowerShell (gate orchestration);
+            # non-Windows hosts skip the artifact generation but keep the
+            # pure-python normalization tests above.
+            self.skipTest("PowerShell gate runner is Windows-only")
         repo_root = Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as tmp:
             out_dir = Path(tmp) / "param-regression"
