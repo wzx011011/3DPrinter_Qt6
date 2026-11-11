@@ -341,10 +341,17 @@ void AppToolRegistry::buildTools() {
           auto *model = qobject_cast<ConfigOptionModel *>(tier.object);
           if (!model)
             continue;
+          if (qEnvironmentVariableIsSet("OWZX_TOOL_TRACE"))
+            qDebug() << "[TOOL-TRACE] tier" << tier.name << "rows" << model->rowCount()
+                     << "model ptr" << (void*)model
+                     << "has_wall_loops_row"
+                     << [&]{ for (int i=0;i<model->rowCount();++i) if (model->optKey(i)==QLatin1String("wall_loops")) return true; return false; }();
           const int rows = model->rowCount();
           for (int row = 0; row < rows; ++row) {
             const QString key = model->optKey(row);
             const QString label = model->optLabel(row);
+            if (qEnvironmentVariableIsSet("OWZX_TOOL_TRACE"))
+              qDebug() << "[TOOL-TRACE] row" << row << "key" << key << "label" << label.left(20);
             if (!filter.isEmpty() &&
                 !key.contains(filter, Qt::CaseInsensitive) &&
                 !label.contains(filter, Qt::CaseInsensitive))

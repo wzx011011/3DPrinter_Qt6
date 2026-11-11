@@ -9,6 +9,7 @@
 // build/AppToolTests_autogen/timestamp.
 
 #include <QtTest>
+#include "qml_gui/Models/ConfigOptionModel.h"
 #include <QDir>
 #include <QEventLoop>
 #include <QFileInfo>
