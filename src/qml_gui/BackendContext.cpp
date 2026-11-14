@@ -996,7 +996,14 @@ void BackendContext::applyAiSettings()
   const QString sidecarDir = QDir(appDir).filePath(QStringLiteral("ai_sidecar"));
   AiAgentService::Config cfg;
   cfg.sidecarScriptPath = QDir(sidecarDir).filePath(QStringLiteral("agent.py"));
+#ifdef Q_OS_MACOS
+  // OWzx (2026-11-11): the Mac sidecar layout is a Homebrew python3.12
+  // venv (python/bin/python) instead of the Windows embeddable layout
+  // (python/python.exe). Same sidecar contract, platform-specific launcher.
+  cfg.pythonPath = QDir(sidecarDir).filePath(QStringLiteral("python/bin/python"));
+#else
   cfg.pythonPath = QDir(sidecarDir).filePath(QStringLiteral("python/python.exe"));
+#endif
   cfg.mcpUrl = QStringLiteral("http://127.0.0.1:%1/mcp")
                    .arg(aiMcp_->port());
   cfg.mcpToken = settingsViewModel_->aiControlToken();
