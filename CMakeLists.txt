@@ -507,7 +507,23 @@ endif()
         src/qml_gui/qml_web.qrc
     )
     target_link_libraries(OWzxSlicer PRIVATE owzx_app_core owzx_qml)
-    # The hot-reload enabler is a static ctor inside qqmldebug.h; no Qt header
+    # OWzx (macOS packaging): real .app bundle with the OWzx icon so the
+    # binary is double-clickable / Dock-visible / Finder-launchable instead
+    # of a bare executable. Windows/Linux keep the bare target.
+    if(APPLE)
+        set(OWZX_APP_ICON "${CMAKE_SOURCE_DIR}/resources/branding/OWzxSlicer.icns")
+        set_target_properties(OWzxSlicer PROPERTIES
+            MACOSX_BUNDLE TRUE
+            MACOSX_BUNDLE_BUNDLE_NAME "OWzxSlicer"
+            MACOSX_BUNDLE_GUI_IDENTIFIER "com.owzx.OWzxSlicer"
+            MACOSX_BUNDLE_BUNDLE_VERSION "1.0.0"
+            MACOSX_BUNDLE_ICON_FILE "OWzxSlicer.icns"
+            MACOSX_BUNDLE_INFO_PLIST_IN "${CMAKE_SOURCE_DIR}/resources/branding/Info.plist.in"
+        )
+        target_sources(OWzxSlicer PRIVATE "${OWZX_APP_ICON}")
+        set_source_files_properties("${OWZX_APP_ICON}" PROPERTIES
+            MACOSX_PACKAGE_LOCATION "Resources")
+    endif()
     # includes it transitively, so main_qml.cpp pulls it in under this define.
     if(OWZX_QML_HOT_RELOAD)
         target_compile_definitions(OWzxSlicer PRIVATE QT_QML_DEBUG)

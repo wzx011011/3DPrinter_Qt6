@@ -600,6 +600,29 @@ int main(int argc, char *argv[])
   extern void qml_register_types_OWzx();
   qml_register_types_OWzx();
 
+  // OWzx (2026-11-11, macOS bundle): the owzx_qml module is NO_PLUGIN with
+  // OUTPUT_DIRECTORY <build>/OWzx — the engine resolves the module's qmldir
+  // from that DISK directory (import paths include the build dir in the dev
+  // layout). Inside a .app bundle the exe sits at Contents/MacOS/, so add
+  // the sibling qml/ deployment dir (package_mac_bundle.sh copies the module
+  // tree there); on a bare dev layout the path simply doesn't exist and the
+  // default resolution continues.
+  {
+    // OWzx (macOS bundle): the OWzx module tree AND the Qt QML plugin tree
+    // deploy beside the executable (Contents/MacOS/qml + qtqml, written by
+    // scripts/package_mac_bundle.sh). qt.conf's Qml2Imports relative paths
+    // proved unreliable here; engine->addImportPath before any load works.
+    const QString appDir = QCoreApplication::applicationDirPath();
+    const QString owzxQmlDir = appDir + QStringLiteral("/qml");
+    const QString qtQmlDir = appDir + QStringLiteral("/qtqml");
+    if (QFileInfo::exists(owzxQmlDir))
+      engine->addImportPath(owzxQmlDir);
+    if (QFileInfo::exists(qtQmlDir))
+      engine->addImportPath(qtQmlDir);
+    if (QFileInfo::exists(owzxQmlDir))
+      qInfo("[BUNDLE-QML] import paths added (OWzx module + Qt QML plugins)");
+  }
+
   // S8 (2026-10-14): the four ROOT CONTEXT PROPERTIES are gone. `Backend` is
   // the OWzx module's QML_SINGLETON (QML_ELEMENT-marked BackendContext in
   // owzx_qml); the engine creates the one shared instance on first access, so
