@@ -6,6 +6,7 @@
 #include <QImage>
 #include <QPointF>
 #include <QQuickRhiItem>
+#include <QElapsedTimer>
 #include <QRectF>
 #include <QSize>
 #include <QString>
@@ -999,6 +1000,8 @@ public:
   // GLGizmoSVG workbench, minimal port).
   Q_INVOKABLE QPointF screenToBedPoint(qreal screenX, qreal screenY) const;
   // G-04: variant 0 = main capture, 1 = picking (per-object flat colors).
+  // OWzx (2026-11-11, memory lever 2'): idle-timeout pick-scene release.
+  void releasePickSceneIfIdle();
   Q_INVOKABLE void requestThumbnailCapture(int plateIndex, int size = 128,
                                            int variant = 0);
   // Phase 95 (THUMBCAP-03): GUI-thread delivery slot the renderer targets via
@@ -1539,6 +1542,8 @@ private:
   qint64 m_modelGeneration = 1;
   qint64 m_pickModelGeneration = 0;
   qint64 m_pickSceneGeneration = 0;
+  // OWzx lever 2': idle-timeout release timestamps.
+  QElapsedTimer m_pickSceneLastBuild;
   // S3: last instance-transform revision the picking scene reflects.
   qint64 m_pickInstanceTransformGeneration = 0;
   CameraController m_camera;

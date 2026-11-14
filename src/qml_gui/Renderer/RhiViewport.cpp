@@ -104,6 +104,7 @@ RhiViewport::RhiViewport(QQuickItem *parent)
     auto *statsTimer = new QTimer(this);
     statsTimer->setInterval(1000);
     connect(statsTimer, &QTimer::timeout, this, [this]() {
+      releasePickSceneIfIdle();
       const auto &s = frameStats();
       if (s.frames > 0)
         qDebug() << "[FRAME-STATS]" << "frames" << s.frames
@@ -3288,12 +3289,33 @@ void RhiViewport::updatePickingScene()
   m_pickModelGeneration = m_modelGeneration;
   m_pickSceneGeneration = m_sceneGeneration;
   m_pickInstanceTransformGeneration = m_instanceTransformGeneration;
+  m_pickSceneLastBuild.start();
 #ifdef Q_OS_MACOS
   // OWzx-PERF: the pick-scene parse/build churn (second 15M-corner expand +
   // BVH) freed hundreds of MB seconds ago; hand those pages back to the OS
   // instead of letting the allocator hold them (vmmap Small-empty regions).
   malloc_zone_pressure_relief(malloc_default_zone(), 0);
 #endif
+}
+
+// OWzx (2026-11-11, memory lever 2'): idle-timeout release — the pick scene
+// (~100MB expanded + BVH per canvas) persists after every build even when no
+// further picks happen. A stale scene is data the rebuild would replace
+// anyway; on the next pick, updatePickingScene() re-parses lazily (~600ms
+// once, invisible to the user). Freed from the frame-stat timer on the GUI
+// thread — no cross-thread hazard.
+void RhiViewport::releasePickSceneIfIdle()
+{
+  if (m_pickSceneGeneration == 0)
+    return; // never built
+  if (m_pickSceneLastBuild.elapsed() < 180000)
+    return; // built within the last 3 minutes — keep it warm
+  m_pickScene.releaseModelPayload();
+  // Invalidate the generation stamps so the next pick triggers a full
+  // re-parse (updatePickingScene rebuilds from the live mesh blob).
+  m_pickModelGeneration = -1;
+  m_pickSceneGeneration = -1;
+  m_pickInstanceTransformGeneration = -1;
 }
 
 int RhiViewport::pickSourceObjectAt(const QPointF &position)
