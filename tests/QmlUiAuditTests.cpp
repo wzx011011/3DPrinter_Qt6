@@ -4251,20 +4251,20 @@ void QmlUiAuditTests::prepareFullVisualParityContract()
     QVERIFY2(mainQml.contains(token) || topbar.contains(token),
              qPrintable(QStringLiteral("Prepare shell visual parity token missing: %1").arg(token)));
   }
-  // S7: whitespace-normalized sequence locks. The 36px height pin stays (a
-  // pixel-literal lock — the retained transition class); only the indentation
-  // sensitivity is dropped.
+  // S7: whitespace-normalized sequence locks. R2+R3 (2026-11-11): the
+  // height pins moved to the upstream-measured 32px title row + 38px
+  // navigation row (restoration-map R2/R3); pixel-literal locks retained.
   {
     const QString topbarNorm = normalizedSource(topbar);
     QVERIFY2(topbarNorm.contains(QStringLiteral(
                  "id: titleToolRow anchors.left: parent.left anchors.right: parent.right"
-                 " anchors.top: parent.top height: 36"))
+                 " anchors.top: parent.top height: 32"))
                  && !topbarNorm.contains(QStringLiteral("id: titleToolRow anchors.fill: parent")),
-             "BBLTopbar title tools must be constrained to the 36px title row so workflow tabs cannot overlap them");
+             "BBLTopbar title tools must be constrained to the 32px title row so workflow tabs cannot overlap them");
   }
-  QVERIFY2(topbar.contains(QStringLiteral("anchors.topMargin: 36"))
-              && topbar.contains(QStringLiteral("height: 34")),
-           "BBLTopbar workflowBar must remain below the 36px title row");
+  QVERIFY2(topbar.contains(QStringLiteral("anchors.topMargin: 32"))
+              && topbar.contains(QStringLiteral("height: 38")),
+           "BBLTopbar workflowBar must remain below the 32px title row");
   // v5.16 (NAVIGATOR): the flat bottom-left view-button row was replaced by
   // the 3D navigator cube and must not return.
   QVERIFY2(!glToolbars.contains(QStringLiteral("prepareBottomViewControls"))

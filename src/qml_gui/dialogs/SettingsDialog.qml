@@ -868,10 +868,13 @@ ApplicationWindow {
                 }
             }
 
-            // END-OF-OPTION-LIST. No footer row: upstream ParamsDialog / Tab
-            // has none (ParamsPanel.cpp keeps export/import commented out).
-            // Saving is the preset-row save icon; closing the window runs
-            // the dirty-gated UnsavedChangesDialog (onClosing).
+            // END-OF-OPTION-LIST. No footer row — RE-VERIFIED against Orca
+            // 2.5.0 Tab.cpp (40ecc66f): only top-bar save/cross/search/revert
+            // buttons exist; there is no bottom Save/Discard/Close row. The
+            // QmlUiAuditTests contract (no bottom action row) is correct per
+            // upstream truth (Orca 2.5.0 Tab.cpp has only the top-bar save /
+            // revert buttons); saving stays on the preset-row save icon and
+            // the dirty-gated onClosing UnsavedChangesDialog.
         }
     }
 

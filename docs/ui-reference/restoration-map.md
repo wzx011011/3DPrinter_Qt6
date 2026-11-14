@@ -57,21 +57,22 @@
 | # | 区域 | 上游源 | QML 目标 | 上游值 | 当前值 | 差距 |
 |---|---|---|---|---|---|---|
 | R1 | **全局色板基调** | 截图 | `Theme.qml` | 中性灰 `#2d2d31` 系 + Material Teal | 蓝黑 `#161a23` 系 + 绿 `#18c75e` | **需决策**（见 §4） |
-| R2 | 标题栏高度/底色 | BBLTopbar.cpp | `BBLTopbar.qml` titleToolRow | 32 / `#262e30` | 36 / `chromeSurface #10161e` | 高度 −4、色未登记 |
-| R3 | 导航行高度 | MainFrame.cpp notebook | `BBLTopbar.qml` workflowBar | 38 | 34 | −4 |
-| R4 | 激活页签填充色 | 同上 | 同上 background | `#00675b` | `Theme.accent #18c75e` | 品牌色（关联已登记偏离 #1） |
+| R2 | 标题栏高度/底色 | BBLTopbar.cpp | `BBLTopbar.qml` titleToolRow | 32 / `#262e30` | **高度 32 已对齐**（2026-11-11）/ 色为品牌偏离 | ✅ 高度；色=R1 决策保留 |
+| R3 | 导航行高度 | MainFrame.cpp notebook | `BBLTopbar.qml` workflowBar | 38 | **38 已对齐**（2026-11-11，topMargin 同步 32）| ✅ |
+| R4 | 激活页签填充色 | 同上 | 同上 background | `#00675b` | `Theme.accent #18c75e` | **品牌偏离（R1 决策保留）** |
 | R5 | 切片/导出分体按钮 | Plater.cpp reslice | `BBLTopbar.qml` prepareSliceButton/prepareExportGcodeButton | [箭头盒][胶囊] 结构，箭头盒恒 teal | **已改**（2026-09-24）：25×24 箭头盒 + 24 高/14px 字胶囊，间距 15、右缘 30；胶囊禁用色仍走 OWzx token（随 R1 定）；箭头盒下拉菜单为上游行为未移植，暂仅视觉 |
-| R6 | 项目标题居中算法 | BBLTopbar.cpp CenteredTitle | `BBLTopbar.qml` projectTitleLabel | 于左簇末(210)→右缘居中 | `width/2-500` 近似 | 公式不同，窄窗口时偏差大 |
-| R7 | 窗口控制键宽 | — | `BBLTopbar.qml` tb-win | ~50 | 30 | −20（热区偏小） |
+| R6 | 项目标题居中算法 | BBLTopbar.cpp CenteredTitle | `BBLTopbar.qml` projectTitleLabel | 于左簇末(210)→右缘居中 | **公式已对齐**（2026-11-11：(width-210)/2-210）| ✅ |
+| R7 | 窗口控制键宽 | — | `BBLTopbar.qml` tb-win | ~50 | **50 已对齐**（2026-11-11，三键）| ✅ |
 | R8 | 侧栏宽度 | Sidebar.cpp | `PreparePage.qml:39` sidebarWidth | 392 | **已改**（2026-09-24）：`kSidebarDefaultWidth = 392` + 设置版本 bump 5（旧存档一次性迁移）；Prepare/Plater/Preview/Assemble 四页回退值与 `LeftSidebar.targetSidebarWidth`、`Theme.sidebarWidth*` 同步为 392；可调区间保持 300/520 |
-| R9 | 区头横带 | Sidebar.cpp | `LeftSidebar.qml` | `#36363b` 高 30 | `bgPanel #161a23` | 色高均不同 |
-| R10 | 耗材丝序号方块 | Sidebar.cpp | `LeftSidebar.qml` | 24×24 `#26a69a` | Theme.accent | 色/尺寸 |
+| R9 | 区头横带 | Sidebar.cpp | `LeftSidebar.qml` | `#36363b` 高 30 | `bgPanel #161a23` | **品牌偏离（R1 决策保留）** |
+| R10 | 耗材丝序号方块 | Sidebar.cpp | `LeftSidebar.qml` | 24×24 `#26a69a` | Theme.accent | **品牌偏离（保留）** |
 | R11 | 参数行节奏 | ParamsPanel.cpp/Tab.cpp | `LeftSidebar.qml` 参数树 | 行 30/输入 25×119/行距 30 | 待逐项核（popup 宽 380） | 核对后收口 |
 | R12 | 参数页签激活态 | ParamsPanel.cpp tabs | `LeftSidebar.qml` | 白字+2px `#009688` 下划线 | 待核 | 同上 |
-| R13 | 滚动条 | — | CxScrollView | 槽 `#171717`/滑块 `#959595` | `#1c2230`/`#3a4258` | 过暗 |
-| R14 | 禁用胶囊配色 | — | `BBLTopbar.qml` | `#8e8e83`/`#56564f` | `borderInput` 系 | 过暗 |
+| R13 | 滚动条 | — | CxScrollView | 槽 `#171717`/滑块 `#959595` | `#1c2230`/`#3a4258` | **品牌偏离（保留）** |
+| R14 | 禁用胶囊配色 | — | `BBLTopbar.qml` | `#8e8e83`/`#56564f` | `borderInput` 系 | **品牌偏离（保留）** |
 
-## 4. 还原前必须先定的一个决策（R1）
+## 4. R1 色板决策（2026-11-11 用户定案） **执行记录（2026-11-11）：R2/R3/R6/R7 几何对齐落地（BBLTopbar.qml：标题 32、导航 38+margin 32、标题居中公式、窗口控制键 50），QmlUiAudit S7 高度锁同步 32/38，QmlUiAuditTests 181/181 绿。R9/R10/R13/R14 色值 + R4 登记为品牌偏离（保留）。**
+**决策：保留 OWzx 品牌色体系（蓝黑底 + 绿 accent），R2-R14 中的色值项全部登记为有意品牌偏离；几何/结构/密度项（R2/R3/R6/R7）全量对齐上游并已于同日落地。** 原 §4 的两方案冲突就此关闭——后续 UI 还原工作只做几何与结构，不再动 Theme.qml 色值。
 
 `inventory` 冻结口径是"上游截图 = 视觉真值"，但 `Theme.qml`（Phase 160 DS-01）
 已把 OWzx 蓝黑+绿确立为 token 体系，且 §5 已登记品牌偏离（绿色 pill 等）。

@@ -221,7 +221,8 @@ Item {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
-            height: 36
+            // R2 (restoration-map): upstream title bar height 32 (BBLTopbar.cpp).
+            height: 32
             acceptedButtons: Qt.LeftButton
             propagateComposedEvents: true
             z: -1
@@ -233,12 +234,13 @@ Item {
             onDoubleClicked: root.titleBarDoubleClicked()
         }
 
+        // R2 (restoration-map): upstream title row height 32.
         RowLayout {
             id: titleToolRow
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
-            height: 36
+            height: 32
             anchors.leftMargin: Theme.insetSM
             anchors.rightMargin: 0
             // topbar-13: upstream spaces the title tools with AddSpacer(10)
@@ -544,7 +546,12 @@ Item {
             Text {
                 id: projectTitleLabel
                 Layout.alignment: Qt.AlignVCenter
-                Layout.maximumWidth: Math.max(160, (root.width / 2) - 500)
+                // R6 (restoration-map): upstream CenteredTitle centers the
+                // title between the left tool-cluster end (~x210) and the
+                // window right edge — max width = right-edge minus cluster
+                // end minus symmetric halves, not the old /2-500 approximation
+                // that drifts on narrow windows.
+                Layout.maximumWidth: Math.max(160, (root.width - 210) / 2 - 210)
                 Layout.minimumWidth: 160
                 text: Backend.displayProjectTitle
                 color: Theme.chromeText
@@ -611,7 +618,8 @@ Item {
             // ── 窗口控制 (TOPBAR-06) ─────────────────────────────────────
             CxIconButton {
                 cxStyle: CxIconButton.Style.Chrome
-                buttonSize: 30
+                // R7 (restoration-map): upstream window-control hit area ~50.
+                buttonSize: 50
                 iconSize: 14
                 iconSource: "qrc:/qml/assets/icons/minus.svg"
                 toolTipText: qsTr("最小化")
@@ -620,7 +628,8 @@ Item {
 
             CxIconButton {
                 cxStyle: CxIconButton.Style.Chrome
-                buttonSize: 30
+                // R7: upstream ~50.
+                buttonSize: 50
                 iconSize: 14
                 iconSource: root.windowVisibility === Window.Maximized
                     ? "qrc:/qml/assets/icons/restore.svg"
@@ -631,7 +640,8 @@ Item {
 
             CxIconButton {
                 cxStyle: CxIconButton.Style.ChromeDanger
-                buttonSize: 30
+                // R7: upstream ~50.
+                buttonSize: 50
                 iconSize: 14
                 iconSource: "qrc:/qml/assets/icons/x.svg"
                 toolTipText: qsTr("关闭")
@@ -644,8 +654,9 @@ Item {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
-            anchors.topMargin: 36
-            height: 34
+            // R2+R3 (restoration-map): title bar 32 + navigation row 38.
+            anchors.topMargin: 32
+            height: 38
             color: Theme.chromeSurface
 
             RowLayout {
