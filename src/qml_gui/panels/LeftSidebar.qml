@@ -9,6 +9,9 @@ Rectangle {
     id: root
     required property var editorVm
     required property var configVm
+    // X6 补全: viewport reference for the object-list volume double-click fit
+    // (PreparePage passes its viewport3dRef alias).
+    property var viewportRef: null
     // G-07 (v5.17): filament compatibility now comes from the NOTIFY-ful
     // configVm.filamentSlotCompatibility list property (item i =
     // isFilamentCompatible(filamentPresetForSlot(i))), so the row
@@ -845,6 +848,8 @@ Rectangle {
             Layout.preferredHeight: root.objectsMode ? 120 : 0
             Layout.maximumHeight: root.objectsMode ? 120 : 0
             editorVm: root.editorVm
+            // X6 补全: volume double-click fit — viewport ref passthrough.
+            viewportRef: root.viewport3dRef
             // 盘与对象统一在对象按钮下：选中树的盘节点 → 盘参数设置，
             // 选中模型节点 → 对象页集（用户对照 Orca 2026-10-29）。
             onTreeRowActivated: function(nodeType, plateIndex, sourceObjectIndex) {

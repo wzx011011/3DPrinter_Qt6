@@ -892,6 +892,18 @@ public:
   /// 移动对象位置（对齐上游 GUI_ObjectList 拖拽重排序）
   Q_INVOKABLE bool moveObject(int fromIndex, int toIndex);
 
+  // ── X6 补全（2026-11-11）：体（volume）行服务面 ─────────────────────────
+  // 上游 GUI_ObjectList 体拖拽规则（:1845-2054）：仅 MODEL_PART 可移动；
+  // SUPPORT_BLOCKER 及以上类型不可移动（:1952-1953）；对象只有一个
+  // MODEL_PART 时该 part 不可移动（首 part 承载对象变换）。
+  /// 体拖拽重排（对齐上游 OnDrop 同对象内逐对 swap）。fromIndex/toIndex 是
+  /// 对象内的体序号。违反类型约束返回 false（lastError_ 携带原因）。
+  Q_INVOKABLE bool moveVolume(int objectIndex, int fromIndex, int toIndex);
+  /// 体列表内重命名（对齐上游 update_name_in_model :1196）。空名拒绝；
+  /// 非法文件名字符拒绝（has_illegal_filename_characters 等价）。
+  Q_INVOKABLE bool renameVolume(int objectIndex, int volumeIndex,
+                                const QString &newName);
+
   /// 平板设置（对齐上游 PlateSettingsDialog）
   Q_INVOKABLE int plateBedType(int plateIndex) const;
   Q_INVOKABLE bool setPlateBedType(int plateIndex, int bedType);

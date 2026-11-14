@@ -29,6 +29,8 @@ Item {
     // ViewModel 注入（透传给内部 LeftSidebar）
     required property var editorVm
     required property var configVm
+    // X6 补全: viewport ref passthrough (volume double-click fit).
+    property var viewportRef: null
     property string processCategory: ""
 
     // X6: bubble the object-list panel's resolved context-menu request up to
@@ -80,6 +82,8 @@ Item {
             editorVm: root.editorVm
             configVm: root.configVm
             processCategory: root.processCategory
+            // X6 补全: volume double-click fit passthrough.
+            viewportRef: root.viewportRef
             onExportRequested: root.exportRequested()
             onObjectListMenuRequested: function(family, menuX, menuY) {
                 root.objectListMenuRequested(family, menuX, menuY)

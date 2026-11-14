@@ -152,12 +152,16 @@ Rectangle {
         }
     }
 
-    // ── drag-reorder state (upstream OnDrop, parity doc §2) ──────────────────
-    // Object rows only; single-selection drags; same-plate targets only
-    // (GUI_ObjectList.cpp:1847-1851, :1920-1939). Drop semantics = the dragged
-    // object takes the target row's slot (moveObject swap-walk).
+    // ── drag-reorder state (upstream OnDrop, parity doc §2 + §7 补全) ────────
+    // Object rows AND volume rows (X6 补全, 2026-11-11: moveVolume 服务面
+    // 已落地；体拖拽规则 = 单选 + 同对象 + 仅 MODEL_PART，service 层强制)。
+    // Drop semantics: object = swap-walk; volume = service swap.
+    // X6 补全: viewport reference for the volume double-click fit (set by
+    // PreparePage from its viewport3dRef alias).
+    property var viewportRef: null
     property int dragSourceIndex: -1
     property int dragPlateIndex: -1
+    property int dragSourceVolumeIndex: -1
     property int dropTargetRow: -1
 
     function _updateDropTarget(fromItem, localX, localY) {
@@ -170,7 +174,17 @@ Rectangle {
             return
         const idx = treeView.index(visualRow, 0)
         const m = treeView.model
-        if (m.nodeTypeAt(idx) !== root.nodeObject)
+        const targetNode = m.nodeTypeAt(idx)
+        if (root.dragSourceVolumeIndex >= 0) {
+            // volume drag: target must be a volume row of the SAME object
+            if (targetNode !== root.nodeVolume)
+                return
+            if (m.sourceObjectIndexAt(idx) !== root.dragPlateIndex)
+                return // dragPlateIndex 复用为 sourceObjectIndex（体拖拽时）
+            root.dropTargetRow = visualRow
+            return
+        }
+        if (targetNode !== root.nodeObject)
             return
         const targetSource = m.sourceObjectIndexAt(idx)
         if (targetSource === root.dragSourceIndex)
@@ -183,12 +197,19 @@ Rectangle {
     function _finishDrag() {
         const targetRow = root.dropTargetRow
         const from = root.dragSourceIndex
+        const fromVol = root.dragSourceVolumeIndex
         root.dragSourceIndex = -1
         root.dragPlateIndex = -1
+        root.dragSourceVolumeIndex = -1
         root.dropTargetRow = -1
         if (targetRow < 0 || from < 0 || !treeView.model || !root.editorVm)
             return
         const idx = treeView.index(targetRow, 0)
+        if (fromVol >= 0) {
+            // X6 补全：体拖拽 → moveVolume 服务面（同对象内 swap）。
+            root.editorVm.moveVolume(from, fromVol, m_volumeIndexAt(idx))
+            return
+        }
         root.editorVm.moveObject(from, treeView.model.sourceObjectIndexAt(idx))
     }
 
@@ -562,7 +583,10 @@ Rectangle {
                             return
                         rowMouse._pressX = mouse.x
                         rowMouse._pressY = mouse.y
+                        // X6 补全: volume rows arm drags too (same-object
+                        // moves); dragPlateIndex carries sourceObjectIndex.
                         rowMouse._dragArmed = treeRow.nodeType === root.nodeObject
+                                              || treeRow.nodeType === root.nodeVolume
                         // wx list: selection lands on left-down; drags start
                         // only after the threshold.
                         root._selectRow(treeRow, mouse.modifiers)
@@ -574,14 +598,20 @@ Rectangle {
                         const dy = mouse.y - rowMouse._pressY
                         if (root.dragSourceIndex < 0
                                 && (dx * dx + dy * dy) > 36) {
-                            root.dragSourceIndex = treeRow.sourceObjectIndex
-                            root.dragPlateIndex = treeRow.plateIndex
+                            if (treeRow.nodeType === root.nodeVolume) {
+                                root.dragSourceIndex = treeRow.sourceObjectIndex
+                                root.dragSourceVolumeIndex = treeRow.volumeIndex
+                                root.dragPlateIndex = treeRow.sourceObjectIndex
+                            } else {
+                                root.dragSourceIndex = treeRow.sourceObjectIndex
+                                root.dragPlateIndex = treeRow.plateIndex
+                            }
                         }
                         if (root.dragSourceIndex >= 0)
                             root._updateDropTarget(rowMouse, mouse.x, mouse.y)
                     }
                     onReleased: {
-                        if (root.dragSourceIndex >= 0)
+                        if (root.dragSourceIndex >= 0 || root.dragSourceVolumeIndex >= 0)
                             root._finishDrag()
                         rowMouse._dragArmed = false
                     }
@@ -589,14 +619,20 @@ Rectangle {
                         if (mouse.button !== Qt.LeftButton)
                             return
                         // Upstream double-click = zoom_to_selection
-                        // (:495-503); the Qt side has no selection-scoped
-                        // fit channel yet (parity §7) -- re-affirm the
-                        // selection so the gesture is not a dead click.
+                        // (:495-503). X6 补全: volume rows now have a
+                        // selection-scoped fit channel (zoomToVolume computes
+                        // the world AABB through volume+instance transforms);
+                        // other rows re-affirm selection.
+                        if (treeRow.nodeType === root.nodeVolume && root.editorVm) {
+                            if (root.editorVm.zoomToVolume(treeRow.sourceObjectIndex, treeRow.volumeIndex))
+                                (root.viewportRef || null) && root.viewportRef.requestFitView(root.editorVm.volumeFitHint.x, root.editorVm.volumeFitHint.y, root.editorVm.volumeFitHint.z, root.editorVm.volumeFitHint.w)
+                        }
                         if (root.editorVm)
                             root._selectRow(treeRow, mouse.modifiers)
                     }
                     onCanceled: {
                         root.dragSourceIndex = -1
+                        root.dragSourceVolumeIndex = -1
                         root.dropTargetRow = -1
                         rowMouse._dragArmed = false
                     }

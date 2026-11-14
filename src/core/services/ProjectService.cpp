@@ -10238,6 +10238,103 @@ bool ProjectService::renameObject(int index, const QString &newName)
   return true;
 }
 
+// ── X6 补全（2026-11-11）：体（volume）行服务面 ────────────────────────────
+// 上游 GUI_ObjectList 体拖拽约束（:1952-1953）：SUPPORT_BLOCKER 及以上类型
+// 不可移动；单一 MODEL_PART 不可移动（首 part 承载对象变换）。逐对 swap 与
+// moveObject 的相邻走位语义一致。
+bool ProjectService::moveVolume(int objectIndex, int fromIndex, int toIndex)
+{
+  if (objectIndex < 0 || objectIndex >= objectNames_.size()) {
+    lastError_ = QStringLiteral("对象索引无效");
+    return false;
+  }
+  if (fromIndex < 0 || toIndex < 0) {
+    lastError_ = QStringLiteral("体索引无效");
+    return false;
+  }
+#ifdef HAS_LIBSLIC3R
+  if (model_ && size_t(objectIndex) < model_->objects.size() &&
+      model_->objects[size_t(objectIndex)])
+  {
+    auto *obj = model_->objects[size_t(objectIndex)];
+    if (size_t(fromIndex) >= obj->volumes.size() ||
+        size_t(toIndex) >= obj->volumes.size()) {
+      lastError_ = QStringLiteral("体索引超出范围");
+      return false;
+    }
+    if (fromIndex == toIndex)
+      return true;
+    // 上游类型约束：仅 MODEL_PART 可移动（:1952-1953）。
+    const auto typeOf = [](const Slic3r::ModelVolume *v) {
+      return v ? v->type() : Slic3r::ModelVolumeType::MODEL_PART;
+    };
+    if (typeOf(obj->volumes[size_t(fromIndex)]) != Slic3r::ModelVolumeType::MODEL_PART) {
+      lastError_ = QStringLiteral("仅模型部件可重排");
+      return false;
+    }
+    if (typeOf(obj->volumes[size_t(toIndex)]) != Slic3r::ModelVolumeType::MODEL_PART &&
+        size_t(toIndex) != obj->volumes.size() - 1) {
+      // 目标位非 MODEL_PART：仅当目标是相邻的修正器/阻挡器时允许（上游
+      // 允许 part 穿过 modifiers；这里保守对齐 :1952 的源类型约束即可，
+      // 目标类型不限制——swap 只交换次序不改类型）。
+    }
+    // 单一 MODEL_PART 不可移动（对象变换承载）。
+    int modelParts = 0;
+    for (const auto &v : obj->volumes)
+      if (v->type() == Slic3r::ModelVolumeType::MODEL_PART)
+        ++modelParts;
+    if (modelParts <= 1) {
+      lastError_ = QStringLiteral("对象只有一个模型部件，无法重排");
+      return false;
+    }
+    const int delta = fromIndex < toIndex ? 1 : -1;
+    for (int id = fromIndex; id != toIndex; id += delta)
+      std::swap(obj->volumes[size_t(id)], obj->volumes[size_t(id + delta)]);
+    emit projectChanged();
+    return true;
+  }
+#endif
+  lastError_ = QStringLiteral("无可用模型");
+  return false;
+}
+
+bool ProjectService::renameVolume(int objectIndex, int volumeIndex,
+                                  const QString &newName)
+{
+  if (objectIndex < 0 || objectIndex >= objectNames_.size()) {
+    lastError_ = QStringLiteral("对象索引无效");
+    return false;
+  }
+  if (newName.trimmed().isEmpty()) {
+    lastError_ = QStringLiteral("名称不能为空");
+    return false;
+  }
+  // 上游 has_illegal_filename_characters（Plater.cpp:428-433）等价。
+  static const QString kIllegal = QStringLiteral("<>:/\\|?*\"");
+  for (const QChar c : newName) {
+    if (kIllegal.contains(c)) {
+      lastError_ = QStringLiteral("名称包含非法字符: %1").arg(c);
+      return false;
+    }
+  }
+#ifdef HAS_LIBSLIC3R
+  if (model_ && size_t(objectIndex) < model_->objects.size() &&
+      model_->objects[size_t(objectIndex)])
+  {
+    auto *obj = model_->objects[size_t(objectIndex)];
+    if (size_t(volumeIndex) >= obj->volumes.size()) {
+      lastError_ = QStringLiteral("体索引超出范围");
+      return false;
+    }
+    obj->volumes[size_t(volumeIndex)]->name = newName.toStdString();
+    emit projectChanged();
+    return true;
+  }
+#endif
+  lastError_ = QStringLiteral("无可用模型");
+  return false;
+}
+
 bool ProjectService::moveObject(int fromIndex, int toIndex)
 {
   if (fromIndex < 0 || fromIndex >= objectNames_.size())

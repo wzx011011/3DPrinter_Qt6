@@ -951,6 +951,18 @@ public:
   // mouse button = Select a part"): select one volume (part) of an object by
   // source index.
   Q_INVOKABLE void selectVolumeBySource(int sourceIndex, int volumeIndex);
+  // OWzx (2026-11-11, X6 补全)：体行双击 = 缩放到该体（上游 zoom_to_selection
+  // 的体级等价）。世界坐标 AABB 由体 mesh 经 instance 变换得到，以
+  // volumeFitHint 属性暴露（QML 调 viewport3d.requestFitView）。返回值：
+  // true = hint 已更新。
+  Q_INVOKABLE bool zoomToVolume(int sourceIndex, int volumeIndex);
+  Q_PROPERTY(QVector4D volumeFitHint READ volumeFitHint NOTIFY stateChanged)
+  QVector4D volumeFitHint() const { return m_volumeFitHint; }
+  // 体拖拽重排 / 体重命名 —— X6 面板发起面，走 ProjectService 新服务面。
+  Q_INVOKABLE bool moveVolume(int sourceObjectIndex, int fromIndex, int toIndex);
+  Q_INVOKABLE bool renameVolume(int sourceObjectIndex, int volumeIndex,
+                                const QString &newName);
+  QVector4D m_volumeFitHint;
   // SEL-MODIFIERS-RECT: rubber-band rectangle selection backend. The viewport
   // resolves which visible source objects the screen rect hits (the upstream
   // GLSelectionRectangle::contains projection test) and forwards the raw press

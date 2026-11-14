@@ -1546,6 +1546,8 @@ Item {
                 editorVm: root.editorVm
                 configVm: root.configVm
                 processCategory: root.processCategory
+                // X6 补全: volume double-click fit passthrough.
+                viewportRef: viewport3dRef
                 _isRightDocked: root.sidebarDockArea === 1   // sdaRight
                 toggleRequested: root.sidebarToggleRequested
                 widthChanged: root.sidebarWidthChanged

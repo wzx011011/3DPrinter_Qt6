@@ -8195,6 +8195,59 @@ void EditorViewModel::toggleSourceObjectSelection(int sourceIndex)
 // mode + KBShortcutsDialog.cpp:235): source-index twin of selectVolume() --
 // the viewport pick carries (sourceObjectIndex, volumeIndex) directly and has
 // no filtered-list row to map through.
+// OWzx (2026-11-11, X6 补全)：体行双击 = 缩放到该体的世界坐标包围盒。
+// AABB 链 = 体 mesh → 体变换 → 实例变换（与 11608 的快照合并循环同一变换
+// 顺序）。世界中心 + 半径走既有 requestFitView(cx,cy,cz,r) 管道。
+bool EditorViewModel::zoomToVolume(int sourceIndex, int volumeIndex)
+{
+  if (!projectService_ || sourceIndex < 0 || volumeIndex < 0)
+    return false;
+#ifdef HAS_LIBSLIC3R
+  const Slic3r::Model *model = projectService_->rawModel();
+  if (!model || size_t(sourceIndex) >= model->objects.size())
+    return false;
+  const Slic3r::ModelObject *obj = model->objects[size_t(sourceIndex)];
+  if (!obj || size_t(volumeIndex) >= obj->volumes.size())
+    return false;
+  const Slic3r::ModelVolume *volume = obj->volumes[size_t(volumeIndex)];
+  if (!volume)
+    return false;
+  Slic3r::TriangleMesh volumeMesh(volume->mesh());
+  volumeMesh.transform(volume->get_transformation().get_matrix(), true);
+  Slic3r::BoundingBoxf3 worldBox = volumeMesh.bounding_box();
+  for (const Slic3r::ModelInstance *instance : obj->instances) {
+    if (!instance)
+      continue;
+    Slic3r::TriangleMesh instanceMesh(volumeMesh);
+    instanceMesh.transform(instance->get_transformation().get_matrix(), true);
+    worldBox.merge(instanceMesh.bounding_box());
+  }
+  if (worldBox.radius() <= 0.f)
+    return false;
+  const Slic3r::Vec3d c = worldBox.center();
+  m_volumeFitHint = QVector4D(float(c.x()), float(c.y()), float(c.z()),
+                              float(worldBox.radius()));
+  emit stateChanged();
+  return true;
+#endif
+  return false;
+}
+
+bool EditorViewModel::moveVolume(int sourceObjectIndex, int fromIndex, int toIndex)
+{
+  if (!projectService_)
+    return false;
+  return projectService_->moveVolume(sourceObjectIndex, fromIndex, toIndex);
+}
+
+bool EditorViewModel::renameVolume(int sourceObjectIndex, int volumeIndex,
+                                   const QString &newName)
+{
+  if (!projectService_)
+    return false;
+  return projectService_->renameVolume(sourceObjectIndex, volumeIndex, newName);
+}
+
 void EditorViewModel::selectVolumeBySource(int sourceIndex, int volumeIndex)
 {
   simplifyPreviewCancel();
